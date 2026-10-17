@@ -2,6 +2,7 @@ import { useT, type MessageKey } from "@/i18n/t";
 import { useEffect, useState } from "react";
 import type { EditTarget } from "@/components/canvas/EditLayer";
 import { Button } from "@/components/ui/button";
+import { ModePanelHeader } from "./ModePanelHeader";
 
 interface AttrRow {
   key: string;
@@ -58,11 +59,13 @@ export default function EditPanel({
   saving,
   onSave,
   onClear,
+  onClose,
 }: {
   target: EditTarget | null;
   saving: boolean;
   onSave: (patch: EditPatch) => void;
   onClear: () => void;
+  onClose?: () => void;
 }) {
   const t = useT();
   const [text, setText] = useState(target?.text ?? "");
@@ -75,13 +78,8 @@ export default function EditPanel({
 
   if (!target) {
     return (
-      <div className="p-4">
-        <div className="mb-2 text-sm font-semibold">
-          {t("modes.edit.title")}
-        </div>
-        <p className="text-sm leading-6 text-muted-foreground">
-          {t("modes.edit.description")}
-        </p>
+      <div className="flex min-h-0 flex-col overflow-y-auto">
+        <ModePanelHeader title={t("modes.edit.title")} description={t("modes.edit.description")} onClose={onClose} />
       </div>
     );
   }
@@ -99,24 +97,16 @@ export default function EditPanel({
 
   return (
     <div className="flex min-h-0 flex-col overflow-y-auto">
-      <div className="border-b border-border px-4 py-3">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-semibold">
-            {t("modes.edit.title")}
-          </span>
-          <button
-            type="button"
-            onClick={onClear}
-            className="min-h-9 rounded px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
-          >
-            {t("modes.clearSelection")}
-          </button>
-        </div>
-        <div className="mt-1 truncate text-xs font-medium">
+      <ModePanelHeader
+        title={t("modes.edit.title")}
+        onClose={onClose}
+        action={<Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={onClear}>{t("modes.clearSelection")}</Button>}
+      >
+        <div className="mt-2 truncate text-xs font-medium">
           {target.tag === "img" ? t("modes.edit.image") : target.tag === "a" ? t("modes.edit.link") : t("modes.edit.textElement")}
           {target.text.trim() ? ` · ${target.text.trim()}` : ""}
         </div>
-      </div>
+      </ModePanelHeader>
 
       {primaryFields.length > 0 && (
         <section className="flex flex-col gap-3 px-4 py-3">
@@ -155,24 +145,24 @@ export default function EditPanel({
 
       <details className="border-t border-border px-4 py-3">
         <summary className="cursor-pointer text-xs leading-6">{t("modes.edit.advancedAttributes")}</summary>
-        <div className="my-2 break-all font-mono text-[10px] text-muted-foreground">
+        <div className="my-2 break-all font-mono text-xs text-muted-foreground">
           &lt;{target.tag}&gt; · {target.bg_id}
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+          <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
             {t("modes.edit.attributes")}
           </span>
           <button
             type="button"
             onClick={() => setAttrRows((prev) => [...prev, { key: "", value: "" }])}
-            className="text-[10px] text-muted-foreground hover:text-foreground"
+            className="text-xs text-muted-foreground hover:text-foreground"
           >
             {t("modes.edit.addAttribute")}
           </button>
         </div>
         <div className="mt-1 flex flex-col gap-1">
           {attrRows.length === 0 && (
-            <p className="text-[10px] text-muted-foreground">{t("modes.edit.noAttributes")}</p>
+            <p className="text-xs text-muted-foreground">{t("modes.edit.noAttributes")}</p>
           )}
           {attrRows.map((row, idx) => (
             <div key={idx} className="flex gap-1">

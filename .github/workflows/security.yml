@@ -62,6 +62,7 @@ jobs:
           bun test --timeout 30000
           packages/backend/tests/project-folder.test.ts
           packages/frontend/tests/canvas-device-width.test.ts
+          packages/frontend/tests/toolbar-overflow.test.ts
           packages/backend/tests/edit-scope.test.ts
           packages/backend/tests/request-authority.test.ts
           packages/backend/tests/path-boundary.test.ts

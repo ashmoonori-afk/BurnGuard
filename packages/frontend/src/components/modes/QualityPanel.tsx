@@ -44,7 +44,7 @@ export default function QualityPanel({ quality, extra }: { readonly quality: Qua
         <Button type="button" size="sm" className="mt-3 w-full max-[900px]:min-h-11" disabled={quality.autoFixDisabled || !current || !controls.canRetry || grouped === null || grouped.mustFix.length + grouped.recommended.length === 0} onClick={quality.onAutoFix}>
           {quality.autoFixPending ? <Loader2 className="motion-safe:animate-spin" /> : <WandSparkles />}{quality.autoFixPending ? t("modes.quality.autoFixPending") : t("modes.quality.autoFix")}
         </Button>
-        <p className="mt-1.5 break-keep text-[11px] leading-relaxed text-muted-foreground">{t("modes.quality.description")}</p>
+        <p className="mt-1.5 break-keep text-xs leading-relaxed text-muted-foreground">{t("modes.quality.description")}</p>
         {(quality.state.kind === "error_cold" || quality.state.kind === "error_warm") && <p role="alert" className="mt-2 text-pretty break-keep rounded border border-destructive/30 bg-destructive/10 px-2 py-1.5 text-xs text-foreground">{DESIGN_AUDIT_ERROR_COPY[quality.state.errorCode]}</p>}
         {(quality.state.kind === "stale" || quality.state.kind === "error_warm" && !quality.state.current) && <p className="mt-2 text-pretty break-keep rounded bg-warning/15 px-2 py-1.5 text-xs text-foreground">{t("modes.quality.staleBanner")}</p>}
       </header>
@@ -55,7 +55,7 @@ export default function QualityPanel({ quality, extra }: { readonly quality: Qua
           <section className="mt-4" aria-labelledby="quality-unknown-title">
             <h3 id="quality-unknown-title" className="mb-2 text-xs font-semibold">{t("modes.quality.unknown")}</h3>
             {grouped.unknown.length === 0 ? <p className="text-xs text-muted-foreground">{t("modes.quality.noUnknown")}</p> : <div className="space-y-2">{grouped.unknown.map((item) => <article key={item.code} className="rounded-md border border-warning/50 bg-warning/10 p-3">
-              <div className="flex items-start gap-2"><CircleHelp className="mt-0.5 h-4 w-4 shrink-0 text-warning-text" /><div className="min-w-0"><div className="text-xs font-semibold">{DESIGN_AUDIT_CHECK_COPY[item.code]}</div><div className="mt-0.5 text-[11px] text-muted-foreground">{DESIGN_AUDIT_STATUS_COPY[item.status]}</div></div></div>
+              <div className="flex items-start gap-2"><CircleHelp className="mt-0.5 h-4 w-4 shrink-0 text-warning-text" /><div className="min-w-0"><div className="text-xs font-semibold">{DESIGN_AUDIT_CHECK_COPY[item.code]}</div><div className="mt-0.5 text-xs text-muted-foreground">{DESIGN_AUDIT_STATUS_COPY[item.status]}</div></div></div>
               <p className="mt-2 break-keep text-xs leading-relaxed">{DESIGN_AUDIT_UNKNOWN_COPY[item.reason]} <strong>{t("modes.quality.notPass")}</strong></p>
             </article>)}</div>}
           </section>

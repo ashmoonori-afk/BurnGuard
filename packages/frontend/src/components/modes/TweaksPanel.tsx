@@ -16,6 +16,7 @@ import {
   type TweaksStyleKey,
   type TweaksTarget,
 } from "@/components/canvas/TweaksLayer";
+import { ModePanelHeader } from "./ModePanelHeader";
 import {
   applySideDraft,
   normalizeHex,
@@ -87,7 +88,7 @@ export function sizeRuleFor(styleKey: SizeRuleKey, target: Pick<TweaksTarget, "i
 }
 
 /** Simple geometry first; the existing style controls remain under Advanced. */
-export default function TweaksPanel({ projectId, relPath, target, saving, onApply, onResetAll, onClear, review }: {
+export default function TweaksPanel({ projectId, relPath, target, saving, onApply, onResetAll, onClear, onClose, review }: {
   projectId: string;
   relPath: string | null;
   target: TweaksTarget | null;
@@ -95,20 +96,18 @@ export default function TweaksPanel({ projectId, relPath, target, saving, onAppl
   onApply: ApplyFn;
   onResetAll: () => void;
   onClear: () => void;
+  onClose?: () => void;
   review: TweakChangePreview | null;
 }) {
   const t = useT();
-  if (!target) return <div className="p-4"><h2 className="text-sm font-semibold">{t("modes.tweaks.select")}</h2><p className="mt-2 text-xs leading-relaxed text-muted-foreground">{t("modes.tweaks.selectHint")}</p></div>;
+  if (!target) return <div className="flex min-h-0 flex-col overflow-y-auto"><ModePanelHeader title={t("modes.tweaks.select")} description={t("modes.tweaks.selectHint")} onClose={onClose} /></div>;
   return <div className="flex min-h-0 flex-col overflow-y-auto">
-    <header className="flex items-center justify-between border-b border-border px-3 py-2">
-      <h2 className="text-sm font-semibold">{t("modes.tweaks.selected")}</h2>
-      <button type="button" onClick={onClear} className="min-h-10 rounded px-2 text-xs text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">{t("modes.clearSelection")}</button>
-    </header>
+    <ModePanelHeader title={t("modes.tweaks.selected")} onClose={onClose} action={<button type="button" onClick={onClear} className="min-h-8 rounded-control px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t("modes.clearSelection")}</button>} />
     <GeometryControls key={target.bg_id} target={target} saving={saving} onApply={onApply} />
     <details className="border-t border-border">
       <summary className="min-h-11 cursor-pointer px-3 py-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t("modes.tweaks.advanced")}</summary>
       <div className="flex items-center justify-between gap-2 px-3 pb-2">
-        <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground">&lt;{target.tag}&gt; · {target.bg_id}</span>
+        <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">&lt;{target.tag}&gt; · {target.bg_id}</span>
         <button type="button" onClick={onResetAll} disabled={saving || Object.keys(target.inline).length === 0} className="min-h-10 shrink-0 rounded px-2 text-xs focus-visible:ring-2 focus-visible:ring-ring">{t("modes.tweaks.resetStyles")}</button>
       </div>
       <section className="border-t border-border px-3 py-3">
@@ -131,7 +130,7 @@ export default function TweaksPanel({ projectId, relPath, target, saving, onAppl
           <SidesRow target={target} styleKey="border-radius" saving={saving} onApply={onApply} />
         </div>
       </section>
-      {review && <section aria-label={t("modes.tweaks.lastChange")} className="border-t border-border px-3 py-3"><SectionHeader>{t("modes.tweaks.lastChange")}</SectionHeader><p className="mt-2 break-all font-mono text-[11px] text-muted-foreground">{review.property}: {review.from} → {review.to}</p></section>}
+      {review && <section aria-label={t("modes.tweaks.lastChange")} className="border-t border-border px-3 py-3"><SectionHeader>{t("modes.tweaks.lastChange")}</SectionHeader><p className="mt-2 break-all font-mono text-xs text-muted-foreground">{review.property}: {review.from} → {review.to}</p></section>}
     </details>
   </div>;
 }
@@ -154,7 +153,7 @@ function GeometryControls({ target, saving, onApply }: { target: TweaksTarget; s
         </select>
       </label>
     </div>
-    <p className="text-[11px] leading-relaxed text-muted-foreground">{t("modes.tweaks.dragHint")}<br />{t("modes.tweaks.shortcuts")}</p>
+    <p className="text-xs leading-relaxed text-muted-foreground">{t("modes.tweaks.dragHint")}<br />{t("modes.tweaks.shortcuts")}</p>
   </section>;
 }
 
@@ -199,7 +198,7 @@ function FontFamilyRow({ target, saving, onApply }: { target: TweaksTarget; savi
     finally { setLoading(false); }
   };
   return <div className="space-y-1">
-    <label className="flex items-center gap-2 text-[11px]">
+    <label className="flex items-center gap-2 text-xs">
       <RowLabel>{t("modes.tweaks.font")}</RowLabel>
       <select className={inputCls("min-w-0 flex-1")} value={inline} disabled={saving} onChange={(event) => onApply({ "font-family": event.target.value || null })}>
         <option value="">{t("modes.tweaks.inheritedValue", { value: target.computed["font-family"] || t("modes.tweaks.default") })}</option>
@@ -208,16 +207,16 @@ function FontFamilyRow({ target, saving, onApply }: { target: TweaksTarget; savi
         {families.filter((family) => !bundledFamilies.includes(family)).map((family) => <option key={family} value={JSON.stringify(family)}>{family}</option>)}
       </select>
     </label>
-    <p className="text-[10px] text-muted-foreground">{t("modes.tweaks.bundledFontsHint", { count: bundledFamilies.length })}</p>
-    <button type="button" className="text-[10px] underline" disabled={loading} onClick={() => void load()}>{loading ? t("modes.tweaks.loadingFonts") : t("modes.tweaks.loadFonts")}</button>
-    {error && <p role="alert" className="text-[10px] text-destructive">{t(error)}</p>}
-    {families.length > 0 && <p role="status" className="text-[10px] text-muted-foreground">{t("modes.tweaks.installedFonts", { count: families.length })}</p>}
+    <p className="text-xs text-muted-foreground">{t("modes.tweaks.bundledFontsHint", { count: bundledFamilies.length })}</p>
+    <button type="button" className="text-xs underline" disabled={loading} onClick={() => void load()}>{loading ? t("modes.tweaks.loadingFonts") : t("modes.tweaks.loadFonts")}</button>
+    {error && <p role="alert" className="text-xs text-destructive">{t(error)}</p>}
+    {families.length > 0 && <p role="status" className="text-xs text-muted-foreground">{t("modes.tweaks.installedFonts", { count: families.length })}</p>}
   </div>;
 }
 
 function SectionHeader({ children }: { children: React.ReactNode }) {
   return (
-    <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+    <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
       {children}
     </div>
   );
@@ -225,7 +224,7 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
 
 function RowLabel({ children }: { children: React.ReactNode }) {
   return (
-    <span className="w-[96px] shrink-0 font-mono text-[10px] text-muted-foreground">
+    <span className="w-24 shrink-0 break-words font-mono text-xs leading-tight text-muted-foreground">
       {children}
     </span>
   );
@@ -233,7 +232,7 @@ function RowLabel({ children }: { children: React.ReactNode }) {
 
 function inputCls(extra?: string) {
   return cn(
-    "rounded border border-border bg-background px-1.5 py-0.5 font-mono text-[11px]",
+    "rounded border border-border bg-background px-1.5 py-0.5 font-mono text-xs",
     "focus:outline-none focus:ring-1 focus:ring-ring",
     extra,
   );
@@ -285,7 +284,7 @@ function SizeRow({
   };
 
   return (
-    <label className="flex items-center gap-2 text-[11px]">
+    <label className="flex items-center gap-2 text-xs">
       <RowLabel>{styleKey}</RowLabel>
       <input
         type="text"
@@ -298,7 +297,7 @@ function SizeRow({
         disabled={saving}
         className={inputCls("min-w-0 flex-1")}
       />
-      <span className="w-6 shrink-0 text-[10px] text-muted-foreground">px</span>
+      <span className="w-6 shrink-0 text-xs text-muted-foreground">px</span>
     </label>
   );
 }
@@ -317,7 +316,7 @@ function FontWeightRow({
   const computed = target.computed["font-weight"] ?? "";
 
   return (
-    <label className="flex items-center gap-2 text-[11px]">
+    <label className="flex items-center gap-2 text-xs">
       <RowLabel>{t("modes.tweaks.fontWeight")}</RowLabel>
       <select
         value={inline}
@@ -351,12 +350,12 @@ export function TweaksPaletteSwatches({ projectId, relPath, onPick }: { projectI
     { title: "modes.tweaks.paletteColors" as const, colors: colors.filter((color) => !color.name.startsWith("--")) },
   ].filter((group) => group.colors.length > 0);
   return <>
-    {palette.isPending && <p role="status" className="mb-2 text-[10px] text-muted-foreground">{t("modes.tweaks.paletteLoading")}</p>}
-    {palette.isError && <p role="alert" className="mb-2 text-[10px] text-destructive">{t("modes.tweaks.paletteError")}</p>}
-    {palette.data && groups.length === 0 && <p className="mb-2 text-[10px] text-muted-foreground">{t("modes.tweaks.paletteEmpty")}</p>}
+    {palette.isPending && <p role="status" className="mb-2 text-xs text-muted-foreground">{t("modes.tweaks.paletteLoading")}</p>}
+    {palette.isError && <p role="alert" className="mb-2 text-xs text-destructive">{t("modes.tweaks.paletteError")}</p>}
+    {palette.data && groups.length === 0 && <p className="mb-2 text-xs text-muted-foreground">{t("modes.tweaks.paletteEmpty")}</p>}
     {groups.map((group) => (
       <div key={group.title} className="mb-2 last:mb-0">
-        <div className="mb-1 text-[9px] font-medium uppercase tracking-wider text-muted-foreground">{t(group.title)}</div>
+        <div className="mb-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{t(group.title)}</div>
         <div className="grid grid-cols-8 gap-1">
           {group.colors.map((color) => (
             <button
@@ -446,14 +445,14 @@ function ColorRow({
 
   return (
     <div ref={popoverRef} className="relative">
-      <label className="flex items-center gap-2 text-[11px]">
+      <label className="flex items-center gap-2 text-xs">
         <RowLabel>{styleKey}</RowLabel>
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
           disabled={saving}
           className={cn(
-            "flex min-w-0 flex-1 items-center gap-1.5 rounded border border-border bg-background px-1.5 py-0.5 font-mono text-[11px]",
+            "flex min-w-0 flex-1 items-center gap-1.5 rounded border border-border bg-background px-1.5 py-0.5 font-mono text-xs",
             "hover:border-accent focus:outline-none focus:ring-1 focus:ring-ring",
             saving && "opacity-50",
           )}
@@ -494,7 +493,7 @@ function ColorRow({
               onClick={clear}
               disabled={!inline}
               className={cn(
-                "rounded border border-border bg-background px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground",
+                "rounded border border-border bg-background px-1.5 py-0.5 text-xs text-muted-foreground hover:text-foreground",
                 !inline && "opacity-50 cursor-not-allowed",
               )}
               title={t("modes.tweaks.clearOverride")}
@@ -532,9 +531,9 @@ function SidesRow({
   // A shorthand the four inputs cannot represent stays read-only, so a commit never rewrites it.
   if (!sides) {
     return (
-      <div className="flex items-center gap-2 text-[11px]">
+      <div className="flex items-center gap-2 text-xs">
         <RowLabel>{styleKey}</RowLabel>
-        <input aria-label={styleKey} title={authored} type="text" value={authored} readOnly disabled className={inputCls("min-w-0 flex-1 text-[10px] px-1")} />
+        <input aria-label={styleKey} title={authored} type="text" value={authored} readOnly disabled className={inputCls("min-w-0 flex-1 text-xs px-1")} />
       </div>
     );
   }
@@ -551,7 +550,7 @@ function SidesRow({
   const unitLabel = sidesUnitLabel(sides);
 
   return (
-    <div className="flex items-center gap-2 text-[11px]">
+    <div className="flex items-center gap-2 text-xs">
       <RowLabel>{styleKey}</RowLabel>
       <div className="flex min-w-0 flex-1 items-center gap-1">
         <SideInput title={t("modes.tweaks.top")} value={sideDisplay(sides.top)} onCommit={commitSide("top")} disabled={saving} />
@@ -559,7 +558,7 @@ function SidesRow({
         <SideInput title={t("modes.tweaks.bottom")} value={sideDisplay(sides.bottom)} onCommit={commitSide("bottom")} disabled={saving} />
         <SideInput title={t("modes.tweaks.left")} value={sideDisplay(sides.left)} onCommit={commitSide("left")} disabled={saving} />
       </div>
-      {unitLabel && <span className="w-6 shrink-0 text-[10px] text-muted-foreground">{unitLabel}</span>}
+      {unitLabel && <span className="w-6 shrink-0 text-xs text-muted-foreground">{unitLabel}</span>}
     </div>
   );
 }
@@ -598,7 +597,7 @@ function SideInput({
       }
       disabled={disabled}
       className={inputCls(
-        "w-0 min-w-0 flex-1 text-center text-[10px] px-1",
+        "w-0 min-w-0 flex-1 text-center text-xs px-1",
       )}
     />
   );

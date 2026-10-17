@@ -1,5 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { surfaceForProjectType, type Comment, type GraphicCanvasV1, type ProjectType } from "@bg/shared";
+import { BarChart3, Box, Hand, Info, Minus, Plus } from "lucide-react";
+import { Tooltip } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 import CanvasTopBar from "./CanvasTopBar";
 import CommentLayer from "./CommentLayer";
 import QuickComment from "./QuickComment";
@@ -41,17 +44,26 @@ import { useLocaleStore } from "@/i18n/locale";
 import { canvasPlaceholderKeys, canvasRenderingVisible } from "@/lib/canvas-placeholder";
 import { canvasDeviceWidth, type CanvasDevicePreset } from "@/lib/canvas-device-width";
 
+const VIEWPORT_BUTTON = "inline-flex h-8 shrink-0 items-center justify-center rounded-control px-2 text-xs font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:text-muted-foreground disabled:hover:bg-transparent";
+const VIEWPORT_ICON_BUTTON = cn(VIEWPORT_BUTTON, "w-8 px-0");
+
+function themeColor(token: string, fallback: string): string {
+  if (typeof document === "undefined") return fallback;
+  const triple = getComputedStyle(document.documentElement).getPropertyValue(token).trim();
+  return triple === "" ? fallback : `rgb(${triple})`;
+}
+
 function buildPlaceholderSrc(locale: string, title: string, subtitle: string): string {
   return `<!doctype html>
 <html lang="${locale}">
 <head>
   <meta charset="utf-8">
   <style>
-    :root { color-scheme: light; }
+    :root { color-scheme: light dark; }
     body {
       margin: 0;
-      background: #f1f3f5;
-      color: #17191a;
+      background: ${themeColor("--muted", "Canvas")};
+      color: ${themeColor("--foreground", "CanvasText")};
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", sans-serif;
       display: grid;
       place-items: center;
@@ -60,7 +72,7 @@ function buildPlaceholderSrc(locale: string, title: string, subtitle: string): s
     }
     .wrap { box-sizing: border-box; text-align: center; padding: clamp(8px, 4vmin, 48px); width: 480px; max-width: 100%; overflow-wrap: anywhere; }
     .eyebrow {
-      color: #004fff;
+      color: ${themeColor("--accent", "LinkText")};
       font-size: 11px;
       letter-spacing: 0.14em;
       text-transform: uppercase;
@@ -68,7 +80,7 @@ function buildPlaceholderSrc(locale: string, title: string, subtitle: string): s
     }
     .title { font-size: clamp(14px, 4vmin, 22px); font-weight: 700; margin: 0; }
     .subtitle {
-      color: #5e646c;
+      color: ${themeColor("--muted-foreground", "GrayText")};
       font-size: clamp(12px, 3vmin, 14px);
       line-height: 1.6;
       margin-top: 12px;
@@ -545,7 +557,7 @@ export default function Canvas({
                   setLoadError(null);
                   onRefresh();
                 }}
-                className="mt-2 inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-[11px] font-medium hover:bg-muted"
+                className="mt-2 inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-xs font-medium hover:bg-muted"
               >
                 {t("workspace.canvas.retry")}
               </button>
@@ -561,16 +573,18 @@ export default function Canvas({
           onLostPointerCapture={() => { dragRef.current = null; }}
         />}
       </div>
-      <div className="flex shrink-0 items-center justify-between gap-3 border-t border-border bg-background px-3 py-1 text-xs" aria-label={t("workspace.canvas.viewportControls")}>
-        <span className="min-w-0 truncate text-[11px] text-muted-foreground">{moving ? t("workspace.canvas.dragToPan") : activeRelPath ?? t("workspace.canvas.title")}</span>
-        <div className="flex shrink-0 items-center gap-1">
-          <button type="button" className="h-8 w-8 rounded hover:bg-muted disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-ring" aria-label={t("workspace.canvas.zoomOut")} disabled={zoom <= MIN_CANVAS_ZOOM} onClick={() => setZoom((v) => Math.max(MIN_CANVAS_ZOOM, v / 1.25))}>−</button>
-          <button type="button" className="h-8 min-w-12 rounded px-1 tabular-nums hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring" title={t("workspace.canvas.resetViewportTitle")} onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}>{t("workspace.canvas.resetViewport")}</button>
-          <label className="flex items-center gap-1"><input aria-label={t("workspace.canvas.zoomRatio")} type="number" min="1" max="6400" value={Math.round(zoom * 100)} onChange={(event) => { const value = event.currentTarget.valueAsNumber; if (Number.isFinite(value)) setZoom(Math.min(MAX_CANVAS_ZOOM, Math.max(MIN_CANVAS_ZOOM, value / 100))); }} className="h-8 w-20 rounded border bg-background px-2 tabular-nums" />%</label>
-          <button type="button" className="h-8 w-8 rounded hover:bg-muted disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-ring" aria-label={t("workspace.canvas.zoomIn")} disabled={zoom >= MAX_CANVAS_ZOOM} onClick={() => setZoom((v) => Math.min(MAX_CANVAS_ZOOM, v * 1.25))}>+</button>
-          <button type="button" aria-pressed={moving} className={`ml-1 h-8 rounded-md px-2 focus-visible:ring-2 focus-visible:ring-ring ${moving ? "bg-accent/10 text-accent" : "text-muted-foreground hover:bg-muted"}`} onClick={() => setMoving((v) => !v)}>{t("workspace.canvas.pan")}</button><span className="text-muted-foreground">{t("workspace.canvas.zoomHint")}</span>
-          {sceneTools && <button type="button" aria-pressed={showSceneTools} className={`h-8 rounded-md px-2 focus-visible:ring-2 focus-visible:ring-ring ${showSceneTools ? "bg-accent/10 text-accent" : "text-muted-foreground hover:bg-muted"}`} onClick={() => setShowSceneTools((value) => !value)}>{t("workspace.canvas.scene3d")}</button>}
-          {chartTools && <button type="button" aria-pressed={showChartTools} className={`h-8 rounded-md px-2 focus-visible:ring-2 focus-visible:ring-ring ${showChartTools ? "bg-accent/10 text-accent" : "text-muted-foreground hover:bg-muted"}`} onClick={() => { setShowChartTools(value => !value); setShowSceneTools(false); }}>{t("workspace.canvas.chart")}</button>}
+      <div className="flex min-h-11 shrink-0 items-center justify-between gap-3 border-t border-border bg-background px-3 py-1 text-xs" role="group" aria-label={t("workspace.canvas.viewportControls")}>
+        <span className="min-w-0 truncate text-xs text-muted-foreground max-[600px]:hidden">{moving ? t("workspace.canvas.dragToPan") : activeRelPath ?? t("workspace.canvas.title")}</span>
+        <div className="flex shrink-0 items-center gap-1 max-[600px]:mx-auto">
+          <Tooltip content={t("workspace.canvas.zoomOut")}><button type="button" className={VIEWPORT_ICON_BUTTON} aria-label={t("workspace.canvas.zoomOut")} disabled={zoom <= MIN_CANVAS_ZOOM} onClick={() => setZoom((v) => Math.max(MIN_CANVAS_ZOOM, v / 1.25))}><Minus className="h-4 w-4" aria-hidden="true" /></button></Tooltip>
+          <Tooltip content={t("workspace.canvas.resetViewportTitle")}><button type="button" className={cn(VIEWPORT_BUTTON, "min-w-12 tabular-nums")} onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}>{t("workspace.canvas.resetViewport")}</button></Tooltip>
+          <label className="flex items-center gap-1 max-[600px]:hidden"><input aria-label={t("workspace.canvas.zoomRatio")} type="number" min="1" max="6400" value={Math.round(zoom * 100)} onChange={(event) => { const value = event.currentTarget.valueAsNumber; if (Number.isFinite(value)) setZoom(Math.min(MAX_CANVAS_ZOOM, Math.max(MIN_CANVAS_ZOOM, value / 100))); }} className="h-8 w-20 rounded-control border border-input bg-card px-2 tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />%</label>
+          <Tooltip content={t("workspace.canvas.zoomIn")}><button type="button" className={VIEWPORT_ICON_BUTTON} aria-label={t("workspace.canvas.zoomIn")} disabled={zoom >= MAX_CANVAS_ZOOM} onClick={() => setZoom((v) => Math.min(MAX_CANVAS_ZOOM, v * 1.25))}><Plus className="h-4 w-4" aria-hidden="true" /></button></Tooltip>
+          <span aria-hidden="true" className="mx-1 h-5 w-px bg-border max-[600px]:hidden" />
+          <Tooltip content={t("workspace.canvas.dragToPan")} className="max-[600px]:hidden"><button type="button" aria-pressed={moving} className={cn(VIEWPORT_BUTTON, "gap-1.5 max-[600px]:hidden", moving && "bg-accent/10 text-accent hover:bg-accent/15 hover:text-accent")} onClick={() => setMoving((v) => !v)}><Hand className="h-4 w-4" aria-hidden="true" />{t("workspace.canvas.pan")}</button></Tooltip>
+          <Tooltip content={t("workspace.canvas.zoomHint")} className="max-[600px]:hidden"><button type="button" className={cn(VIEWPORT_ICON_BUTTON, "max-[600px]:hidden")} aria-label={t("workspace.canvas.zoomHelp")}><Info className="h-4 w-4" aria-hidden="true" /></button></Tooltip>
+          {sceneTools && <Tooltip content={t("workspace.canvas.scene3d")}><button type="button" aria-pressed={showSceneTools} aria-label={t("workspace.canvas.scene3d")} className={cn(VIEWPORT_BUTTON, "gap-1.5", showSceneTools && "bg-accent/10 text-accent hover:bg-accent/15 hover:text-accent")} onClick={() => setShowSceneTools((value) => !value)}><Box className="h-4 w-4" aria-hidden="true" /><span className="max-[600px]:hidden">{t("workspace.canvas.scene3d")}</span></button></Tooltip>}
+          {chartTools && <Tooltip content={t("workspace.canvas.chart")}><button type="button" aria-pressed={showChartTools} aria-label={t("workspace.canvas.chart")} className={cn(VIEWPORT_BUTTON, "gap-1.5", showChartTools && "bg-accent/10 text-accent hover:bg-accent/15 hover:text-accent")} onClick={() => { setShowChartTools(value => !value); setShowSceneTools(false); }}><BarChart3 className="h-4 w-4" aria-hidden="true" /><span className="max-[600px]:hidden">{t("workspace.canvas.chart")}</span></button></Tooltip>}
         </div>
       </div>
       {!livePreview && !loadError && activeRelPath && frameDocument?.key === frameLoadKey && loadedFrameKey === (frameKey ?? src) && (

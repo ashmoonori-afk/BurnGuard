@@ -61,7 +61,7 @@ export default function ThreeScenePanel({ projectId, relPath, disabled, onSaved,
     <div className="min-w-0 flex-1">
       <div className="text-xs font-semibold">{t("canvas.three.title")}{" "}{relPath}</div>
       <div ref={hostRef} className="mt-2 h-56 min-w-48 overflow-hidden rounded border border-border" />
-      <p className="mt-1 text-[10px] text-muted-foreground">{t("canvas.three.controls")}</p>
+      <p className="mt-1 text-xs text-muted-foreground">{t("canvas.three.controls")}</p>
     </div>
     <div className="w-64 shrink-0 space-y-2 text-xs max-[700px]:w-full">
       <div className="flex gap-2">{(["cube", "sphere", "torus"] as const).map((shape) => <button key={shape} type="button" disabled={busy || scene.objects.length >= 16} className="rounded border px-2 py-1 disabled:opacity-50" onClick={() => add(shape)}>{t(SHAPE_COPY[shape])} +</button>)}</div>
