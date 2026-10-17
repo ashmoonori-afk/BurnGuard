@@ -104,7 +104,7 @@ export function systemToCard(s: DesignSystemSummary, _index = 0, type?: ProjectT
     updatedTitle: formatFullDate(s.updated_at),
     subtitle: `${statusSuffix} · ${formatRelativeDay(s.updated_at)}`,
     href: `/systems/${s.id}`,
-    tintClass: "bg-tint-slate",
+    tintClass: "bg-muted",
     thumbnail: type === undefined || type === "other" || type === "from_template"
       ? s.thumbnail_path
       : s.thumbnail_paths?.[type] ?? null,

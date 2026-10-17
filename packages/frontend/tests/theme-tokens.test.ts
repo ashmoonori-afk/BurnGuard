@@ -46,14 +46,13 @@ describe("theme token coverage (UX-32)", () => {
     expect(card.tintClass).toMatch(/^bg-tint-[a-z]+$/);
   });
 
-  test("Given four design systems When mapped Then they share one calm theme-token tint instead of a saturated cycle", () => {
+  test("Given four design systems When mapped Then they share the neutral muted surface instead of a colored tint cycle", () => {
     const tints = [0, 1, 2, 3].map((index) => systemToCard({ id: `s${index}`, name: "s", status: "published", is_template: false, thumbnail_path: null, updated_at: 0 }, index).tintClass);
-    expect(new Set(tints).size).toBe(1);
-    for (const tint of tints) expect(tint).toMatch(/^bg-tint-[a-z]+$/);
+    expect(new Set(tints)).toEqual(new Set(["bg-muted"]));
   });
 
   test("Given the tint utilities When compiled Then each resolves through a --tint variable defined for both themes", async () => {
-    const tints = [...PROJECT_TYPES.map((type) => projectToCard({ id: "p", name: "n", type, design_system_id: null, design_system_name: null, thumbnail_path: null, updated_at: 0, archived_at: null }).tintClass), ...[0, 1, 2, 3].map((index) => systemToCard({ id: "s", name: "s", status: "published", is_template: false, thumbnail_path: null, updated_at: 0 }, index).tintClass)];
+    const tints = [...PROJECT_TYPES.map((type) => projectToCard({ id: "p", name: "n", type, design_system_id: null, design_system_name: null, thumbnail_path: null, updated_at: 0, archived_at: null }).tintClass)];
     const css = await compileUtilities(`<div class="${tints.join(" ")}"></div>`);
     const index = await Bun.file(new URL("../src/index.css", import.meta.url)).text();
     const dark = new Set(variableNames(cssBlock(index, ':root[data-theme="dark"]')));

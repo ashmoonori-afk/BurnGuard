@@ -76,7 +76,7 @@ describe("design system card display", () => {
     expect(card.fullName).toBe("Aurora Design system");
     expect(card.monogram).toBe("A");
     expect(card.builtIn).toBe(false);
-    expect(card.tintClass).toBe("bg-tint-slate");
+    expect(card.tintClass).toBe("bg-muted");
   });
 });
 
