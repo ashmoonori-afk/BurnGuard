@@ -7,6 +7,7 @@ import { apiFetch, ApiError } from "@/api/client";
 import { createExport, getExport } from "@/api/export";
 import { getSettings } from "@/api/home";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useUIStore } from "@/state/uiStore";
 import { exportJobState } from "./export-job-state";
@@ -91,10 +92,10 @@ export default function VercelShare({ projectId, projectType }: { projectId: str
     <DialogContent className="max-w-md"><DialogHeader><DialogTitle>{t("export.share.publishTitle")}</DialogTitle></DialogHeader>
       <p className="text-sm text-muted-foreground">{t("export.share.description")}</p>
       <p className="text-xs text-muted-foreground">{t("export.share.planNote")}</p>
-      <a className="text-sm underline" href="https://vercel.com/account/tokens" target="_blank" rel="noreferrer">{t("export.share.createToken")}</a>
-      <label className="text-sm">{t("export.share.token")}<input className="mt-1 w-full rounded border bg-background p-2" disabled={busy || autoPublish} type="password" autoComplete="off" value={token} onChange={(event) => setToken(event.target.value)} />{tokenSaved && <span className="mt-1 block text-xs text-muted-foreground">{t("export.share.tokenSaved")}</span>}</label>
-      <label className="text-sm">{t("export.share.teamId")}<input className="mt-1 w-full rounded border bg-background p-2" disabled={busy || autoPublish} placeholder="team_…" value={teamId} onChange={(event) => setTeamId(event.target.value)} /></label>
-      {badgeAvailable && <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="h-4 w-4 accent-accent" disabled={busy || autoPublish} checked={badgeEnabled} onChange={(event) => setBadge(event.target.checked)} />{t("export.share.badge")}</label>}
+      <a className="inline-flex min-h-8 items-center text-sm text-accent underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" href="https://vercel.com/account/tokens" target="_blank" rel="noreferrer">{t("export.share.createToken")}</a>
+      <label className="block space-y-1 text-sm">{t("export.share.token")}<Input disabled={busy || autoPublish} type="password" autoComplete="off" value={token} onChange={(event) => setToken(event.target.value)} />{tokenSaved && <span className="mt-1 block text-xs text-muted-foreground">{t("export.share.tokenSaved")}</span>}</label>
+      <label className="block space-y-1 text-sm">{t("export.share.teamId")}<Input disabled={busy || autoPublish} placeholder="team_…" value={teamId} onChange={(event) => setTeamId(event.target.value)} /></label>
+      {badgeAvailable && <label className="flex min-h-8 items-center gap-2 text-sm"><input type="checkbox" className="h-6 w-6 shrink-0 accent-accent" disabled={busy || autoPublish} checked={badgeEnabled} onChange={(event) => setBadge(event.target.checked)} />{t("export.share.badge")}</label>}
       <Button variant="outline" disabled={busy || autoPublish || packaging} onClick={() => void prepare()}>{t("export.share.prepare")}</Button>
       <p role="status" className="text-sm">{busy ? t("export.share.busy") : job.isError ? t("export.share.statusFailed") : ready && job.data?.latest_attempt ? t("export.share.ready", { name: String(job.data.latest_attempt.project_revision) }) : exportFailed ? t("export.share.exportFailed") : jobId ? t("export.share.packaging") : t("export.share.prepareHint")}</p>
       {message && <p role={message === "export.share.copied" ? "status" : "alert"} className={`text-sm ${message === "export.share.copied" ? "text-muted-foreground" : "text-destructive"}`}>{t(message)}</p>}

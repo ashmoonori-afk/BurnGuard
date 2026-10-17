@@ -373,7 +373,7 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
               <label className="flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
-                  className="h-4 w-4 accent-accent"
+                  className="h-6 w-6 shrink-0 accent-accent"
                   checked={settings.web_asset_search}
                   onChange={(e) => setSettings((draft) => draft ? { ...draft, web_asset_search: e.target.checked } : draft)}
                 />
@@ -667,7 +667,7 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
               <label className="flex items-center gap-2 pt-1 text-sm">
                 <input
                   type="checkbox"
-                  className="h-4 w-4 accent-accent"
+                  className="h-6 w-6 shrink-0 accent-accent"
                   checked={settings.publish_made_with_badge}
                   onChange={(e) => setSettings((draft) => draft ? { ...draft, publish_made_with_badge: e.target.checked } : draft)}
                 />

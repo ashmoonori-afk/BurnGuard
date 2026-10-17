@@ -26,7 +26,7 @@ export default function GenerationControls({ backendId, value, onChange, disable
   const efforts = model?.efforts ?? ["low"];
   const profile = resolveModelCapabilityProfile(backendId, value);
   const belowRecommendation = effortBelowRecommendation(profile, value.effort);
-  const selectClass = "mt-1 min-h-9 w-full rounded-lg border border-border bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+  const selectClass = "mt-1 min-h-9 w-full rounded-lg border border-input bg-card px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
   const secondary = <>
     {backendId === "claude-code" && <label className="block">{t("settings.connection")}
       <select aria-label={t("settings.modelConnection")} className={selectClass} value={value.provider} onChange={(event) => {
@@ -38,7 +38,7 @@ export default function GenerationControls({ backendId, value, onChange, disable
         <option value="commandcode" disabled={!settings.data?.commandcode_api_key_set}>{t(settings.data?.commandcode_api_key_set ? "settings.commandcodeModel" : "settings.commandcodeModelNeedsKey")}</option>
       </select>
     </label>}
-    <label className="flex items-center gap-2"><input type="checkbox" checked={value.vanilla} onChange={(event) => onChange({ ...value, vanilla: event.target.checked })} />{t("settings.vanilla")}</label>
+    <label className="flex items-center gap-2"><input type="checkbox" className="h-6 w-6 shrink-0 accent-accent" checked={value.vanilla} onChange={(event) => onChange({ ...value, vanilla: event.target.checked })} />{t("settings.vanilla")}</label>
   </>;
   return <fieldset disabled={disabled} className="space-y-2 text-xs disabled:opacity-60">
     <legend className="sr-only">{t("settings.generationOptions")}</legend>

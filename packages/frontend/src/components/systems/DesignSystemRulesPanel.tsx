@@ -51,7 +51,7 @@ export function DesignSystemRulesPanel({ systemId, rules, loading }: DesignSyste
       {list("system.rules.dont", groups.dont, "dont")}
     </div>}
     <form className="mt-5 flex min-w-0 flex-wrap items-center gap-2" onSubmit={submit}>
-      <select aria-label={t("system.rules.kind")} className="h-9 rounded-md border border-border bg-background px-2 text-sm" value={kind} onChange={event => setKind(event.target.value === "do" ? "do" : "dont")}>
+      <select aria-label={t("system.rules.kind")} className="h-9 rounded-md border border-input bg-card px-2 text-sm" value={kind} onChange={event => setKind(event.target.value === "do" ? "do" : "dont")}>
         <option value="do">{t("system.rules.do")}</option>
         <option value="dont">{t("system.rules.dont")}</option>
       </select>
