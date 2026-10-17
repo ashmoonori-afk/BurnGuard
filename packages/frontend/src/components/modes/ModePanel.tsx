@@ -12,8 +12,10 @@ import DrawPanel from "./DrawPanel";
 import EditPanel from "./EditPanel";
 import TweaksPanel from "./TweaksPanel";
 import type { TweakChangePreview } from "./TweaksPanel";
+import PhotoPlacementsSection from "./PhotoPlacementsSection";
 import QualityPanel, { type QualityPanelBinding } from "./QualityPanel";
 import UxReviewPanel, { type UxReviewBinding } from "./UxReviewPanel";
+import { ModePanelHeader } from "./ModePanelHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 /**
@@ -57,6 +59,7 @@ export default function ModePanel({
   onClearDraw,
   quality,
   uxReview,
+  onClose,
 }: {
   mode: CanvasMode | null;
   projectId: string;
@@ -96,12 +99,13 @@ export default function ModePanel({
   onClearDraw: () => void;
   quality: QualityPanelBinding;
   uxReview: UxReviewBinding;
+  onClose?: () => void;
 }) {
   const t = useT();
   if (!mode) return null;
 
   return (
-    <aside aria-label={t("modes.panel.settings")} className="flex min-h-0 w-[260px] shrink-0 flex-col overflow-hidden border-l border-border bg-background min-[1500px]:w-[288px] max-[1000px]:max-h-[40%] max-[1000px]:w-full max-[1000px]:shrink max-[1000px]:border-l-0 max-[1000px]:border-t">
+    <aside aria-label={t("modes.panel.settings")} className="flex min-h-0 w-[260px] shrink-0 flex-col overflow-hidden border-l border-border bg-background min-[1500px]:w-[288px] max-lg:absolute max-lg:inset-x-0 max-lg:bottom-0 max-lg:z-30 max-lg:h-auto max-lg:max-h-[min(65%,32rem)] max-lg:w-full max-lg:rounded-t-card max-lg:border-l-0 max-lg:border-t max-lg:shadow-app-3">
       {mode === "tweaks" && (
         <TweaksPanel
           projectId={projectId}
@@ -112,6 +116,7 @@ export default function ModePanel({
           onResetAll={onResetTweaks}
           onClear={onClearTweaks}
           review={tweakReview}
+          onClose={onClose}
         />
       )}
       {mode === "comment" && (
@@ -126,6 +131,7 @@ export default function ModePanel({
           onToggleResolved={onToggleCommentResolved}
           onRequestEdit={onRequestCommentEdit}
           editDisabled={commentEditDisabled}
+          onClose={onClose}
         />
       )}
       {mode === "edit" && (
@@ -134,13 +140,14 @@ export default function ModePanel({
           saving={editSaving}
           onSave={onSaveEdit}
           onClear={onClearEdit}
+          onClose={onClose}
         />
       )}
-      {mode === "quality" && <Tabs defaultValue="quality" className="flex min-h-0 flex-1 flex-col">
+      {mode === "quality" && <><ModePanelHeader title={t("modes.panel.review")} onClose={onClose} /><Tabs defaultValue="quality" className="flex min-h-0 flex-1 flex-col">
         <TabsList aria-label={t("modes.panel.review")} className="m-2 h-auto shrink-0"><TabsTrigger value="quality" className="min-h-11 flex-1">{t("modes.panel.quality")}</TabsTrigger><TabsTrigger value="ux" className="min-h-11 flex-1">{t("modes.panel.ux")}</TabsTrigger></TabsList>
-        <TabsContent value="quality" className="min-h-0 flex-1 data-[state=active]:flex data-[state=active]:flex-col"><QualityPanel quality={quality} /></TabsContent>
+        <TabsContent value="quality" className="min-h-0 flex-1 data-[state=active]:flex data-[state=active]:flex-col"><QualityPanel quality={quality} extra={<PhotoPlacementsSection projectId={projectId} />} /></TabsContent>
         <TabsContent value="ux" className="min-h-0 flex-1 data-[state=active]:flex data-[state=active]:flex-col"><UxReviewPanel key={`${uxReview.projectId}:${uxReview.relPath}:${uxReview.digest}:${uxReview.revision}`} binding={uxReview} /></TabsContent>
-      </Tabs>}
+      </Tabs></>}
       {mode === "draw" && (
         <DrawPanel
           tool={drawTool}
@@ -154,6 +161,7 @@ export default function ModePanel({
           onUndo={onUndoDraw}
           onRedo={onRedoDraw}
           onClear={onClearDraw}
+          onClose={onClose}
         />
       )}
     </aside>

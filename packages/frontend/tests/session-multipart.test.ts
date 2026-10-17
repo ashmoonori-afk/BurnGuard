@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
+import { defaultGenerationOptions, parseGenerationOptions } from "@bg/shared";
 import { ApiError, bootstrapApiAuthority } from "../src/api/client";
 import { preserveSessionDocuments, sendUserEvent } from "../src/api/session";
 
@@ -141,5 +142,18 @@ describe("multipart user event upload", () => {
       schema_version: 1,
       sources: [{ source_type: "upload", upload_id: "upload-deck", file_index: 0, role: "immutable_reference" }],
     });
+  });
+
+  test("Given scoped generation options When JSON and multipart messages are sent Then the complete shared scope survives both transports", async () => {
+    const generation = { ...defaultGenerationOptions("codex"), edit_scope: { mode: "image_only" as const, targets: [{ rel_path: "index.html", artboard_id: "p2", node_id: "photo2" }] } };
+    for (const files of [[], [upload()]]) {
+      let delivered: unknown;
+      await installAuthorizedFetch((_input, init) => {
+        delivered = init?.body instanceof FormData ? JSON.parse(String(init.body.get("generation"))) : JSON.parse(String(init?.body)).generation;
+        return Response.json({ data: { accepted: true } });
+      });
+      await sendUserEvent("session-1", { type: "user.message", text: "Replace one image", generation, files });
+      expect(parseGenerationOptions(delivered)).toEqual(generation);
+    }
   });
 });

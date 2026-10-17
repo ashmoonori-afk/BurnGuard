@@ -3,6 +3,7 @@ import { COMMANDCODE_MODELS, defaultEffortFor, effortBelowRecommendation, resolv
 import { detectBackends, getSettings } from "@/api/home";
 import type { MessageKey } from "@/i18n/messages";
 import { useT } from "@/i18n/t";
+import EditScopeFields from "@/components/chat/EditScopeFields";
 
 export const EFFORT_LABELS: Readonly<Record<GenerationEffort, MessageKey>> = {
   low: "settings.effort.low",
@@ -25,7 +26,13 @@ export default function GenerationControls({ backendId, value, onChange, disable
   const efforts = model?.efforts ?? ["low"];
   const profile = resolveModelCapabilityProfile(backendId, value);
   const belowRecommendation = effortBelowRecommendation(profile, value.effort);
-  const selectClass = "mt-1 min-h-9 w-full rounded-lg border border-border bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+  const selectClass = "mt-1 min-h-9 w-full rounded-lg border border-input bg-card px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+  const guidance = <>
+    <p data-bg-recommended-models className="text-xs font-medium text-foreground">{t("settings.recommendedModels")}</p>
+    {/* States that guidance follows the selection. Never surfaces preset ids, block text or prompt JSON. */}
+    <p className="text-xs text-muted-foreground">{t("settings.taskGuidanceAdapts")}</p>
+    {profile.recommended_min_effort !== null && <p data-bg-effort-note={belowRecommendation ? "below" : "met"} className={belowRecommendation ? "rounded-md bg-warning/10 px-2 py-1 text-xs text-warning-text" : "text-xs text-muted-foreground"}>{t("settings.capableModelEffortNote")}</p>}
+  </>;
   const secondary = <>
     {backendId === "claude-code" && <label className="block">{t("settings.connection")}
       <select aria-label={t("settings.modelConnection")} className={selectClass} value={value.provider} onChange={(event) => {
@@ -37,10 +44,11 @@ export default function GenerationControls({ backendId, value, onChange, disable
         <option value="commandcode" disabled={!settings.data?.commandcode_api_key_set}>{t(settings.data?.commandcode_api_key_set ? "settings.commandcodeModel" : "settings.commandcodeModelNeedsKey")}</option>
       </select>
     </label>}
-    <label className="flex items-center gap-2"><input type="checkbox" checked={value.vanilla} onChange={(event) => onChange({ ...value, vanilla: event.target.checked })} />{t("settings.vanilla")}</label>
+    <label className="flex items-center gap-2"><input type="checkbox" className="h-6 w-6 shrink-0 accent-accent" checked={value.vanilla} onChange={(event) => onChange({ ...value, vanilla: event.target.checked })} />{t("settings.vanilla")}</label>
   </>;
   return <fieldset disabled={disabled} className="space-y-2 text-xs disabled:opacity-60">
     <legend className="sr-only">{t("settings.generationOptions")}</legend>
+    {compact && <EditScopeFields value={value.edit_scope} onChange={scope => onChange({ ...value, edit_scope: scope })} />}
     <div className="grid grid-cols-[minmax(0,1fr)_minmax(90px,auto)] gap-2">
       <label>{t("settings.model")}<select aria-label={t("settings.generationModel")} className={selectClass} value={value.model} onChange={(event) => onChange({ ...value, model: event.target.value, effort: defaultEffortFor(models.find((candidate) => candidate.id === event.target.value) ?? models[0]) })}>
         <option value="">{model ? t("settings.defaultModel", { name: models[0]?.label ?? "" }) : t("settings.toolDefault")}</option>
@@ -50,12 +58,12 @@ export default function GenerationControls({ backendId, value, onChange, disable
         {efforts.map((effort) => <option key={effort} value={effort}>{t(EFFORT_LABELS[effort])}</option>)}
       </select></label>
     </div>
-    <p data-bg-recommended-models className="text-[11px] font-medium text-foreground">{t("settings.recommendedModels")}</p>
-    {/* States that guidance follows the selection. Never surfaces preset ids, block text or prompt JSON. */}
-    <p className="text-[11px] text-muted-foreground">{t("settings.taskGuidanceAdapts")}</p>
-    {profile.recommended_min_effort !== null && <p data-bg-effort-note={belowRecommendation ? "below" : "met"} className={belowRecommendation ? "rounded-md bg-amber-500/10 px-2 py-1 text-[11px] text-amber-700 dark:text-amber-300" : "text-[11px] text-muted-foreground"}>{t("settings.capableModelEffortNote")}</p>}
     {compact ? <details className="text-muted-foreground">
-      <summary className="cursor-pointer rounded py-1 text-[11px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t("settings.additional")}</summary>
+      <summary className="cursor-pointer rounded py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t("chat.details")}</summary>
+      <div className="mt-1 space-y-1">{guidance}</div>
+    </details> : guidance}
+    {compact ? <details className="text-muted-foreground">
+      <summary className="cursor-pointer rounded py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t("settings.additional")}</summary>
       <div className="mt-1 space-y-3 rounded-lg bg-muted/40 p-2.5">{secondary}</div>
     </details> : secondary}
   </fieldset>;

@@ -7,6 +7,12 @@ on:
 permissions:
   contents: read
 
+# A force-push makes the running pull_request job stale: the secret scan asks the API for the pull request's commits
+# at scan time and gets the new head, which the job's earlier checkout does not contain. Cancel the superseded run.
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   security:
     runs-on: ubuntu-latest
@@ -54,6 +60,10 @@ jobs:
       - name: Security boundary tests
         run: >-
           bun test --timeout 30000
+          packages/backend/tests/project-folder.test.ts
+          packages/frontend/tests/canvas-device-width.test.ts
+          packages/frontend/tests/toolbar-overflow.test.ts
+          packages/backend/tests/edit-scope.test.ts
           packages/backend/tests/request-authority.test.ts
           packages/backend/tests/path-boundary.test.ts
           packages/backend/tests/raw-file-response.test.ts
@@ -67,6 +77,9 @@ jobs:
           packages/backend/tests/bundled-fonts.test.ts
           packages/backend/tests/bundled-font-reference.test.ts
           packages/frontend/tests/canvas-edit-review.test.ts
+          packages/frontend/tests/revision-thumbnails.test.ts
+          packages/frontend/tests/settings-sections.test.ts
+          packages/frontend/tests/layout-notes.test.ts
           packages/backend/tests/daisyui-seed-themes.test.ts
           packages/backend/tests/theme-previews.test.ts
           packages/backend/tests/catalog.test.ts
@@ -74,6 +87,7 @@ jobs:
           packages/frontend/tests/quick-comment.test.ts
           packages/frontend/tests/canvas-interaction.test.ts
           packages/backend/tests/structure-extractor.test.ts
+          packages/frontend/tests/project-header-actions.test.ts
           packages/frontend/tests/workspace-narrow-layout.test.ts
           packages/frontend/tests/chat-status-slot-layout.test.ts
           packages/frontend/tests/turn-disposition.test.ts
@@ -137,10 +151,18 @@ jobs:
           packages/backend/tests/extraction-website-boundaries.test.ts
           packages/backend/tests/design-system-starter.test.ts
           packages/backend/tests/design-system-pages.test.ts
+          packages/backend/tests/design-system-rules.test.ts
+          packages/backend/tests/design-md.test.ts
+          packages/backend/tests/project-instructions.test.ts
+          packages/backend/tests/project-reader.test.ts
+          packages/frontend/tests/correction-rule.test.ts
+          packages/frontend/tests/example-briefs.test.ts
           packages/backend/tests/extraction-source-publication.test.ts
           packages/frontend/tests/error-copy.test.ts
           packages/backend/tests/project-import.test.ts
           packages/backend/tests/artifact-history.test.ts
+          packages/backend/tests/revision-thumbnails.test.ts
+          packages/backend/tests/review-failed-draft-recovery.test.ts
           packages/backend/tests/checkpoints.test.ts
           packages/backend/tests/project-bundle.test.ts
           packages/backend/tests/export-pptx.test.ts
@@ -151,8 +173,15 @@ jobs:
           packages/backend/tests/chromium-bridge-probe.test.ts
           packages/backend/tests/chromium-browser-paths.test.ts
           packages/backend/tests/export-render-launch.test.ts
+          packages/backend/tests/export-render-phase.test.ts
+          packages/backend/tests/print-preflight.test.ts
+          packages/backend/tests/print-preflight-measure.test.ts
+          packages/backend/tests/print-backgrounds.browser.test.ts
+          packages/backend/tests/export-render-phase-callers.test.ts
+          packages/frontend/tests/print-preflight-view.test.ts
           packages/backend/tests/chromium-process-tree.test.ts
           packages/backend/tests/chromium-launch-hardening.test.ts
+          packages/backend/tests/design-audit-skip-link.test.ts
           scripts/qa/check-os-matrix-coverage.test.ts
           scripts/qa/check-flake-patterns.test.ts
           scripts/qa/check-migration-order.test.ts
@@ -162,6 +191,14 @@ jobs:
           packages/frontend/tests/canvas-source.test.ts
           packages/frontend/tests/side-input.test.ts
           packages/frontend/tests/i18n-messages.test.ts
+          packages/frontend/tests/project-creation.test.ts
+          packages/frontend/tests/new-project-panel.test.ts
+          packages/frontend/tests/first-run-guide.test.ts
+          packages/frontend/tests/design-token-contrast.test.ts
+          packages/frontend/tests/design-token-usage.test.ts
+          packages/frontend/tests/ui-primitives.test.ts
+          packages/frontend/tests/home-card-display.test.ts
+          packages/backend/tests/first-run-project-origin.test.ts
           packages/frontend/tests/tool-badge-copy.test.ts
           packages/frontend/tests/prompt-library.test.ts
           packages/frontend/tests/logo-inspiration.test.ts
@@ -171,6 +208,11 @@ jobs:
           packages/backend/tests/image-fingerprint.test.ts
           packages/backend/tests/logo-moodboard.test.ts
           packages/backend/tests/logo-moodboard-routes.test.ts
+          packages/backend/tests/photo-placements.test.ts
+          packages/backend/tests/photo-record-publication.test.ts
+          packages/backend/tests/photo-record-crash-recovery.test.ts
+          packages/backend/tests/review-failed-photo-record.test.ts
+          packages/backend/tests/photo-stretch.browser.test.ts
           packages/backend/tests/logo-originality.test.ts
           packages/backend/tests/logo-pipeline-state.test.ts
           packages/backend/tests/logo-completion-gate.test.ts
@@ -213,6 +255,7 @@ jobs:
           packages/backend/tests/desktop-lifecycle.test.ts
           packages/backend/tests/local-fonts.test.ts
           packages/frontend/tests/canvas-css-imports.browser.test.ts
+          packages/frontend/tests/project-first-message.browser.test.ts
           packages/backend/tests/exports.test.ts
       # Every baseline suite (scripts/qa/os-matrix-baseline.txt) that an explicit list above does not already run, one
       # `bun test` process per file, after the browser install because most of them drive a real Chromium. The
@@ -229,7 +272,7 @@ jobs:
       # ICNS/JXL/HEIF inputs never reach PPTXGenJS here. Remove the router ids
       # with the planned 7.18+ migration; this client-only app uses neither SSR
       # hydration nor user-controlled navigation targets. Remove the braces id
-      # when a release after 3.0.3 exists; braces is reached only through
+      # with a release after 3.0.3 exists; braces is reached only through
       # tailwindcss at frontend build time, with patterns from our own config,
       # and is not part of the packaged app. The postcss-selector-parser id
       # (fixed only in 7.1.6) has the same reach: tailwindcss 3.4.19, the last

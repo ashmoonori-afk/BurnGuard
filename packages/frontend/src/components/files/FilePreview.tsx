@@ -130,7 +130,7 @@ export default function FilePreview({ projectId, file }: { projectId: string; fi
     <section aria-label={t("files.preview")} className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
       <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-6">
         <div className="min-w-0 flex-1 basis-36">
-          <p className="mb-1 text-[11px] font-medium text-muted-foreground">{t("files.readOnlyPreview")}</p>
+          <p className="mb-1 text-xs font-medium text-muted-foreground">{t("files.readOnlyPreview")}</p>
           <h3 title={file.rel_path} className="break-all font-mono text-xs leading-5">{fileDisplayPath(file.rel_path)}</h3>
         </div>
         <Button asChild variant="outline" className="min-h-11 shrink-0 text-xs">

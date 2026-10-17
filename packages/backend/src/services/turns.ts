@@ -62,6 +62,7 @@ import { checkCssLogos } from "./css-logo-check";
 import { prepareSlideDeckExport } from "./export-stage";
 import { blockingDesignFindings, DesignReviewError, reviewTurnDesign } from "./turn-design-review";
 import { reviewDesignSystemConformance } from "./design-system-conformance";
+import { writeReviewFailureReceipt } from "./review-failed-recovery";
 import { entrypointBuiltAgainstSystem, provisionDesignSystemStarter, seedStarterEntrypoint } from "./design-system-starter";
 import { provisionDesignSystemHeroAssets, provisionDesignSystemLayoutReference } from "./design-system-layout-reference";
 import { resolveManagedPath, systemsDir } from "../lib/paths";
@@ -418,7 +419,7 @@ async function runUserTurnInternal(
   if (!sessionContext) throw new Error("session_not_found");
   // Previously submitted documents remain available after navigation/restart.
   const modelPayload = dependencies.modelText === undefined ? payload : { ...payload, text: dependencies.modelText };
-  const contextPayload = { ...modelPayload, attachments: selectContextAttachments(sessionContext.attachments, payload.attachments ?? [], payload.text) };
+  const contextPayload = { ...modelPayload, generation, attachments: selectContextAttachments(sessionContext.attachments, payload.attachments ?? [], payload.text) };
   const visualSources = await buildVisualSourceManifest({
     projectDir: sessionContext.project.project_dir,
     attachments: sessionContext.attachments,
@@ -498,6 +499,7 @@ async function runUserTurnInternal(
   try {
     const operation = await coordinator.run({
       projectId: project.id, projectDir, kind: "turn", operationId,
+      editScope: generation.edit_scope,
       ...(project.type === "logo" ? { signal: activeTurn.abortController.signal } : {}),
       expectedRevision: project.current_revision, expectedArtifactDigest: base.tree_digest,
       publicationPolicy: { forbiddenSha256 },
@@ -680,7 +682,11 @@ async function runUserTurnInternal(
               // Checks that could not run do not refuse the turn: the review badge and the on-demand
               // Quality audit carry that warning. Only measured, blocking defects do.
               const blocking = designReview.result === null ? [] : blockingDesignFindings(designReview.result, changedPaths);
-              if (blocking.length > 0 || providerReportedFailure) throw new DesignReviewError();
+              if (blocking.length > 0 || providerReportedFailure) {
+                // The retained stage is what a user can later open as an unverified draft; record why it was refused.
+                await writeReviewFailureReceipt(stageDir, { result: designReview.result, forbiddenSha256 }).catch(() => console.warn("[artifact] review failure receipt not written", operationId));
+                throw new DesignReviewError();
+              }
               designReviewResult = designReview.result;
               // A repair edits the stage after the completion gate, so repaired output is gated again.
               if ((designReview.repairs > 0 || sourcePages !== undefined) && !await generationOutputComplete(stageDir, project.entrypoint, project.type, sourcePages?.length, sourcePages, briefPages)) {

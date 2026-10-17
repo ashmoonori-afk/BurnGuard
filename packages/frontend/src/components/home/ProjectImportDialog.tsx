@@ -5,6 +5,8 @@ import { useNavigate } from "react-router-dom";
 import { apiFetch, ApiError } from "@/api/client";
 import { importProjectBundle } from "@/api/project-bundle";
 import { apiErrorCopy } from "@/lib/error-copy";
+import { cn } from "@/lib/utils";
+import { PROJECT_CONTROL_CLASS, PROJECT_LABEL_CLASS } from "@/lib/project-creation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, busyDialogProps } from "@/components/ui/dialog";
@@ -58,13 +60,25 @@ export function ProjectImportForm({ name, source, files, pending, error, oversiz
   readonly onSubmit: () => void;
 }) {
   const t = useT();
-  return <form className="space-y-4" onSubmit={event => { event.preventDefault(); onSubmit(); }}>
-    <label htmlFor="project-import-name" className="block space-y-2 text-sm">{t("home.creation.name")}<Input id="project-import-name" className="max-[900px]:min-h-11" value={name} maxLength={200} onChange={event => onNameChange(event.target.value)} disabled={pending} required /></label>
-    <label htmlFor="project-import-format" className="block space-y-2 text-sm">{t("home.projectImport.format")}<select id="project-import-format" className="min-h-10 w-full rounded-md border border-border bg-background p-2 max-[900px]:min-h-11" value={source} disabled={pending} onChange={event => onSourceChange(event.target.value as ProjectImportSource)}><option value="bundle">{t("home.projectImport.bundle")}</option><option value="zip">{t("home.projectImport.zip")}</option><option value="folder">{t("home.projectImport.folder")}</option></select></label>
-    <label htmlFor="project-import-file" className="block space-y-2 text-sm">{source === "bundle" ? t("home.projectImport.selectBundle") : source === "zip" ? t("home.projectImport.selectZip") : t("home.projectImport.selectFolder")}<input id="project-import-file" key={source} type="file" className="block min-h-10 w-full max-[900px]:min-h-11" disabled={pending} {...(source === "bundle" ? { accept: ".burnguard-project" } : source === "zip" ? { accept: ".zip" } : { webkitdirectory: "", directory: "", multiple: true })} onChange={event => onFilesChange(Array.from(event.target.files ?? []))} /></label>
-    <p className="text-xs text-muted-foreground">{t(source === "bundle" ? "home.projectImport.bundleDetails" : "home.projectImport.limits")}</p>
-    {source !== "bundle" && <p className="text-xs text-muted-foreground">{t("home.projectImport.docs")}</p>}
-    {files.length > 0 && <p role="status" className="text-xs">{t("home.projectImport.selected", { count: files.length })}</p>}
+  const folder = source === "folder";
+  const chosen = files.length === 0 ? t(folder ? "home.projectImport.noFolder" : "home.projectImport.noFile")
+    : folder ? t("home.projectImport.selected", { count: files.length }) : files[0]?.name ?? "";
+  return <form className="space-y-5" onSubmit={event => { event.preventDefault(); onSubmit(); }}>
+    <div className="space-y-1.5"><label htmlFor="project-import-name" className={PROJECT_LABEL_CLASS}>{t("home.creation.name")}</label><Input id="project-import-name" className="max-[900px]:min-h-11" value={name} maxLength={200} onChange={event => onNameChange(event.target.value)} disabled={pending} required /></div>
+    <div className="space-y-1.5"><label htmlFor="project-import-format" className={PROJECT_LABEL_CLASS}>{t("home.projectImport.format")}</label><select id="project-import-format" className={`${PROJECT_CONTROL_CLASS} min-h-10 max-[900px]:min-h-11`} value={source} disabled={pending} onChange={event => onSourceChange(event.target.value as ProjectImportSource)}><option value="bundle">{t("home.projectImport.bundle")}</option><option value="zip">{t("home.projectImport.zip")}</option><option value="folder">{t("home.projectImport.folder")}</option></select></div>
+    <div className="space-y-1.5">
+      <span id="project-import-file-label" className={`block ${PROJECT_LABEL_CLASS}`}>{source === "bundle" ? t("home.projectImport.selectBundle") : source === "zip" ? t("home.projectImport.selectZip") : t("home.projectImport.selectFolder")}</span>
+      <div className="flex items-center gap-3">
+        <input id="project-import-file" aria-labelledby="project-import-file-label" key={source} type="file" className="peer sr-only" disabled={pending} {...(source === "bundle" ? { accept: ".burnguard-project" } : source === "zip" ? { accept: ".zip" } : { webkitdirectory: "", directory: "", multiple: true })} onChange={event => onFilesChange(Array.from(event.target.files ?? []))} />
+        <label htmlFor="project-import-file" className={cn("inline-flex min-h-10 shrink-0 cursor-pointer items-center rounded-lg border border-input bg-background px-4 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-muted peer-focus-visible:ring-2 peer-focus-visible:ring-ring peer-focus-visible:ring-offset-2 peer-disabled:pointer-events-none peer-disabled:opacity-50 max-[900px]:min-h-11")}>{t(folder ? "home.projectImport.chooseFolder" : "home.projectImport.chooseFile")}</label>
+        <span className={cn("min-w-0 flex-1 truncate text-sm", files.length === 0 ? "text-muted-foreground" : "text-foreground")} title={files.length === 1 ? chosen : undefined}>{chosen}</span>
+      </div>
+    </div>
+    <div className="space-y-1.5 rounded-lg bg-muted/60 p-3 text-xs leading-5 text-muted-foreground">
+      <p>{t(source === "bundle" ? "home.projectImport.bundleDetails" : "home.projectImport.limits")}</p>
+      {source !== "bundle" && <p>{t("home.projectImport.docs")}</p>}
+    </div>
+    {files.length > 0 && <p role="status" className="sr-only">{t("home.projectImport.selected", { count: files.length })}</p>}
     {(oversized || error !== null) && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-foreground">{oversized ? t("home.projectImport.limitError") : projectImportErrorCopy(error)}</p>}
     <Button className="w-full max-[900px]:min-h-11" type="submit" disabled={pending || oversized || !files.length || !name.trim()}>{pending ? t("home.projectImport.pending") : t("home.projectImport.open")}</Button>
   </form>;

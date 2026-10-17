@@ -15,6 +15,7 @@ export const DESIGN_AUDIT_CHECK_COPY = {
   get remote_resources() { return t("modes.audit.check.remoteResources"); },
   get journey_dead_link() { return t("modes.audit.check.journeyDeadLink"); }, get journey_mobile_nav() { return t("modes.audit.check.journeyMobileNav"); },
   get journey_focus_visible() { return t("modes.audit.check.journeyFocusVisible"); }, get journey_layout_shift() { return t("modes.audit.check.journeyLayoutShift"); },
+  get stretched_image() { return t("modes.audit.check.stretchedImage"); }, get reference_photo_leak() { return t("modes.audit.check.referencePhotoLeak"); },
 } as const satisfies Record<DesignAuditCheckCode, string>;
 
 export const DESIGN_AUDIT_STATUS_COPY = {
@@ -34,6 +35,7 @@ export const DESIGN_AUDIT_ACTION_COPY = {
   get create_or_repair_site_link() { return t("modes.audit.action.siteLink"); }, get add_shared_blocks() { return t("modes.audit.action.sharedBlocks"); },
   get relativize_asset_path() { return t("modes.audit.action.assetPath"); }, get bundle_remote_resource() { return t("modes.audit.action.bundleRemote"); },
   get add_visible_focus() { return t("modes.audit.action.visibleFocus"); }, get reserve_layout_space() { return t("modes.audit.action.reserveSpace"); },
+  get restore_image_crop() { return t("modes.audit.action.imageCrop"); }, get remove_reference_photo() { return t("modes.audit.action.removeReference"); },
 } as const satisfies Record<DesignAuditTargetedAction, string>;
 
 export const DESIGN_AUDIT_UNKNOWN_COPY = {

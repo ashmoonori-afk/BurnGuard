@@ -41,14 +41,14 @@ export default function ExportParitySummary({
       <div className="flex items-center gap-1.5">
         <Icon
           className={`h-3.5 w-3.5 ${
-            passed ? "text-success" : "text-warning"
+            passed ? "text-success-text" : "text-warning-text"
           }`}
           aria-hidden="true"
         />
-        <span className="text-[10px] font-medium text-foreground">
+        <span className="text-xs font-medium text-foreground">
           {t(passed ? "export.parity.pass" : "export.parity.warn")}
         </span>
-        <span className="text-[10px] text-muted-foreground">
+        <span className="text-xs text-muted-foreground">
           {t(
             parity.comparison === "pixel"
               ? "export.parity.pixel"
@@ -57,7 +57,7 @@ export default function ExportParitySummary({
         </span>
       </div>
       {warnings.length > 0 && (
-        <ul className="space-y-0.5 text-[10px] text-muted-foreground">
+        <ul className="space-y-0.5 text-xs text-muted-foreground">
           {warnings.map((warning) => (
             <li key={warning}>{t(parityWarningKey(warning))}</li>
           ))}
@@ -65,7 +65,7 @@ export default function ExportParitySummary({
       )}
       {parity.pages.map((page) => (
         <figure key={page.page} className="space-y-1">
-          <figcaption className="flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
+          <figcaption className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
             <span>{t("export.parity.page", { count: page.page })}</span>
             <span className="font-mono">
               {page.source_dimensions.width}×{page.source_dimensions.height}

@@ -37,6 +37,10 @@ import { useLocaleStore } from "@/i18n/locale";
 export const BRIEF_LOCALE = "ko";
 export const AUDIENCE_MAX_LENGTH = 200;
 export const OBJECTIVE_MAX_LENGTH = 1000;
+
+export function suggestedProjectName(objective: string): string {
+  return objective.trim().split(/\s+/u).slice(0, 6).join(" ").slice(0, 100);
+}
 export const PROTOTYPE_PAGE_PRESETS = [
   { label: "home.page.about", relPath: "about.html" },
   { label: "home.page.services", relPath: "services.html" },
@@ -166,9 +170,12 @@ export const INITIAL_BRIEF_FORM: BriefForm = {
   logoAvoid: "",
 };
 
-export const PROJECT_LABEL_CLASS = "text-xs font-medium text-foreground/80";
+/** One field-label style for every creation and import form. */
+export const PROJECT_LABEL_CLASS = "text-sm font-medium text-foreground";
+/** One section-heading style for the numbered sections of the creation dialog. */
+export const PROJECT_SECTION_CLASS = "text-sm font-semibold text-foreground";
 export const PROJECT_CONTROL_CLASS =
-  "flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground opacity-100 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:opacity-50";
+  "flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground opacity-100 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground";
 
 export type DraftProblem =
   | "section_count_invalid"
@@ -311,11 +318,11 @@ export function buildCreateProjectRequest(
     && draft.pages.every((page) => safePage.test(page) && page.toLowerCase() !== "index.html")
     && new Set(draft.pages.map((page) => page.toLowerCase())).size === draft.pages.length;
   if ((draft.type !== "prototype" && draft.pages.length > 0) || !pagesValid) return { ok: false, problem: "pages_invalid" };
-  const name = draft.name.trim();
+  const name = draft.name.trim() || suggestedProjectName(draft.objective);
   if (name.length === 0) return { ok: false, problem: "name_required" };
 
   const audience = draft.audience.trim();
-  if (audience.length === 0 || audience.length > AUDIENCE_MAX_LENGTH) {
+  if (audience.length > AUDIENCE_MAX_LENGTH) {
     return { ok: false, problem: "audience_invalid" };
   }
 

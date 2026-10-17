@@ -4,6 +4,8 @@ import { DECK_SOURCE_PAGE_LIMIT } from "./context";
 import { LogoDeliverableError } from "./logo-deliverables";
 
 const COPY: Readonly<Record<TurnErrorCode, string>> = {
+  edit_scope_violation: "Changes outside the requested edit scope were not applied. Correct the changes or explicitly widen the scope.",
+  invalid_edit_scope: "The edit scope is invalid. Check the target pages and nodes.",
   logo_directions_invalid: "Logo directions or adopted choices are invalid. The previous result was preserved.",
   logo_originality_rejected: "Logo reference screening did not pass. The previous result was preserved.",
   graphic_requires_authenticated_codex: "그래픽 생성에는 이미지 생성이 가능한 로그인된 연결이 필요해요. 모델 선택과 로그인 상태를 확인해 주세요.",
@@ -146,6 +148,8 @@ export function turnErrorCode(error: unknown, fallback?: string): TurnErrorCode 
 
 function knownCode(candidate: string | undefined): TurnErrorCode | undefined {
   switch (candidate) {
+    case "edit_scope_violation":
+    case "invalid_edit_scope":
     case "graphic_requires_authenticated_codex":
     case "graphic_starter_unchanged":
     case "logo_requires_authenticated_codex":

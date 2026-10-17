@@ -1,17 +1,19 @@
 import type { PatchFileRequest } from "./file-patch";
 
-export const DESIGN_AUDIT_CHECK_CODES = ["text_overflow", "element_overlap", "minimum_text_size", "contrast", "narrow_width", "duplicate_node_id", "missing_image", "token_usage", "site_nav_mismatch", "site_missing_aria_current", "site_dangling_link", "site_missing_shared_block", "site_root_absolute_asset", "font_consistency", "copy_review", "em_dash_copy", "eyebrow_density", "duplicate_cta_intent", "cta_label_wrap", "placeholder_copy", "accent_color_count", "radius_scale_count", "repeated_section_structure", "remote_resources", "journey_dead_link", "journey_mobile_nav", "journey_focus_visible", "journey_layout_shift"] as const;
+export const DESIGN_AUDIT_CHECK_CODES = ["text_overflow", "element_overlap", "minimum_text_size", "contrast", "narrow_width", "duplicate_node_id", "missing_image", "token_usage", "site_nav_mismatch", "site_missing_aria_current", "site_dangling_link", "site_missing_shared_block", "site_root_absolute_asset", "font_consistency", "copy_review", "em_dash_copy", "eyebrow_density", "duplicate_cta_intent", "cta_label_wrap", "placeholder_copy", "accent_color_count", "radius_scale_count", "repeated_section_structure", "remote_resources", "journey_dead_link", "journey_mobile_nav", "journey_focus_visible", "journey_layout_shift", "stretched_image", "reference_photo_leak"] as const;
 export type DesignAuditCheckCode = (typeof DESIGN_AUDIT_CHECK_CODES)[number];
 /** `not_applicable`: the check has no meaning for this project kind (site checks on a deck, narrow width on a fixed canvas); it counts like a pass for the verdict but is never a passed check. */
 export type DesignAuditCheckStatus = "pass" | "fail" | "skipped" | "unmeasurable" | "not_applicable";
 export type DesignAuditOverallStatus = "ready" | "must_fix" | "recommended";
 export type DesignAuditUnknownReason = "no_measurable_candidates" | "unresolvable_rendering" | "tokens_not_exposed";
 export type DesignAuditSeverity = "must_fix" | "recommended";
-export type DesignAuditTargetedAction = "expand_or_reflow_text" | "separate_overlapping_elements" | "set_minimum_font_size" | "increase_color_contrast" | "repair_narrow_layout" | "assign_unique_node_ids" | "restore_image_reference" | "replace_literal_with_token" | "repair_site_navigation" | "mark_current_page" | "create_or_repair_site_link" | "add_shared_blocks" | "relativize_asset_path" | "align_font_roles" | "revise_copy" | "keep_cta_label_single_line" | "consolidate_visual_language" | "vary_section_layout" | "bundle_remote_resource" | "add_visible_focus" | "reserve_layout_space";
+export type DesignAuditTargetedAction = "expand_or_reflow_text" | "separate_overlapping_elements" | "set_minimum_font_size" | "increase_color_contrast" | "repair_narrow_layout" | "assign_unique_node_ids" | "restore_image_reference" | "replace_literal_with_token" | "repair_site_navigation" | "mark_current_page" | "create_or_repair_site_link" | "add_shared_blocks" | "relativize_asset_path" | "align_font_roles" | "revise_copy" | "keep_cta_label_single_line" | "consolidate_visual_language" | "vary_section_layout" | "bundle_remote_resource" | "add_visible_focus" | "reserve_layout_space" | "restore_image_crop" | "remove_reference_photo";
 /** Values a minimum-text safe fix may write: the two literal floors, or the slides surface token when the deck exposes it. */
 export const DESIGN_AUDIT_SAFE_FIX_FONT_SIZES = ["12px", "24px", "var(--slide-type-caption)"] as const;
 
 export type DesignAuditSafeFix = { readonly kind: "patch_html_node"; readonly rel_path: string; readonly request: PatchFileRequest };
+/** Where an element without a data-bg-node-id sits: a project-relative CSS path and its measured page-coordinate bounds in px. */
+export type DesignAuditLocator = { readonly selector: string; readonly bounds: { readonly x: number; readonly y: number; readonly width: number; readonly height: number } };
 export type DesignAuditFinding = {
   readonly id: string;
   readonly check_code: DesignAuditCheckCode;
@@ -22,6 +24,7 @@ export type DesignAuditFinding = {
   readonly threshold?: number;
   readonly targeted_action: DesignAuditTargetedAction;
   readonly safe_fix?: DesignAuditSafeFix;
+  readonly locator?: DesignAuditLocator;
 };
 export type DesignAuditCheck = { readonly code: DesignAuditCheckCode; readonly status: DesignAuditCheckStatus; readonly reason: DesignAuditUnknownReason | null; readonly findings: readonly DesignAuditFinding[] };
 export type DesignAuditResult = { readonly schema_version: 1; readonly project_id: string; readonly artifact_revision: number; readonly artifact_digest: string; readonly created_at: number; readonly overall_status: DesignAuditOverallStatus; readonly checks: readonly DesignAuditCheck[]; readonly shared_change_divergence?: readonly string[] };
@@ -29,10 +32,10 @@ export type DesignAuditResult = { readonly schema_version: 1; readonly project_i
 const SHA256 = /^[0-9a-f]{64}$/u;
 const REL_PATH = /^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))(?!.*\\)[^\0]{1,512}$/u;
 /** The one severity a check's findings carry; null when the check decides per finding (a remote frame blocks exports, another remote URL is advisory). */
-const SEVERITIES: Readonly<Record<DesignAuditCheckCode, DesignAuditSeverity | null>> = { text_overflow: "must_fix", element_overlap: "recommended", minimum_text_size: "recommended", contrast: "must_fix", narrow_width: "must_fix", duplicate_node_id: "must_fix", missing_image: "must_fix", token_usage: "recommended", site_nav_mismatch: "recommended", site_missing_aria_current: "recommended", site_dangling_link: "recommended", site_missing_shared_block: "recommended", site_root_absolute_asset: "recommended", font_consistency: "recommended", copy_review: "recommended", em_dash_copy: "recommended", eyebrow_density: "recommended", duplicate_cta_intent: "recommended", cta_label_wrap: "recommended", placeholder_copy: "recommended", accent_color_count: "recommended", radius_scale_count: "recommended", repeated_section_structure: "recommended", remote_resources: null, journey_dead_link: "recommended", journey_mobile_nav: "recommended", journey_focus_visible: "recommended", journey_layout_shift: "recommended" };
+const SEVERITIES: Readonly<Record<DesignAuditCheckCode, DesignAuditSeverity | null>> = { text_overflow: "must_fix", element_overlap: "recommended", minimum_text_size: "recommended", contrast: "must_fix", narrow_width: "must_fix", duplicate_node_id: "must_fix", missing_image: "must_fix", token_usage: "recommended", site_nav_mismatch: "recommended", site_missing_aria_current: "recommended", site_dangling_link: "recommended", site_missing_shared_block: "recommended", site_root_absolute_asset: "recommended", font_consistency: "recommended", copy_review: "recommended", em_dash_copy: "recommended", eyebrow_density: "recommended", duplicate_cta_intent: "recommended", cta_label_wrap: "recommended", placeholder_copy: "recommended", accent_color_count: "recommended", radius_scale_count: "recommended", repeated_section_structure: "recommended", remote_resources: null, journey_dead_link: "recommended", journey_mobile_nav: "recommended", journey_focus_visible: "recommended", journey_layout_shift: "recommended", stretched_image: "must_fix", reference_photo_leak: "must_fix" };
 const ACTIONS: Readonly<Record<DesignAuditCheckCode, DesignAuditTargetedAction>> = {
   font_consistency: "align_font_roles", copy_review: "revise_copy", em_dash_copy: "revise_copy", eyebrow_density: "revise_copy", duplicate_cta_intent: "revise_copy", cta_label_wrap: "keep_cta_label_single_line", placeholder_copy: "revise_copy", accent_color_count: "consolidate_visual_language", radius_scale_count: "consolidate_visual_language", repeated_section_structure: "vary_section_layout", remote_resources: "bundle_remote_resource",
-  journey_dead_link: "create_or_repair_site_link", journey_mobile_nav: "repair_narrow_layout", journey_focus_visible: "add_visible_focus", journey_layout_shift: "reserve_layout_space",
+  journey_dead_link: "create_or_repair_site_link", journey_mobile_nav: "repair_narrow_layout", journey_focus_visible: "add_visible_focus", journey_layout_shift: "reserve_layout_space", stretched_image: "restore_image_crop", reference_photo_leak: "remove_reference_photo",
   text_overflow: "expand_or_reflow_text", element_overlap: "separate_overlapping_elements", minimum_text_size: "set_minimum_font_size", contrast: "increase_color_contrast", narrow_width: "repair_narrow_layout", duplicate_node_id: "assign_unique_node_ids", missing_image: "restore_image_reference", token_usage: "replace_literal_with_token", site_nav_mismatch: "repair_site_navigation", site_missing_aria_current: "mark_current_page", site_dangling_link: "create_or_repair_site_link", site_missing_shared_block: "add_shared_blocks", site_root_absolute_asset: "relativize_asset_path",
 };
 
@@ -85,8 +88,8 @@ function parseCheck(input: unknown, expectedCode: DesignAuditCheckCode, path: st
 
 function parseFinding(input: unknown, code: DesignAuditCheckCode, path: string): DesignAuditFinding {
   const raw = plainRecord(input, path);
-  const allowed = ["id", "check_code", "severity", "source", "evidence", "measured", "threshold", "targeted_action", "safe_fix"];
-  exact(raw, allowed, { path, optional: ["measured", "threshold", "safe_fix"] });
+  const allowed = ["id", "check_code", "severity", "source", "evidence", "measured", "threshold", "targeted_action", "safe_fix", "locator"];
+  exact(raw, allowed, { path, optional: ["measured", "threshold", "safe_fix", "locator"] });
   const id = boundedString(raw["id"], `${path}.id`, 240);
   if (raw["check_code"] !== code) invalid(`${path}.check_code`);
   const severity = oneOf(raw["severity"], `${path}.severity`, ["must_fix", "recommended"] as const);
@@ -100,7 +103,15 @@ function parseFinding(input: unknown, code: DesignAuditCheckCode, path: string):
   const measured = optionalFinite(raw["measured"], `${path}.measured`);
   const threshold = optionalFinite(raw["threshold"], `${path}.threshold`);
   const safeFix = raw["safe_fix"] === undefined ? undefined : parseSafeFix({ input: raw["safe_fix"], code, relPath, nodeBgId, path: `${path}.safe_fix` });
-  return { id, check_code: code, severity, source: { rel_path: relPath, node_bg_id: nodeBgId }, evidence, ...(measured === undefined ? {} : { measured }), ...(threshold === undefined ? {} : { threshold }), targeted_action: ACTIONS[code], ...(safeFix === undefined ? {} : { safe_fix: safeFix }) };
+  const locator = raw["locator"] === undefined ? undefined : parseLocator(raw["locator"], `${path}.locator`);
+  return { id, check_code: code, severity, source: { rel_path: relPath, node_bg_id: nodeBgId }, evidence, ...(measured === undefined ? {} : { measured }), ...(threshold === undefined ? {} : { threshold }), targeted_action: ACTIONS[code], ...(safeFix === undefined ? {} : { safe_fix: safeFix }), ...(locator === undefined ? {} : { locator }) };
+}
+
+function parseLocator(input: unknown, path: string): DesignAuditLocator {
+  const value = record(input, path, ["selector", "bounds"]);
+  const bounds = record(value["bounds"], `${path}.bounds`, ["x", "y", "width", "height"]);
+  const finite = (key: string): number => optionalFinite(bounds[key], `${path}.bounds.${key}`) ?? invalid(`${path}.bounds.${key}`);
+  return { selector: boundedString(value["selector"], `${path}.selector`, 300), bounds: { x: finite("x"), y: finite("y"), width: finite("width"), height: finite("height") } };
 }
 
 function parseSafeFix(context: { readonly input: unknown; readonly code: DesignAuditCheckCode; readonly relPath: string; readonly nodeBgId: string | null; readonly path: string }): DesignAuditSafeFix {

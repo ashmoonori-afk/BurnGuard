@@ -1,9 +1,9 @@
 import { expect, test } from "bun:test";
 import { inspectRenderedPage } from "../src/services/design-audit-dom";
-import { launchChromium } from "../src/services/export-render-session";
+import { launchTestChromium } from "./helpers/chromium";
 
 test.each(["data-graphic-artboard", "data-slide"] as const)("Given twelve stacked %s pages When inspected Then local bounds pass inside text but retain overflow and clipping failures", async (marker) => {
-  const browser = await launchChromium(AbortSignal.timeout(60_000));
+  const browser = await launchTestChromium(60_000);
   try {
     const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
     const controls = '<p data-bg-node-id="outside-left" style="left:-20px;top:120px">Outside</p><p data-bg-node-id="outside-right" style="left:1900px;top:120px">Outside</p><p data-bg-node-id="outside-top" style="left:40px;top:-40px">Outside</p><p data-bg-node-id="outside-bottom" style="left:40px;top:1070px">Outside</p><p data-bg-node-id="ink-outside" style="left:1880px;top:200px;width:10px;white-space:nowrap">Text extending beyond the page</p><p data-bg-node-id="self-clipped" style="left:40px;top:200px;height:10px;overflow:hidden">Clipped</p><div style="position:absolute;left:40px;top:300px;width:200px;height:10px;overflow:hidden"><p data-bg-node-id="ancestor-clipped" style="left:0;top:0">Clipped</p></div>';

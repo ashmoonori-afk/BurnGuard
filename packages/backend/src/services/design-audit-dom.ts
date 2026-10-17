@@ -1,8 +1,8 @@
 import type { Page } from "playwright-core";
-import type { DesignAuditCheckCode, DesignAuditSeverity, DesignAuditTargetedAction, DesignAuditUnknownReason } from "@bg/shared";
+import type { DesignAuditCheckCode, DesignAuditLocator, DesignAuditSeverity, DesignAuditTargetedAction, DesignAuditUnknownReason } from "@bg/shared";
 
 /** `fix` is the font-size a minimum-text safe fix may write for this finding; absent when no contract-accepted value fits. */
-export type DomAuditFinding = { readonly code: DesignAuditCheckCode; readonly severity: DesignAuditSeverity; readonly nodeId: string | null; readonly evidence: string; readonly measured?: number; readonly threshold?: number; readonly action: DesignAuditTargetedAction; readonly fix?: string };
+export type DomAuditFinding = { readonly code: DesignAuditCheckCode; readonly severity: DesignAuditSeverity; readonly nodeId: string | null; readonly evidence: string; readonly measured?: number; readonly threshold?: number; readonly action: DesignAuditTargetedAction; readonly fix?: string; readonly locator?: DesignAuditLocator };
 export type DomAuditObservation = { readonly findings: readonly DomAuditFinding[]; readonly measurable: Readonly<Record<DesignAuditCheckCode, boolean>>; readonly unknownReasons: Readonly<Partial<Record<DesignAuditCheckCode, DesignAuditUnknownReason>>> };
 
 /**
@@ -53,14 +53,14 @@ export async function inspectRenderedPage(page: Page, fixedCanvas = false, journ
       });
     }
     observation = await page.evaluate((fixedCanvas) => {
-    type Code = "text_overflow" | "element_overlap" | "minimum_text_size" | "contrast" | "narrow_width" | "duplicate_node_id" | "missing_image" | "token_usage" | "site_nav_mismatch" | "site_missing_aria_current" | "site_dangling_link" | "site_missing_shared_block" | "site_root_absolute_asset" | "font_consistency" | "copy_review" | "em_dash_copy" | "eyebrow_density" | "duplicate_cta_intent" | "cta_label_wrap" | "placeholder_copy" | "accent_color_count" | "radius_scale_count" | "repeated_section_structure" | "remote_resources" | "journey_dead_link" | "journey_mobile_nav" | "journey_focus_visible" | "journey_layout_shift";
+    type Code = "text_overflow" | "element_overlap" | "minimum_text_size" | "contrast" | "narrow_width" | "duplicate_node_id" | "missing_image" | "token_usage" | "site_nav_mismatch" | "site_missing_aria_current" | "site_dangling_link" | "site_missing_shared_block" | "site_root_absolute_asset" | "font_consistency" | "copy_review" | "em_dash_copy" | "eyebrow_density" | "duplicate_cta_intent" | "cta_label_wrap" | "placeholder_copy" | "accent_color_count" | "radius_scale_count" | "repeated_section_structure" | "remote_resources" | "journey_dead_link" | "journey_mobile_nav" | "journey_focus_visible" | "journey_layout_shift" | "stretched_image" | "reference_photo_leak";
     type Severity = "must_fix" | "recommended";
-    type Action = "expand_or_reflow_text" | "separate_overlapping_elements" | "set_minimum_font_size" | "increase_color_contrast" | "repair_narrow_layout" | "assign_unique_node_ids" | "restore_image_reference" | "replace_literal_with_token" | "repair_site_navigation" | "mark_current_page" | "create_or_repair_site_link" | "add_shared_blocks" | "relativize_asset_path" | "align_font_roles" | "revise_copy" | "keep_cta_label_single_line" | "consolidate_visual_language" | "vary_section_layout" | "bundle_remote_resource" | "add_visible_focus" | "reserve_layout_space";
+    type Action = "expand_or_reflow_text" | "separate_overlapping_elements" | "set_minimum_font_size" | "increase_color_contrast" | "repair_narrow_layout" | "assign_unique_node_ids" | "restore_image_reference" | "replace_literal_with_token" | "repair_site_navigation" | "mark_current_page" | "create_or_repair_site_link" | "add_shared_blocks" | "relativize_asset_path" | "align_font_roles" | "revise_copy" | "keep_cta_label_single_line" | "consolidate_visual_language" | "vary_section_layout" | "bundle_remote_resource" | "add_visible_focus" | "reserve_layout_space" | "restore_image_crop" | "remove_reference_photo";
     type Reason = "no_measurable_candidates" | "unresolvable_rendering" | "tokens_not_exposed";
-    type Finding = { code: Code; severity: Severity; nodeId: string | null; evidence: string; measured?: number; threshold?: number; action: Action; fix?: string };
+    type Finding = { code: Code; severity: Severity; nodeId: string | null; evidence: string; measured?: number; threshold?: number; action: Action; fix?: string; locator?: { selector: string; bounds: { x: number; y: number; width: number; height: number } } };
     type Color = readonly [number, number, number, number];
     const findings: Finding[] = [];
-    const measurable: Record<Code, boolean> = { text_overflow: false, element_overlap: false, minimum_text_size: false, contrast: false, narrow_width: !fixedCanvas, duplicate_node_id: true, missing_image: true, token_usage: false, site_nav_mismatch: true, site_missing_aria_current: true, site_dangling_link: true, site_missing_shared_block: true, site_root_absolute_asset: true, font_consistency: false, copy_review: false, em_dash_copy: false, eyebrow_density: !fixedCanvas, duplicate_cta_intent: !fixedCanvas, cta_label_wrap: !fixedCanvas, placeholder_copy: false, accent_color_count: true, radius_scale_count: true, repeated_section_structure: !fixedCanvas, remote_resources: true, journey_dead_link: false, journey_mobile_nav: false, journey_focus_visible: false, journey_layout_shift: false };
+    const measurable: Record<Code, boolean> = { text_overflow: false, element_overlap: false, minimum_text_size: false, contrast: false, narrow_width: !fixedCanvas, duplicate_node_id: true, missing_image: true, token_usage: false, site_nav_mismatch: true, site_missing_aria_current: true, site_dangling_link: true, site_missing_shared_block: true, site_root_absolute_asset: true, font_consistency: false, copy_review: false, em_dash_copy: false, eyebrow_density: !fixedCanvas, duplicate_cta_intent: !fixedCanvas, cta_label_wrap: !fixedCanvas, placeholder_copy: false, accent_color_count: true, radius_scale_count: true, repeated_section_structure: !fixedCanvas, remote_resources: true, journey_dead_link: false, journey_mobile_nav: false, journey_focus_visible: false, journey_layout_shift: false, stretched_image: true, reference_photo_leak: true };
     const unknownReasons: Partial<Record<Code, Reason>> = { text_overflow: "no_measurable_candidates", element_overlap: "no_measurable_candidates", minimum_text_size: "no_measurable_candidates", contrast: "no_measurable_candidates", token_usage: "tokens_not_exposed", journey_dead_link: "no_measurable_candidates", journey_mobile_nav: "no_measurable_candidates", journey_focus_visible: "no_measurable_candidates", journey_layout_shift: "no_measurable_candidates" };
     const elements = [...document.querySelectorAll<HTMLElement>("body *")];
     const rootStyle = getComputedStyle(document.documentElement);
@@ -68,7 +68,22 @@ export async function inspectRenderedPage(page: Page, fixedCanvas = false, journ
     const textBearing = (element: HTMLElement): boolean => visible(element) && [...element.childNodes].some((node) => node.nodeType === Node.TEXT_NODE && (node.textContent?.trim().length ?? 0) > 0);
     const loadBearing = (element: HTMLElement): boolean => textBearing(element) || element instanceof HTMLImageElement || element.matches("button,a,input,select,textarea,[role=button]");
     const id = (element: Element): string | null => element.getAttribute("data-bg-node-id");
-    const push = (element: Element | null, finding: Omit<Finding, "nodeId">): void => { findings.push({ ...finding, nodeId: element === null ? null : id(element), evidence: finding.evidence.slice(0, 500) }); };
+    // An element without data-bg-node-id is located by a project-relative CSS path (ids stop it) and its page-coordinate bounds.
+    const segment = (element: Element): string => {
+      const tag = element.tagName.toLowerCase();
+      if (element.id !== "") return `${tag}#${CSS.escape(element.id)}`;
+      const classes = [...element.classList].slice(0, 2).map((name) => `.${CSS.escape(name)}`).join("");
+      const same = element.parentElement === null ? [] : [...element.parentElement.children].filter((sibling) => sibling.tagName === element.tagName);
+      return `${tag}${classes}${same.length > 1 ? `:nth-of-type(${same.indexOf(element) + 1})` : ""}`;
+    };
+    const locate = (element: Element): NonNullable<Finding["locator"]> => {
+      const chain: string[] = [];
+      for (let current: Element | null = element; current !== null; current = current.parentElement) { chain.unshift(segment(current)); if (current.id !== "") break; }
+      while (chain.length > 1 && chain.join(" > ").length > 300) chain.shift();
+      const rect = element.getBoundingClientRect();
+      return { selector: chain.join(" > "), bounds: { x: Math.round(rect.left + window.scrollX), y: Math.round(rect.top + window.scrollY), width: Math.round(rect.width), height: Math.round(rect.height) } };
+    };
+    const push = (element: Element | null, finding: Omit<Finding, "nodeId">): void => { const nodeId = element === null ? null : id(element); findings.push({ ...finding, nodeId, ...(element !== null && nodeId === null ? { locator: locate(element) } : {}), evidence: finding.evidence.slice(0, 500) }); };
     // Accepted motion regions are already at rest; inside one, an aria-hidden copy (a seamless marquee's second set) is decorative.
     const motion = Reflect.get(window, "__bgMotion") as { regions: HTMLElement[]; ignored: { element: HTMLElement; evidence: string }[] } | undefined;
     for (const { element, evidence } of motion?.ignored ?? []) push(element, { code: "text_overflow", severity: "must_fix", evidence, action: "expand_or_reflow_text" });
@@ -190,7 +205,23 @@ export async function inspectRenderedPage(page: Page, fixedCanvas = false, journ
       const scaled = Number.isFinite(contentCaption) && contentCaption > 0 ? contentCaption * Math.min(rect.width, rect.height) / base : 12;
       const floor = Math.max(12, Math.floor(scaled * 100) / 100); floors.set(artboard, floor); return floor;
     };
-    for (const element of textElements) {
+    // A skip link rests off-page and is revealed by focus. It counts as working only when the page itself, focused for
+    // real, brings it on-page; transitions are paused for the measurement and focus, scroll and inline style restored.
+    const revealsOnFocus = (element: HTMLElement, stillOutside: () => boolean): boolean => {
+      const href = element instanceof HTMLAnchorElement ? element.getAttribute("href") ?? "" : "";
+      if (!href.startsWith("#") || href.length < 2) return false;
+      const fragment = (() => { try { return decodeURIComponent(href.slice(1)); } catch { return href.slice(1); } })();
+      if (document.getElementById(fragment) === null && document.getElementsByName(fragment).length === 0) return false;
+      const previous = document.activeElement; const scrollX = window.scrollX; const scrollY = window.scrollY;
+      const transition = element.style.getPropertyValue("transition"); const priority = element.style.getPropertyPriority("transition");
+      element.style.setProperty("transition", "none", "important");
+      try { element.focus({ preventScroll: true }); return document.activeElement === element && visible(element) && !stillOutside(); } finally {
+        if (transition === "") element.style.removeProperty("transition"); else element.style.setProperty("transition", transition, priority);
+        if (previous instanceof HTMLElement && previous !== document.body && previous !== element) previous.focus({ preventScroll: true }); else element.blur();
+        window.scrollTo(scrollX, scrollY);
+      }
+    };
+    const textOutside = (element: HTMLElement): boolean => {
       const rect = element.getBoundingClientRect();
       const style = getComputedStyle(element);
       const canvas = element.closest<HTMLElement>("[data-slide],[data-graphic-artboard]")?.getBoundingClientRect();
@@ -204,7 +235,10 @@ export async function inspectRenderedPage(page: Page, fixedCanvas = false, journ
         const parentStyle = getComputedStyle(parent); const parentRect = parent.getBoundingClientRect();
         clipped = (clips(parentStyle.overflowX) && (textRect.left < parentRect.left - 1 || textRect.right > parentRect.right + 1)) || (clips(parentStyle.overflowY) && (textRect.top < parentRect.top - 1 || textRect.bottom > parentRect.bottom + 1));
       }
-      if (!decorative(element) && (clipped || Math.min(rect.left, textRect.left) < bounds.left - 1 || Math.max(rect.right, textRect.right) > bounds.right + 1 || Math.min(rect.top, textRect.top) < bounds.top - 1 || Math.max(rect.bottom, textRect.bottom) > bounds.bottom + 1)) push(element, { code: "text_overflow", severity: "must_fix", evidence: "Text geometry exceeds clipping or page bounds", action: "expand_or_reflow_text" });
+      return clipped || Math.min(rect.left, textRect.left) < bounds.left - 1 || Math.max(rect.right, textRect.right) > bounds.right + 1 || Math.min(rect.top, textRect.top) < bounds.top - 1 || Math.max(rect.bottom, textRect.bottom) > bounds.bottom + 1;
+    };
+    for (const element of textElements) {
+      if (!decorative(element) && textOutside(element) && !revealsOnFocus(element, () => textOutside(element))) push(element, { code: "text_overflow", severity: "must_fix", evidence: "Text geometry exceeds clipping or page bounds", action: "expand_or_reflow_text" });
       const size = Number.parseFloat(getComputedStyle(element).fontSize);
       const slide = element.closest("[data-slide]") !== null; const artboard = element.closest<HTMLElement>("[data-graphic-artboard]");
       const minimum = slide ? 24 : artboard === null ? 12 : artboardFloor(artboard);
@@ -272,7 +306,7 @@ export async function inspectRenderedPage(page: Page, fixedCanvas = false, journ
     if (!fixedCanvas) {
       const viewport = document.documentElement.clientWidth; const overflow = Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - viewport;
       if (viewport <= 375 && overflow > 1) push(null, { code: "narrow_width", severity: "must_fix", evidence: `Document exceeds narrow viewport by ${Math.round(overflow)}px`, action: "repair_narrow_layout", measured: Math.round(overflow), threshold: 0 });
-      if (viewport <= 375) for (const element of elements.filter((candidate) => visible(candidate) && loadBearing(candidate) && !decorative(candidate))) { const rect = element.getBoundingClientRect(); if (rect.left < -1 || rect.right > viewport + 1) push(element, { code: "narrow_width", severity: "must_fix", evidence: `Element escapes 375px viewport at ${Math.round(rect.left)}..${Math.round(rect.right)}`, action: "repair_narrow_layout" }); }
+      if (viewport <= 375) for (const element of elements.filter((candidate) => visible(candidate) && loadBearing(candidate) && !decorative(candidate))) { const rect = element.getBoundingClientRect(); if ((rect.left < -1 || rect.right > viewport + 1) && !revealsOnFocus(element, () => { const now = element.getBoundingClientRect(); return now.left < -1 || now.right > viewport + 1; })) push(element, { code: "narrow_width", severity: "must_fix", evidence: `Element escapes 375px viewport at ${Math.round(rect.left)}..${Math.round(rect.right)}`, action: "repair_narrow_layout" }); }
 
       // Journey: a visible link must lead somewhere - a page, a URL or an element on this page.
       const anchors = elements.filter((element): element is HTMLAnchorElement => element instanceof HTMLAnchorElement && visible(element));
@@ -309,6 +343,12 @@ export async function inspectRenderedPage(page: Page, fixedCanvas = false, journ
     }
 
     for (const image of document.images) if (!image.complete || image.naturalWidth === 0 || image.currentSrc.length === 0) { const raw = image.getAttribute("src") ?? "missing src"; let safe = raw; try { const url = new URL(raw, location.href); safe = url.protocol === "file:" ? raw : `${url.protocol}//${url.host}${url.pathname}`; } catch { safe = "invalid image reference"; } push(image, { code: "missing_image", severity: "must_fix", evidence: `Image reference failed: ${safe}`, action: "restore_image_reference" }); }
+    // Photo stretch (images under 64px in either dimension are icons or spacers and are not judged): a raster image whose rendered box has a different aspect than its pixels and whose object-fit is the default fill is distorted; cover, contain, none and scale-down keep the pixels' proportions.
+    for (const image of document.images) {
+      if (!image.complete || image.naturalWidth === 0 || image.naturalHeight === 0 || !visible(image) || /^data:image\/svg|\.svg(?:$|[?#])/iu.test(image.currentSrc) || getComputedStyle(image).objectFit !== "fill") continue;
+      const box = image.getBoundingClientRect(); if (box.width < 64 || box.height < 64) continue; const drift = Math.abs(box.width / box.height / (image.naturalWidth / image.naturalHeight) - 1);
+      if (drift > 0.05) push(image, { code: "stretched_image", severity: "must_fix", evidence: `Image renders at ${Math.round(box.width)}x${Math.round(box.height)} but its pixels are ${image.naturalWidth}x${image.naturalHeight}; crop it with object-fit: cover instead of stretching`, action: "restore_image_crop", measured: Math.round(drift * 100) / 100, threshold: 0.05 });
+    }
     measurable.token_usage = [...rootStyle].some((name) => name.startsWith("--")); if (measurable.token_usage) delete unknownReasons.token_usage;
     if (measurable.token_usage) for (const element of elements) { const inline = element.getAttribute("style") ?? ""; const match = inline.match(/(?:^|;)\s*(?:color|background(?:-color)?|border(?:-[\w-]+)?-color)\s*:\s*(#[0-9a-f]{3,8}|rgba?\([^;]+\)|hsla?\([^;]+\))/iu); if (match?.[1] !== undefined) push(element, { code: "token_usage", severity: "recommended", evidence: `Inline literal color ${match[1]} bypasses exposed design tokens`, action: "replace_literal_with_token" }); }
     // Same-origin stylesheet rules, bounded to 2000 rules: only the three colour properties, never :root/html declarations.

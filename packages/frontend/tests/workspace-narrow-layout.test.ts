@@ -8,10 +8,12 @@ import { canvasMessages } from "../src/i18n/messages/canvas";
 const classesOf = (html: string, attribute: string): readonly string[] =>
   html.match(new RegExp(`<div (?:${attribute} class="([^"]*)"|class="([^"]*)" ${attribute})`))?.slice(1).find(Boolean)?.split(" ") ?? [];
 
-test("Given a phone-width workspace When the canvas toolbar renders Then the mode tools claim a full row instead of being squeezed beside the history group", () => {
+test("Given any workspace width When the canvas toolbar renders Then the tools stay in one non-wrapping row", () => {
   const html = renderToStaticMarkup(createElement(CanvasTopBar, { mode: null, onModeChange: () => {}, onRefresh: () => {} }));
   // Server rendering reads the locale store's initial state, so the shipped Korean label names the group.
-  expect(classesOf(html, `aria-label="${canvasMessages["canvas.toolbar.tools"].ko}"`)).toContain("max-[900px]:basis-full");
+  const tools = classesOf(html, `aria-label="${canvasMessages["canvas.toolbar.tools"].ko}"`);
+  expect(tools).toContain("shrink-0");
+  expect(tools).not.toContain("flex-wrap");
 });
 
 test("Given a phone-width workspace When the project header lays out its actions Then they wrap instead of pushing Export off screen", () => {

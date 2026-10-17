@@ -119,6 +119,15 @@ artifactRoutes.get("/api/projects/:id/ux-review", async (c) => {
     return c.json(fail(error.code, error.message), error.code === "project_not_found" ? 404 : error.code === "invalid_review_path" ? 400 : error.code === "stale_artifact_identity" ? 409 : 503);
   }
 });
+artifactRoutes.get("/api/projects/:id/photo-placements", async (c) => {
+  const projectId = c.req.param("id");
+  const project = await getProjectDetail(projectId);
+  if (!project) return c.json(fail("project_not_found", "Project not found", { projectId }), 404);
+  const { readPhotoPlacements } = await import("../services/photo-placements");
+  const { resolveManagedPath, projectsDir } = await import("../lib/paths");
+  const read = await readPhotoPlacements(resolveManagedPath(projectsDir, project.dir_path));
+  return c.json(ok({ state: read.kind, record: read.kind === "present" ? read.record : null }));
+});
 artifactRoutes.post("/api/projects/:id/design-audit/retry", async (c) => designAuditResponse(c.req.param("id"), true, c.req.raw.signal, c));
 
 async function designAuditResponse(projectId: string, force: boolean, signal: AbortSignal, c: Context) {

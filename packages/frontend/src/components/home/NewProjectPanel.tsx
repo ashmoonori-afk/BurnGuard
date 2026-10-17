@@ -13,6 +13,8 @@ import type {
 import { defaultGenerationOptions } from "@bg/shared";
 import GenerationControls from "@/components/settings/GenerationControls";
 import { createProject, detectBackends } from "@/api/home";
+import { sendUserEvent } from "@/api/session";
+import { logoIdeationMessage } from "@/lib/logo-project";
 import { backendOptionLabel, backendSelectState, graphicBackendId } from "@/lib/backend-display";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,15 +24,20 @@ import ProjectBriefFields, {
 import { GraphicCanvasFields } from "@/components/home/GraphicCanvasFields";
 import { GraphicSetFields } from "@/components/home/GraphicSetFields";
 import { LogoSetFields } from "@/components/home/LogoSetFields";
-import DesignSystemPicker from "./DesignSystemPicker";
+import DesignSystemPicker, { PickerThumbnail } from "./DesignSystemPicker";
+import { filterHomeCards, systemToCard } from "./mappers";
 import { apiErrorCopy } from "@/lib/error-copy";
 import { clearCreationDraft, readCreationDraft, writeCreationDraft } from "@/lib/creation-draft";
 import { manualCanvasPatch } from "@/lib/graphic-set-form";
 import {
   INITIAL_BRIEF_FORM,
+  AUDIENCE_MAX_LENGTH,
+  OBJECTIVE_MAX_LENGTH,
+  suggestedProjectName,
   draftProblemMessage,
   PROJECT_CONTROL_CLASS,
   PROJECT_LABEL_CLASS,
+  PROJECT_SECTION_CLASS,
   PROTOTYPE_PAGE_PRESETS,
   buildCreateProjectRequest,
   coerceBriefChoice,
@@ -53,6 +60,7 @@ export default function NewProjectPanel({
   type,
   designSystems,
   defaultBackend,
+  guided = false,
   graphicReady = false,
   generationDefaults,
   systemsLoading,
@@ -66,6 +74,7 @@ export default function NewProjectPanel({
   type: ProjectType;
   designSystems: DesignSystemSummary[];
   defaultBackend: BackendId;
+  guided?: boolean;
   graphicReady?: boolean;
   generationDefaults?: Partial<Record<BackendId, GenerationOptions>>;
   systemsLoading: boolean;
@@ -89,7 +98,7 @@ export default function NewProjectPanel({
   const draftTypeRef = useRef(type);
   const [pickedSystemId, setPickedSystemId] = useState<string | null>(null);
   const [choosingSystem, setChoosingSystem] = useState(false);
-  const [withoutSystem, setWithoutSystem] = useState(false);
+  const submitting = useRef(false);
   const returnFocusRef = useRef<HTMLButtonElement>(null);
   const wasChoosingRef = useRef(false);
   const [items, setItems] = useState<readonly IntakeItem[]>([]);
@@ -118,9 +127,25 @@ export default function NewProjectPanel({
 
   const createMutation = useMutation({
     mutationFn: (request: CreateProjectRequest) => createProject(request),
-    onSuccess: async (created) => {
-      try { await saveComposerDraft(created.session_id, { text: form.objective, items: items.filter((item) => item.status === "ready"), generation }); }
+    onSuccess: async (created, request) => {
+      const readyItems = items.filter((item) => item.status === "ready");
+      const text = request.options?.design_brief?.objective ?? form.objective.trim();
+      try { await saveComposerDraft(created.session_id, { text, items: readyItems, generation }); }
       catch { pushToast({ title: t("home.creation.draftMoved"), body: t("home.creation.storageLimited"), tone: "error" }); }
+      if (text.trim() || readyItems.length > 0) {
+        try {
+          await sendUserEvent(created.session_id, {
+            type: "user.message",
+            text: request.type === "logo" ? logoIdeationMessage(text) : text,
+            files: readyItems.map((item) => ({ id: item.id, file: item.file, role: item.role })),
+            generation,
+          });
+          try { await saveComposerDraft(created.session_id, { text: "", items: [], generation }); }
+          catch { pushToast({ title: t("home.creation.draftMoved"), body: t("home.creation.storageLimited"), tone: "error" }); }
+        } catch (sendError) {
+          pushToast({ title: t("home.creation.firstSendFailed"), body: apiErrorCopy(sendError), tone: "error" });
+        }
+      }
       setItems([]);
       await queryClient.invalidateQueries({ queryKey: ["projects"] });
       clearCreationDraft(type);
@@ -129,6 +154,7 @@ export default function NewProjectPanel({
       setPickedSystemId(null);
       setError(null);
     },
+    onSettled: () => { submitting.current = false; },
     onError: (err) => {
       const message = apiErrorCopy(err);
       setError(err);
@@ -153,14 +179,8 @@ export default function NewProjectPanel({
     designSystems,
   );
   const disabled = createMutation.isPending;
-  const needsSystemChoice = !designSystemId && (!withoutSystem || isTemplate || pickedSystemId !== null);
+  const suggestions = filterHomeCards(selectable.map((system, index) => systemToCard(system, index, effectiveType)), "").slice(0, 4);
   const canContinue = built.ok || (!built.ok && (built.problem === "design_system_required" || built.problem === "design_system_not_selectable"));
-
-  useEffect(() => {
-    setChoosingSystem(false);
-    setPickedSystemId(null);
-    setWithoutSystem(false);
-  }, [type]);
 
   useEffect(() => {
     if (wasChoosingRef.current && !choosingSystem) returnFocusRef.current?.focus();
@@ -189,6 +209,8 @@ export default function NewProjectPanel({
       return;
     }
     draftTypeRef.current = type;
+    setChoosingSystem(false);
+    setPickedSystemId(null);
     setForm(readCreationDraft(type));
   }, [form, type]);
 
@@ -196,26 +218,7 @@ export default function NewProjectPanel({
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  if (choosingSystem) return <DesignSystemPicker
-    projectType={isTemplate ? templateFormat : type}
-    systems={selectable} selectedId={designSystemId} loading={systemsLoading} error={systemsError} allowNone={!isTemplate}
-    onSelect={setPickedSystemId} onRefresh={onRetrySystems} onBack={() => setChoosingSystem(false)}
-    onApply={(id) => { setPickedSystemId(id); setWithoutSystem(id === null); setChoosingSystem(false); }}
-  />;
-
-  return (
-    <form className="p-6" onSubmit={(event) => {
-      event.preventDefault();
-      if (!canContinue || disabled || (needsImageBackend && !graphicReady)) return;
-      if (needsSystemChoice) { setChoosingSystem(true); return; }
-      if (!built.ok || (designSystemId && (systemsLoading || systemsError))) return;
-      setError(null);
-      createMutation.mutate(built.request);
-    }}>
-      <h2 className="mb-3 text-xs font-semibold text-muted-foreground">{t("home.creation.basics")}</h2>
-
-      <div className="space-y-4">
-        <div className="space-y-2"><label htmlFor="creation-backend" className={PROJECT_LABEL_CLASS}>{t("home.creation.aiTool")}</label><select id="creation-backend" className={PROJECT_CONTROL_CLASS} value={backendSelect.placeholder === null ? effectiveBackend : ""} disabled={disabled || needsImageBackend || backendSelect.placeholder !== null} onChange={(event) => setBackendId(event.target.value as BackendId)}>{backendSelect.placeholder === null ? detectedBackends.map((backend) => <option key={backend.id} value={backend.id} disabled={!backend.found}>{backendOptionLabel(backend)}</option>) : <option value="">{t(backendSelect.placeholder)}</option>}</select>{detection.isError ? <p role="alert" className="text-xs text-destructive">{apiErrorCopy(detection.error)} <button type="button" onClick={() => void detection.refetch()} className="font-medium text-accent underline underline-offset-2 hover:no-underline">{t("home.retry")}</button></p> : null}<GenerationControls backendId={effectiveBackend} value={generation} disabled={disabled} onChange={(value) => setGenerationByBackend((current) => ({ ...current, [effectiveBackend]: value }))} /></div>
+  const nameField = (
         <div className="space-y-1.5">
           <label htmlFor="project-name" className={PROJECT_LABEL_CLASS}>
             {t("home.creation.name")}
@@ -223,13 +226,53 @@ export default function NewProjectPanel({
           <Input
             id="project-name"
             placeholder={t("home.creation.namePlaceholder")}
-            value={form.name}
-            autoFocus
-            required
+            value={form.name || suggestedProjectName(form.objective)}
             disabled={disabled}
             onChange={(e) => update("name", e.target.value)}
           />
         </div>
+  );
+  const audienceField = (
+        <div className="space-y-1.5">
+          <label htmlFor="brief-audience" className={PROJECT_LABEL_CLASS}>{t("home.brief.audience")}</label>
+          <Input id="brief-audience" maxLength={AUDIENCE_MAX_LENGTH} value={form.audience} disabled={disabled}
+            placeholder={t("home.brief.audiencePlaceholder")} onChange={(event) => update("audience", event.target.value)} />
+        </div>
+
+  );
+  const materialsField = (
+        <div className="space-y-2"><label htmlFor="project-materials" className={PROJECT_LABEL_CLASS}>{t("home.creation.attach")}</label><input id="project-materials" type="file" multiple accept={COMPOSER_SUPPORTED_EXTENSIONS.join(",")} disabled={disabled} onChange={(event) => { const picked = Array.from(event.target.files ?? []); setItems((current) => planAttachmentIntake(current, picked)); event.target.value = ""; }} className="block w-full text-sm" /><p className="text-xs text-muted-foreground">{t("home.creation.attachHint")}</p><ComposerAttachments items={items} sending={disabled} onRemove={(id) => setItems((current) => current.filter((item) => item.id !== id))} onRoleChange={(id, role) => setItems((current) => setAttachmentRole(current, id, role))} /></div>
+  );
+  if (choosingSystem) return <div className="min-h-0 flex-1 overflow-y-auto"><DesignSystemPicker
+    projectType={isTemplate ? templateFormat : type}
+    systems={selectable} selectedId={designSystemId} loading={systemsLoading} error={systemsError} allowNone={!isTemplate}
+    onSelect={setPickedSystemId} onRefresh={onRetrySystems} onBack={() => setChoosingSystem(false)}
+    onApply={(id) => { setPickedSystemId(id); setChoosingSystem(false); }}
+  /></div>;
+
+  return (
+    <form className={guided ? "[&_select]:min-h-11" : "flex min-h-0 flex-1 flex-col"} onSubmit={(event) => {
+      event.preventDefault();
+      if (!canContinue || disabled || submitting.current || (needsImageBackend && !graphicReady)) return;
+      if (!built.ok || (designSystemId && (systemsLoading || systemsError))) return;
+      submitting.current = true;
+      setError(null);
+      createMutation.mutate(built.request);
+    }}>
+      <div className={guided ? "" : "min-h-0 flex-1 overflow-y-auto px-6 pb-4 pt-5"}>
+      {!guided && <h2 className={`mb-3 ${PROJECT_SECTION_CLASS}`}>{t("home.creation.basics")}</h2>}
+
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <label htmlFor="brief-objective" className={PROJECT_LABEL_CLASS}>{t("home.brief.objective")}</label>
+          <textarea id="brief-objective" rows={4} required maxLength={OBJECTIVE_MAX_LENGTH}
+            placeholder={t("home.brief.objectivePlaceholder")} value={form.objective} disabled={disabled}
+            onChange={(event) => update("objective", event.target.value)}
+            className={`${PROJECT_CONTROL_CLASS} h-auto resize-y py-3 leading-relaxed placeholder:text-muted-foreground`} />
+        </div>
+        <div className="space-y-2"><label htmlFor="creation-backend" className={PROJECT_LABEL_CLASS}>{t("home.creation.aiTool")}</label><select id="creation-backend" className={PROJECT_CONTROL_CLASS} value={backendSelect.placeholder === null ? effectiveBackend : ""} disabled={disabled || needsImageBackend || backendSelect.placeholder !== null} onChange={(event) => setBackendId(event.target.value as BackendId)}>{backendSelect.placeholder === null ? detectedBackends.map((backend) => <option key={backend.id} value={backend.id} disabled={!backend.found}>{backendOptionLabel(backend)}</option>) : <option value="">{t(backendSelect.placeholder)}</option>}</select>{detection.isError ? <p role="alert" className="text-xs text-destructive">{apiErrorCopy(detection.error)} <button type="button" onClick={() => void detection.refetch()} className="font-medium text-accent underline underline-offset-2 hover:no-underline">{t("home.retry")}</button></p> : null}</div>
+        {nameField}
+        {!guided && audienceField}
 
         <div className="space-y-1.5">
           <label htmlFor="design-system" className={PROJECT_LABEL_CLASS}>
@@ -244,7 +287,7 @@ export default function NewProjectPanel({
               systemsError !== null ||
               selectable.length === 0
             }
-            onChange={(e) => { setPickedSystemId(e.target.value || null); setWithoutSystem(false); }}
+            onChange={(e) => setPickedSystemId(e.target.value || null)}
             className={PROJECT_CONTROL_CLASS}
           >
             <option value="">
@@ -258,7 +301,7 @@ export default function NewProjectPanel({
                       : t("home.creation.noSystems")
                     : isTemplate
                       ? t("home.creation.selectTemplate")
-                      : t(withoutSystem ? "home.creation.noSystem" : "home.picker.later")}
+                      : t("home.creation.noSystem")}
             </option>
             {systemsLoading || systemsError
               ? null
@@ -268,7 +311,15 @@ export default function NewProjectPanel({
                   </option>
                 ))}
           </select>
-          <Button ref={returnFocusRef} type="button" variant="outline" className="w-full" disabled={disabled} onClick={() => setChoosingSystem(true)}>{t("home.picker.browse")}</Button>
+          {!guided && !systemsLoading && !systemsError && suggestions.length > 0 && <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" data-qa="creation-suggestions">
+            {suggestions.map((card) => <button key={card.id} type="button" disabled={disabled} aria-pressed={designSystemId === card.id}
+              onClick={() => setPickedSystemId(card.id)}
+              className={`min-w-0 overflow-hidden rounded-lg border border-border text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${designSystemId === card.id ? "bg-accent-soft" : "bg-card hover:bg-muted"}`}>
+              <span className="flex aspect-video items-center justify-center overflow-hidden bg-muted"><PickerThumbnail source={card.thumbnail} /></span>
+              <span className="block break-words p-2 text-xs font-medium">{card.name}</span>
+            </button>)}
+          </div>}
+          {!guided && <Button ref={returnFocusRef} type="button" variant="outline" className="w-full" disabled={disabled} onClick={() => setChoosingSystem(true)}>{t("home.picker.browse")}</Button>}
           {systemsError ? (
             <button
               type="button"
@@ -308,6 +359,12 @@ export default function NewProjectPanel({
           </div>
         )}
 
+        {!guided && materialsField}
+        <details className="rounded-xl border border-border bg-muted/30 p-4" data-qa="creation-advanced">
+          <summary className="min-h-6 cursor-pointer rounded-sm py-1 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">{t("home.brief.details")}</summary>
+          <div className="mt-4 space-y-4">
+            {guided && <>{audienceField}{materialsField}</>}
+            <GenerationControls backendId={effectiveBackend} value={generation} disabled={disabled} onChange={(value) => setGenerationByBackend((current) => ({ ...current, [effectiveBackend]: value }))} />
         {isGraphic && (
           <GraphicCanvasFields
             width={isOriginal ? 1080 : form.graphicWidth}
@@ -346,7 +403,6 @@ export default function NewProjectPanel({
             <p className="text-xs text-muted-foreground">{t("home.creation.homeIncluded")}</p>
           </fieldset>
         </>}
-        <div className="space-y-2"><label htmlFor="project-materials" className={PROJECT_LABEL_CLASS}>{t("home.creation.attach")}</label><input id="project-materials" type="file" multiple accept={COMPOSER_SUPPORTED_EXTENSIONS.join(",")} disabled={disabled} onChange={(event) => { const picked = Array.from(event.target.files ?? []); setItems((current) => planAttachmentIntake(current, picked)); event.target.value = ""; }} className="block w-full text-sm" /><p className="text-xs text-muted-foreground">{t("home.creation.attachHint")}</p><ComposerAttachments items={items} sending={disabled} onRemove={(id) => setItems((current) => current.filter((item) => item.id !== id))} onRoleChange={(id, role) => setItems((current) => setAttachmentRole(current, id, role))} /></div>
         <ProjectBriefFields
           form={{ ...form, contentSource, outputSize }}
           disabled={disabled}
@@ -385,17 +441,21 @@ export default function NewProjectPanel({
             onChange={(v) => update("copyAsIs", v)}
           />
         )}
+          </div>
+        </details>
       </div>
 
-      {needsImageBackend && !graphicReady && <p role="status" className="mt-4 text-sm text-muted-foreground">{t(isLogo ? "home.creation.logoRequired" : "home.creation.graphicRequired")}</p>}
+      </div>
+      <div className={guided ? "mt-5" : "shrink-0 border-t border-border bg-card px-6 py-4"}>
+      {needsImageBackend && !graphicReady && <p role="status" className="mb-3 text-sm text-muted-foreground">{t(isLogo ? "home.creation.logoRequired" : "home.creation.graphicRequired")}</p>}
       <Button
         data-qa="creation-submit"
-        className="mt-6 h-11 w-full gap-2 rounded-xl"
+        className="h-11 w-full gap-2 rounded-xl"
         type="submit"
         variant="cta"
         disabled={!canContinue || disabled || (needsImageBackend && !graphicReady) || (!!designSystemId && (systemsLoading || systemsError !== null))}
       >
-        {createMutation.isPending ? t("home.creation.creating") : t(needsSystemChoice ? "home.picker.next" : "home.creation.create")}
+        {createMutation.isPending ? t("home.creation.creating") : t("home.creation.create")}
         <ArrowRight className="h-4 w-4" aria-hidden="true" />
       </Button>
 
@@ -408,6 +468,7 @@ export default function NewProjectPanel({
             : draftProblemMessage(built.problem)}
         </p>
       )}
+      </div>
     </form>
   );
 }

@@ -1,5 +1,6 @@
 import { loadComposerDraft } from "@/components/chat/useComposerDraft";
 import ProjectDesignSystemVersion from "@/components/systems/ProjectDesignSystemVersion";
+import ProjectNotFound from "@/components/project/ProjectNotFound";
 import type { ReadyAttachmentSource } from "@/components/chat/attachment-intake";
 import { saveAndRequestCommentEdit } from "@/components/modes/comment-edit-request";
 import { CommentItem } from "@/components/modes/CommentPanel";
@@ -51,7 +52,7 @@ import { ApiError } from "@/api/client";
 import { isStaleIdentityError, readFileIdentity } from "@/lib/artifact-identity";
 import { getProjectDesignAudit, retryProjectDesignAudit } from "@/api/design-audit";
 import { restoreCheckpoint } from "@/api/checkpoints";
-import { getArtifactHistory, reapplyExternalCapture, restoreArtifactHistory, patchProjectFile } from "@/api/files";
+import { getArtifactHistory, getUnverifiedDraft, reapplyExternalCapture, recoverReviewFailedDraft, restoreArtifactHistory, patchProjectFile } from "@/api/files";
 import {
   createProjectComment,
   listProjectComments,
@@ -82,7 +83,7 @@ import { apiErrorCopy } from "@/lib/error-copy";
 import { sendFailureTitleKey } from "@/lib/composer-send";
 import Canvas from "@/components/canvas/Canvas";
 import ColorPalette from "@/components/canvas/ColorPalette";
-import ArtifactHistory from "@/components/canvas/ArtifactHistory";
+import ArtifactHistory, { UnverifiedDraftBadge } from "@/components/canvas/ArtifactHistory";
 import { qualityFixRequest } from "@/lib/quality-fix-request";
 import { installLeaveGuard } from "@/lib/leave-guard";
 import { createPagePrompt } from "@/lib/create-page-prompt";
@@ -138,6 +139,7 @@ import { isSafeCanvasPagePath, resolveCanvasNavigationAfterRefetch, resolveCanva
 import { t as globalT, useT, type MessageKey } from "@/i18n/t";
 import { latestArtifactPreview } from "@/lib/live-preview";
 import AlternativeCompare from "@/components/alternatives/AlternativeCompare";
+import KeepRuleDialog, { type KeepRuleSource } from "@/components/chat/KeepRuleDialog";
 import {
   cancelVisualAlternatives,
   deleteVisualAlternative,
@@ -183,6 +185,7 @@ export default function ProjectView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const [activeTabId, setActiveTabId] = useState("design-system");
+  const [keepRuleSource, setKeepRuleSource] = useState<KeepRuleSource | null>(null);
   const [mobilePane, setMobilePane] = useState<"workspace" | "chat">("workspace");
   const [logoStage, setLogoStage] = useState<LogoPipelineStage>("inspiration");
   const [chatCollapsed, setChatCollapsed] = useState(false);
@@ -233,6 +236,7 @@ export default function ProjectView() {
     queryKey: ["project", id],
     queryFn: () => getProject(id!),
     enabled: Boolean(id),
+    retry: (count, error) => !(error instanceof ApiError && error.status === 404) && count < 1,
   });
   const sessionQuery = useQuery({
     queryKey: ["project", id, "session"],
@@ -272,7 +276,7 @@ export default function ProjectView() {
     staleTime: Infinity,
     refetchOnWindowFocus: false,
   });
-  const invalidateDesignAudit = useCallback(() => queryClient.invalidateQueries({ queryKey: designAuditQueryKey }), [designAuditQueryKey, queryClient]);
+  const invalidateDesignAudit = useCallback(() => Promise.all([queryClient.invalidateQueries({ queryKey: designAuditQueryKey }), queryClient.invalidateQueries({ queryKey: ["project", id, "unverified-draft"] })]), [designAuditQueryKey, id, queryClient]);
   // Every artifact write carries the revision/digest the user was looking at.
   // A stale rejection means someone else moved the canvas: refetch identity
   // and ask for one retry instead of showing the raw backend message.
@@ -533,15 +537,6 @@ export default function ProjectView() {
     },
     onError: (error) => handleWriteError("workspace.project.saveEditFailed", error),
   });
-
-  useEffect(() => {
-    const error = projectQuery.error;
-    if (!(error instanceof ApiError) || error.status !== 404) {
-      return;
-    }
-    pushToast({ title: globalT("workspace.project.notFound"), tone: "error" });
-    navigate("/", { replace: true });
-  }, [navigate, projectQuery.error, pushToast]);
 
   useEffect(() => {
     activeTabIdRef.current = activeTabId;
@@ -1055,6 +1050,19 @@ export default function ProjectView() {
     },
     enabled: Boolean(id && undoActiveRelPath),
   });
+  const unverifiedDraftQuery = useQuery({
+    queryKey: ["project", id, "unverified-draft"] as const,
+    queryFn: () => (id ? getUnverifiedDraft(id) : null),
+    enabled: Boolean(id),
+  });
+  const recoverDraftMutation = useMutation({
+    mutationFn: (operationId: string) => {
+      if (!id) throw new Error("no_project");
+      return recoverReviewFailedDraft(id, operationId);
+    },
+    onSuccess: (result) => navigate(`/projects/${encodeURIComponent(result.project_id)}`),
+    onError: (err) => pushToast({ title: t("workspace.project.undoFailed"), body: apiErrorCopy(err), tone: "error" }),
+  });
   const artifactRedo = useRef<{ revision: number; operations: string[] }>({ revision: -1, operations: [] });
   const undoMutation = useMutation({
     mutationFn: (input: { operationId?: string; redo?: boolean; fromHistory?: boolean; reapplyExternal?: boolean }) => {
@@ -1140,6 +1148,10 @@ export default function ProjectView() {
     sessionQuery.isLoading ||
     filesQuery.isLoading ||
     artifactsQuery.isLoading || (Boolean(sessionQuery.data) && !stream.state && !stream.error));
+
+  if (projectQuery.error instanceof ApiError && projectQuery.error.status === 404) {
+    return <ProjectNotFound retrying={projectQuery.isFetching} onRetry={() => void projectQuery.refetch()} />;
+  }
 
   if (isLoading) {
     return (
@@ -1335,6 +1347,7 @@ export default function ProjectView() {
       </div>
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <div id="project-chat-pane" className={cn("min-h-0 shrink-0 max-[900px]:flex-1", mobilePane !== "chat" && "max-[900px]:hidden", chatCollapsed && "min-[901px]:hidden")}>
+        <KeepRuleDialog projectId={project.id} designSystemId={project.design_system_id ?? null} source={keepRuleSource} onClose={() => setKeepRuleSource(null)} />
         <ChatPane
           chatFocusKey={chatFocusKey}
           events={events}
@@ -1382,6 +1395,7 @@ export default function ProjectView() {
               ? (restoreMutation.variables as string | undefined) ?? null
               : null
           }
+          onKeepAsRule={(turnId, text) => setKeepRuleSource({ turnId, text })}
         />
         </div>
         <div id="project-workspace-pane" className={cn("flex min-h-0 min-w-0 flex-1", isLogoProject && "flex-col", mobilePane !== "workspace" && "max-[900px]:hidden")}>
@@ -1459,8 +1473,9 @@ export default function ProjectView() {
         )}
 
         {activeTab?.kind === "file" && (
-          <div className="flex min-h-0 min-w-0 flex-1 max-[1000px]:flex-col">
+          <div className="relative flex min-h-0 min-w-0 flex-1">
             <Canvas
+              projectType={project.type}
               loading={projectQuery.isPending || filesQuery.isPending || artifactsQuery.isPending}
               working={session?.status === "running"}
               colorPalette={activeRelPath && /\.html?$/i.test(activeRelPath) ? <div className="flex items-center gap-2">
@@ -1523,7 +1538,8 @@ export default function ProjectView() {
                   onDelete={async alternativeId => { await deleteAlternativeMutation.mutateAsync(alternativeId); }}
                   onCancel={async () => { await cancelAlternativesMutation.mutateAsync(); }}
                 />
-                <ArtifactHistory history={undoInfoQuery.data} disabled={composerDisabled || undoMutation.isPending || tweaksMutation.isPending || patchFileMutation.isPending} onRestore={async operationId => { await undoMutation.mutateAsync({ operationId, fromHistory: true }); }} onReapply={async operationId => { await undoMutation.mutateAsync({ operationId, fromHistory: true, reapplyExternal: true }); }} />
+                <UnverifiedDraftBadge state={unverifiedDraftQuery.data} />
+                <ArtifactHistory projectId={project.id} history={undoInfoQuery.data} onRecoverDraft={async operationId => { await recoverDraftMutation.mutateAsync(operationId); }} disabled={composerDisabled || recoverDraftMutation.isPending || undoMutation.isPending || tweaksMutation.isPending || patchFileMutation.isPending} onRestore={async operationId => { await undoMutation.mutateAsync({ operationId, fromHistory: true }); }} onReapply={async operationId => { await undoMutation.mutateAsync({ operationId, fromHistory: true, reapplyExternal: true }); }} />
               </div>}
               canUndo={Boolean(undoInfoQuery.data?.undo_operation_id)}
               undoPending={composerDisabled || undoMutation.isPending || tweaksMutation.isPending || patchFileMutation.isPending}
@@ -1609,6 +1625,7 @@ export default function ProjectView() {
             />
             <ModePanel
               mode={livePreview ? null : mode}
+              onClose={() => setMode(null)}
               projectId={id!}
               uxReview={{
                 projectId: id!,

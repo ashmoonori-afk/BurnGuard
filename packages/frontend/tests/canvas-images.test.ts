@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { MAX_SHARED_CANVAS_FONTS, embedCssImages, fontFaceFamily, isProjectImageUrl, pruneUnusedFontFaces, readCanvasImage } from "../src/lib/canvas-images";
+import { MAX_SHARED_CANVAS_FONTS, embedCssImages, fontFaceFamily, isProjectImageUrl, pruneUnusedFontFaces, readCanvasImage, tolerateMissingResource } from "../src/lib/canvas-images";
 
 test("Given sandbox images, When resolving assets, Then only the current project is fetched and CSS images are embedded", async () => {
   const base = "http://127.0.0.1:14070/api/projects/one/fs/index.html";
@@ -71,4 +71,18 @@ test("Given faces used directly, through a token, from script, or not at all Whe
   expect(pruned).toContain("src:url(n)");
   expect(pruned).not.toContain("Unused");
   expect(pruneUnusedFontFaces(['@font-face{font-family:"Only";src:url(o)}', "p{font-family:only}"], "")[0]).toContain('"Only"');
+});
+
+test("Given a recovered draft served from fs, When one image is missing, Then the document is kept and only broken CSS or scripts stay fatal", () => {
+  const notFound = Object.assign(new Error("artifact_image_load_failed"), { httpStatus: 404 });
+  const serverError = Object.assign(new Error("artifact_image_load_failed"), { httpStatus: 500 });
+  const draft = "http://127.0.0.1:14070/api/projects/one/fs/index.html";
+  const preview = "http://127.0.0.1:14070/api/projects/one/preview/p1/fs/index.html";
+  expect(tolerateMissingResource(draft, "asset", notFound)).toBe(true);
+  expect(tolerateMissingResource(preview, "asset", notFound)).toBe(true);
+  expect(tolerateMissingResource(draft, "css", notFound)).toBe(false);
+  expect(tolerateMissingResource(draft, "script", notFound)).toBe(false);
+  expect(tolerateMissingResource(preview, "css", notFound)).toBe(true);
+  expect(tolerateMissingResource(draft, "asset", serverError)).toBe(false);
+  expect(tolerateMissingResource(draft, "asset", new Error("network"))).toBe(false);
 });

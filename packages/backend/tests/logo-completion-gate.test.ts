@@ -75,6 +75,12 @@ const manifestJson = (selected: unknown, rounds: unknown = ROUNDS): string =>
 let projectId: string;
 let sessionId: string;
 let projectDir: string;
+// Cleanup joins the case's turn before deleting the rows and files that turn still writes to: a case that
+// times out would otherwise leave its turn running into a deleted project and fail every later case.
+let ownedTurn: Promise<unknown> | null = null;
+const ownTurn = (turn: { readonly prepared: Promise<unknown>; readonly promise: Promise<unknown> }): void => {
+  ownedTurn = Promise.allSettled([turn.prepared, turn.promise]);
+};
 
 beforeAll(async () => { await runMigrations(); await mkdir(projectsDir, { recursive: true }); });
 beforeEach(async () => {
@@ -89,6 +95,9 @@ beforeEach(async () => {
   getSqlite().prepare("INSERT INTO sessions(id,project_id,backend_id,status,created_at,updated_at,last_active_at) VALUES (?,?,'codex','idle',1,1,1)").run(sessionId, projectId);
 });
 afterEach(async () => {
+  interruptUserTurn(sessionId);
+  await ownedTurn;
+  ownedTurn = null;
   getSqlite().prepare("DELETE FROM projects WHERE id=?").run(projectId);
   await rm(projectDir, { recursive: true, force: true });
 });
@@ -200,6 +209,7 @@ test.each(cases)("Given %s in a finalize logo turn Then the gate, the repair bud
       }),
     });
     if (turn === null) throw new Error("turn reservation unavailable");
+    ownTurn(turn);
     await Promise.all([turn.prepared, turn.promise]);
 
     expect(generations).toBe(1);
@@ -287,6 +297,7 @@ test("Given a failure after the operation committed Then the refusal never claim
       }),
     });
     if (turn === null) throw new Error("turn reservation unavailable");
+    ownTurn(turn);
     expect(turn.operationId).toBe(operationId);
     await Promise.all([turn.prepared, turn.promise]);
 
@@ -342,6 +353,7 @@ test("Given a nonrepairable provenance failure in an explore turn Then no repair
       }),
     });
     if (turn === null) throw new Error("turn reservation unavailable");
+    ownTurn(turn);
     await Promise.all([turn.prepared, turn.promise]);
 
     expect(repairs).toBe(0);
@@ -457,6 +469,7 @@ test.each(["ideate", "adopt", "regenerate", "copied", "board-changed", "interrup
         reviewDesign: async () => { reviews++; return { status: "checked", repairs: 0, result: null }; },
       });
       if (turn === null) throw new Error("turn reservation unavailable");
+      ownTurn(turn);
       await Promise.all([turn.prepared, turn.promise]);
       // Then: no continuation, starter repair, speculative preview or post-commit receipt.
       const success = scenario === "ideate" || scenario === "adopt" || scenario === "regenerate";

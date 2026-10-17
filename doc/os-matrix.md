@@ -42,6 +42,7 @@ jobs run each pinning suite.
 
 | Area | macOS arm64 | Windows x64 | Linux | Pinned by | Runs in |
 |------|-------------|-------------|-------|-----------|---------|
+| Show project folder | `open <dir>` | `explorer.exe <dir>` | `xdg-open <dir>` | `project-folder` (injected platform and spawner; managed-root containment, junction/symlink escapes, private error diagnostics) | Ubuntu, OS jobs |
 | Chromium launch | Node bridge child, capability probe | Node bridge child (in-process launch freezes Bun) | same as macOS | `chromium-node-launch`; `chromium-capability`, `chromium-bridge-probe`, `export-render-launch` (injected probe, launcher and deadline); `chromium-launch-hardening` (real bridge and probe children, fake browser) | `chromium-node-launch`: Ubuntu (opt-in smoke), Windows job; the others: Ubuntu, OS jobs |
 | System browser lookup (Chrome and Edge channels) | fixed `/Applications` paths | `LOCALAPPDATA`, `PROGRAMFILES`, `PROGRAMFILES(X86)` roots, backslash paths | fixed `/opt` paths | `chromium-browser-paths` (platform, environment, file check and Playwright build path injected) | Ubuntu, OS jobs |
 | Local fonts | `osascript` JXA family list | PowerShell family list | `fc-list` | `local-fonts` (runs the host command) | OS jobs |
@@ -69,6 +70,54 @@ jobs run each pinning suite.
 | CI guards (OS-matrix coverage, launch-path flake patterns) | same result | same result, backslash spellings normalized | same result | `check-os-matrix-coverage`, `check-flake-patterns` (`scripts/qa`) | Ubuntu, OS jobs; the guards themselves run on Ubuntu |
 
 ## Hardening log
+
+### 2026-10-16: "Scan for secrets" failing on pull requests that were force-pushed during the run
+
+- Symptom: Security runs 38849940297 (PR #350) and 38851727312 (PR #352) failed only in "Scan for secrets" with
+  `failed to scan Git repository ... stderr is not empty`; every test step passed, and the next run passed.
+- Cause: on a `pull_request` event the scan action lists the pull request's commits through the API when it reaches
+  that step and scans `<head>^..<head>`. Both branches were force-pushed (rebased) after the job had checked out
+  `refs/pull/<n>/merge`, so the API returned a head commit (fe7b9b96 for run 38851727312, whose checkout was 0b24e710)
+  that the job's checkout does not contain, and `git log` failed. Not a test flake; the same day's other first-run
+  failures were real defects fixed by later commits (stale option expectations, a source-mapping contract test, a
+  reverted bridge commit).
+- Fixed: `security.yml` now cancels a superseded run of the same ref (`concurrency` with `cancel-in-progress`), as
+  `os-tests.yml` already did, so a force-push stops the stale job instead of letting its scan fail.
+
+### 2026-10-15: multi-minute Windows stalls, and a logo-test cleanup that turned one into many failures
+
+- Symptom: Windows x64, runs 38732070767 (main `cc1c93e1`) and 38734059594 (PR #335): in `logo-completion-gate`,
+  four and five consecutive cases timed out at 30 s, after which the file recovered; every timeout was followed by
+  `ENOENT` or `tree_missing` and a SQLite `FOREIGN KEY` failure at `turns.ts` `persistAndPublish`. macOS and Ubuntu
+  passed; reruns passed.
+- What is known: these are stretches of 2-3 minutes in which every turn on the machine is slow, not one case that
+  hangs. In run 38750245081 (job "base 6", unchanged main) the same stretch hit the first backend suite of the step,
+  `artifact-history`, before any of the 2026-10-15 suites had run, and in the same minutes a child-process Chromium
+  launch in `design-audit-skip-link` missed its 45 s deadline. The failing operations were in baseline
+  materialization, snapshot copying and the logo gate alike. Measured on 24 other Windows jobs with per-phase timing:
+  single small-file write+rename steps of up to 5.3 s, with and without a Defender exclusion of the workspace and
+  temp directories. The slow primitive (a filesystem call, the runtime, or the VM) is not identified; no code path
+  was found that waits for the project directory to be deleted.
+- Fixed: the test's `afterEach` deleted the project and session while a timed-out case's turn was still running, so
+  that turn wrote into a deleted project, failed its event insert and left later cases to fail on the same machine
+  stall. Cleanup now interrupts and joins the case's own turn before deleting anything. A deterministic local probe
+  that holds a turn after its adapter showed the old order ends in `SQLITE_CONSTRAINT_FOREIGNKEY` and the new order
+  settles cleanly.
+- Open: the cause of the stall itself. The next failure needs per-operation begin/end markers captured before
+  cleanup to separate a pending filesystem call from a stalled event loop.
+
+### 2026-10-15: a test's launch deadline also closed its shared browser
+
+- Symptom: Windows x64, run 38704171155 (PR #322): every case of `design-audit-skip-link` failed with
+  `Chromium connection aborted`, the first one about 45 s after the suite started; macOS and Ubuntu passed, and a
+  rerun of the same head passed.
+- Root cause: `launchChromium(signal)` hands its signal to the Node bridge, which closes the browser connection when
+  the signal aborts (`chromium-node-launch.ts`). The suite passed `AbortSignal.timeout(45_000)` for a browser shared
+  by `beforeAll`; a cold Windows launch took about 43 s, so the timer fired during the first case and closed the
+  browser under every later one. Eight other test call sites had the same shape with 30-60 s timers.
+- Fix: `packages/backend/tests/helpers/chromium.ts` `launchTestChromium(deadlineMs)` bounds the launch only and clears
+  its deadline once the browser is up; every test launch uses it. `check-flake-patterns` rejects
+  `launchChromium(AbortSignal.timeout(...))` in tests (`timed_signal_owns_test_browser`).
 
 ### 2026-10-01: export closure textual import scan was quadratic
 

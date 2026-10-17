@@ -85,7 +85,7 @@ export function DirectionCard({
             variant={selected ? "secondary" : "outline"}
             className={cn(
               "mt-4 min-h-11 w-full",
-              selected && "disabled:opacity-100",
+              selected && "disabled:bg-secondary disabled:text-secondary-foreground",
             )}
             aria-pressed={selected}
             aria-describedby={styleFactsId}

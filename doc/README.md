@@ -2,9 +2,11 @@
 
 Start with the [product introduction and setup](../README.md), available in [Korean](../README.ko.md) and [Chinese](../README.zh-CN.md). Release changes are listed in the [changelog](../README.md#changelog).
 
+[User guide](user-guide.md): make a first website, fix an image, move a project to another computer and locate your files.
+
 ## Architecture and development
 
-- [Overview](00-overview.md): product scope and implementation overview.
+- [Product overview](../README.md): current product scope, supported platforms and setup. The retired internal-alpha overview is available in Git history.
 - [Architecture](01-architecture.md): runtime topology, data flow and security boundaries.
 - [Data model](02-data-model.md): filesystem layout, SQLite schema and persistence.
 - [Backend adapters](03-backend-adapters.md): orchestration and normalized events.
@@ -20,6 +22,7 @@ Start with the [product introduction and setup](../README.md), available in [Kor
 - [Brand identity](brand-identity.md)
 - [Logo design deliverable](logo-design.md)
 - [Model capability profiles, CSS logos and web asset sourcing](model-profiles.md)
+- [Edit scope and revision comparison](edit-scope.md)
 - [Sample design system](<../design system sample/README.md>)
 - [Bundled themes](<../design system themes/>)
 - [Original sample collections](../samples/original/README.md)

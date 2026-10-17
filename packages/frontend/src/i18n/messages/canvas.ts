@@ -1,6 +1,11 @@
 import { defineMessages } from "../types";
 
 export const canvasMessages = defineMessages({
+  "canvas.device.width": { ko: "미리보기 화면 너비", en: "Preview viewport width", "zh-CN": "预览视口宽度" },
+  "canvas.device.fit": { ko: "맞춤", en: "Fit", "zh-CN": "适应" },
+  "canvas.device.desktop": { ko: "데스크톱 1440", en: "Desktop 1440", "zh-CN": "桌面 1440" },
+  "canvas.device.tablet": { ko: "태블릿 768", en: "Tablet 768", "zh-CN": "平板 768" },
+  "canvas.device.phone": { ko: "휴대폰 390", en: "Phone 390", "zh-CN": "手机 390" },
   "canvas.chart.sankeyHeader": { ko: "출발\t도착\t값", en: "Source\tTarget\tValue", "zh-CN": "来源\t目标\t值" },
   "canvas.chart.categoryHeader": { ko: "항목", en: "Category", "zh-CN": "类别" },
   "canvas.toolbar.edit": {"ko":"편집","en":"Edit","zh-CN":"编辑"},
@@ -120,6 +125,12 @@ export const canvasMessages = defineMessages({
   "canvas.history.externalCaptures": {"ko":"대체된 외부 편집","en":"Replaced external edits","zh-CN":"被替换的外部编辑"},
   "canvas.history.externalCapture": {"ko":"생성이 진행되는 동안 외부에서 저장한 편집이 대체됐어요. 복원할 수 있어요.","en":"Your external edit was replaced while a generation ran - restore it","zh-CN":"生成运行期间，您在外部保存的编辑被替换了，可以恢复。"},
   "canvas.history.externalCaptureFiles": {"ko":"변경된 파일 {count}개","en":{"one":"{count} file changed","other":"{count} files changed"},"zh-CN":"更改了 {count} 个文件"},
+  "canvas.history.reviewFailedDrafts": {"ko":"검사를 통과하지 못한 결과물","en":"Output that failed design review","zh-CN":"未通过设计检查的结果"},
+  "canvas.history.reviewFailedDraft": {"ko":"디자인 검사를 통과하지 못해 반영되지 않은 결과물이 남아 있어요. 별도의 미확인 초안으로 열 수 있어요.","en":"Output that failed design review was kept but not applied. You can open it as a separate unverified draft.","zh-CN":"未通过设计检查的结果已保留但未应用，可作为单独的未验证草稿打开。"},
+  "canvas.history.reviewFailedDraftMeta": {"ko":"미완료 검사 {count}개 · {date}까지 보관","en":"{count} checks incomplete · kept until {date}","zh-CN":"{count} 项检查未完成 · 保留至 {date}"},
+  "canvas.history.openUnverifiedDraft": {"ko":"미확인 초안으로 열기","en":"Open as unverified draft","zh-CN":"作为未验证草稿打开"},
+  "canvas.draft.unverified": {"ko":"미확인 초안","en":"Unverified draft","zh-CN":"未验证草稿"},
+  "canvas.draft.unverifiedDetail": {"ko":"디자인 검사를 통과하지 못한 결과물에서 복구한 초안이에요. 미완료 검사 {count}개 · 원본은 {date}까지 보관돼요. 전체 디자인 검사를 통과하기 전까지는 미확인 상태로 남아요.","en":"Recovered from output that failed design review. {count} checks incomplete · the original copy is kept until {date}. It stays unverified until a full design review passes.","zh-CN":"此草稿恢复自未通过设计检查的结果。{count} 项检查未完成 · 原始副本保留至 {date}。在完整设计检查通过之前，它会保持未验证状态。"},
   "canvas.history.reapplyExternal": {"ko":"내 편집 복원","en":"Restore my edit","zh-CN":"恢复我的编辑"},
   "canvas.frames.safeZone": {"ko":"9:16 안전 영역 밖(위·아래 250px)에는 중요한 글자를 두지 마세요.","en":"Keep important text inside the 9:16 safe zone, away from the top and bottom 250px.","zh-CN":"请勿将重要文字放在 9:16 安全区域之外（顶部和底部各 250px）。"},
   "canvas.frames.navigation": {"ko":"프레임 이동","en":"Frame navigation","zh-CN":"画框导航"},
@@ -176,4 +187,6 @@ export const canvasMessages = defineMessages({
   "canvas.chart.validation.itemCount": {"ko":"항목 수는 {min}–{max}개여야 해요.","en":"The number of items must be between {min} and {max}.","zh-CN":"项目数量必须为 {min}–{max} 个。"},
   "canvas.chart.aiRequestTemplate": {"ko":"파일 {file}의 차트 {chart}를 다음 요청에 맞게 수정해 주세요. data-bg-chart-config의 원본 데이터를 보존하고 ChartV1 규칙을 적용하세요. 배치도 파일의 목적에 맞게 조정하세요.","en":"Update chart {chart} in file {file} to match the request below. Preserve the original data in data-bg-chart-config and apply the ChartV1 rules. Adjust the layout to suit the file's purpose.","zh-CN":"请按照下面的要求修改文件 {file} 中的图表 {chart}。保留 data-bg-chart-config 中的原始数据并遵循 ChartV1 规则，同时根据文件用途调整布局。"},
   "canvas.three.aiRequestTemplate": {"ko":"파일 {file}의 data-bg-three 관리형 3D 장면을 다음 요청에 맞게 수정해 주세요. ThreeSceneV1 계약을 유지하고 변경 결과를 설명해 주세요.","en":"Update the data-bg-three managed 3D scene in file {file} to match the request below. Keep the ThreeSceneV1 contract and describe what changed.","zh-CN":"请按照下面的要求修改文件 {file} 中由 data-bg-three 管理的 3D 场景。保持 ThreeSceneV1 契约并说明所做的更改。"},
+  "canvas.toolbar.more": {"ko":"더 보기","en":"More","zh-CN":"更多"},
+  "canvas.toolbar.moreHint": {"ko":"자리가 모자라 접어 둔 도구예요","en":"Tools that did not fit in the row","zh-CN":"这一行放不下的工具"},
 });

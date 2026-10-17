@@ -9,7 +9,7 @@ export function VisualSourceCandidates({ files }: { readonly files: readonly Fil
   const sources = useMemo(() => listExistingVisualSources(files), [files]);
   return (
     <details className="mt-3 text-xs leading-relaxed text-muted-foreground">
-      <summary className="cursor-pointer rounded py-1 text-[11px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+      <summary className="cursor-pointer rounded py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
         {sources.length > 0 ? t("chat.sources.summaryWithCount", { count: sources.length }) : t("chat.sources.summary")}
       </summary>
     <div className="mt-2 space-y-2 rounded-lg border border-border bg-muted/30 p-2.5">
@@ -22,7 +22,7 @@ export function VisualSourceCandidates({ files }: { readonly files: readonly Fil
               <li key={source.rel_path} className="flex min-w-0 items-center gap-1.5 text-muted-foreground">
                 <FileImage className="h-3 w-3 shrink-0" aria-hidden="true" />
                 <span className="min-w-0 flex-1 truncate" title={source.rel_path}>{source.rel_path}</span>
-                <span className="shrink-0 text-[10px]">{t("chat.sources.editable")}</span>
+                <span className="shrink-0 text-xs">{t("chat.sources.editable")}</span>
               </li>
             ))}
           </ul>

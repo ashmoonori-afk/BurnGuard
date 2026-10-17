@@ -23,6 +23,7 @@ import { platformGuideView } from "./platform-guide";
 import HandoffCommands from "./HandoffCommands";
 import { handoffCommands } from "./handoff-command-state";
 import ExportParitySummary from "./ExportParitySummary";
+import { classifyRenderPhaseFailure, renderPhaseFailureMessage } from "./export-options";
 
 export type ExportRowActions = {
   readonly onRetry?: (job: ExportJob) => void;
@@ -57,7 +58,7 @@ const STAGE_ICON_CLASS = {
 } as const;
 
 const ACTION_CLASS =
-  "inline-flex min-h-8 items-center gap-1 rounded px-1.5 py-0.5 text-[10px] hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex min-h-8 items-center gap-1 rounded px-1.5 py-0.5 text-xs hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50";
 
 export default function ExportStatusRow({
   job,
@@ -86,6 +87,7 @@ export default function ExportStatusRow({
   const iconClass = `h-3.5 w-3.5 ${state.cancelled ? "text-muted-foreground" : STAGE_ICON_CLASS[stage]}`;
   const canFix = offersFixRequest(job) && actions.onRequestFix !== undefined;
   const continuation = handoffCommands(job);
+  const phaseFailure = job.status === "failed" ? classifyRenderPhaseFailure(job.error_message) : null;
   return (
     <li className="space-y-1 rounded-md px-1 py-1 text-xs">
       <div className="flex items-center gap-2">
@@ -130,7 +132,7 @@ export default function ExportStatusRow({
             {t("export.retry")}
           </button>
         )}
-        <span className="text-[10px] text-muted-foreground" aria-live="polite">{label}</span>
+        <span className="text-xs text-muted-foreground" aria-live="polite">{label}</span>
         {state.active && actions.onCancel !== undefined && (
           <button
             type="button"
@@ -144,7 +146,10 @@ export default function ExportStatusRow({
         )}
       </div>
       {isPackage && stage === "ready" && job.status === "succeeded" && (
-        <p className="text-pretty break-keep pl-6 text-[10px] text-muted-foreground">{t("export.packageNote")}</p>
+        <p className="text-pretty break-keep pl-6 text-xs text-muted-foreground">{t("export.packageNote")}</p>
+      )}
+      {phaseFailure !== null && (
+        <p role="alert" className="text-pretty break-keep pl-6 text-xs text-destructive">{renderPhaseFailureMessage(phaseFailure)}</p>
       )}
       {continuation !== null && (
         <HandoffCommands continuation={continuation} />
@@ -155,9 +160,9 @@ export default function ExportStatusRow({
       {findings.length > 0 && (
         <ul className="space-y-0.5 pl-6">
           {findings.map((finding) => (
-            <li key={`${finding.code}-${finding.page}`} className="flex items-start gap-1 text-[10px]">
+            <li key={`${finding.code}-${finding.page}`} className="flex items-start gap-1 text-xs">
               <AlertTriangle
-                className={finding.severity === "error" ? "mt-0.5 h-3 w-3 shrink-0 text-destructive" : "mt-0.5 h-3 w-3 shrink-0 text-warning"}
+                className={finding.severity === "error" ? "mt-0.5 h-3 w-3 shrink-0 text-destructive" : "mt-0.5 h-3 w-3 shrink-0 text-warning-text"}
                 aria-hidden="true"
               />
               <span className="text-pretty break-keep text-muted-foreground">

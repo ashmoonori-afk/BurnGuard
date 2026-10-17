@@ -60,8 +60,25 @@ for icons, borders, and large or bold labels.
 
 ## Component anatomy
 
+- **NewProjectPanel**: one prominent idea field, an editable suggested name,
+  optional audience, and inline design-system suggestions. The full picker opens
+  only through Browse all and preserves the brief. Attachments stay visible;
+  detailed fields share one collapsed Advanced section without changing their
+  limits or defaults. Create and generate admits one first message, preserves the
+  draft if sending fails, and never sends an empty request.
+- **FirstRunGuide**: a dismissible, nonmodal home card only before a user has
+  created a project. Reuse provider detection and distinguish signed-in,
+  signed-out, unknown, failed-probe, and missing states. Its compact creation
+  form keeps optional identity, attachments, and detailed controls in Advanced;
+  the normal creation entry remains available. Successful creation or explicit
+  dismissal hides the guide persistently when browser storage is available.
 - **CanvasTopBar**: mode controls, refresh, and file-level undo. Each action
   has an accessible name and a disabled state when unavailable.
+  Website surfaces also offer Fit, Desktop (1440), Tablet (768), and Phone
+  (390 CSS pixels). These change only the viewport width of the mounted
+  preview, never its document or model output. Fixed artboards keep their
+  geometry. Selected presets use a neutral wash and pressed state; controls
+  wrap on narrow screens, and wide previews scroll inside the canvas.
 - **SelectorOverlay**: hover and selected bounds. Selection must preserve
   element identity, computed styles, and an authoring anchor when one exists.
 - **SelectorReadOnlyPanel**: selected identity and computed/token context. When
@@ -78,6 +95,11 @@ for icons, borders, and large or bold labels.
   Escape closes and saves the draft. Refresh/file changes dismiss stale context
   while preserving edited text through the existing comment save path. Editable
   controls retain Alt/Option+C, including inside the opaque-origin sandbox.
+- **RevisionThumbnails**: two equal columns captioned before and after, using
+  the existing 640-by-360 preview with contain fitting, muted fallback text,
+  semantic borders and the 4px spacing scale. Each side keeps its own failed
+  source and bounded preview retry state. Expired or missing revisions never
+  substitute the live artifact. The history dialog owns scrolling.
 - **ChatPane**: intent entry and streaming state. Chat must not obscure the
   artifact or imply a completed update before the backend event arrives.
   Each queued PDF/PPTX owns a stable item identity and an explicit ordinary

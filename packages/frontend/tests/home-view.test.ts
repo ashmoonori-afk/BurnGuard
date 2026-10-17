@@ -20,7 +20,9 @@ function renderHome(path: string, detection: BackendDetectionResult | ApiError):
   } else {
     client.setQueryData(["backends", "detect"], detection);
   }
-  for (const tab of ["recent", "mine", "examples"]) client.setQueryData(["projects", tab], []);
+  // One user project keeps the first-run guide (which replaces the quick-start tiles) out of these Home cases.
+  const userProject = { id: "p1", name: "My project", type: "prototype", design_system_id: null, design_system_name: null, thumbnail_path: null, updated_at: 1, archived_at: null };
+  for (const tab of ["recent", "mine", "examples"]) client.setQueryData(["projects", tab], tab === "mine" ? [userProject] : []);
   return renderToStaticMarkup(createElement(QueryClientProvider, { client }, createElement(MemoryRouter, { initialEntries: [path] }, createElement(HomeView))));
 }
 

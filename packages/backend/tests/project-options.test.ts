@@ -35,6 +35,7 @@ describe("project options", () => {
       graphic_set: { schema_version: 1, kind: "single", frame_count: 1 },
       logo_set: null,
       research_purpose: null,
+      standing_instructions: null,
     });
   });
 
@@ -94,6 +95,7 @@ describe("project options", () => {
       graphic_set: { schema_version: 1, kind: "single", frame_count: 1 },
       logo_set: null,
       research_purpose: null,
+      standing_instructions: null,
     });
   });
 

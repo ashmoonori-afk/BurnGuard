@@ -6,7 +6,7 @@ import type { Browser } from "playwright-core";
 import { inspectCanonicalTree } from "../src/services/canonical-tree-manifest";
 import { inspectRenderedPage } from "../src/services/design-audit-dom";
 import { auditRenderedTree } from "../src/services/design-audit";
-import { launchChromium } from "../src/services/export-render-session";
+import { launchTestChromium } from "./helpers/chromium";
 
 const NOT_APPLICABLE_ON_FIXED = ["narrow_width", "site_nav_mismatch", "site_missing_aria_current", "site_dangling_link", "site_missing_shared_block", "site_root_absolute_asset", "eyebrow_density", "duplicate_cta_intent", "cta_label_wrap", "repeated_section_structure", "journey_dead_link", "journey_mobile_nav", "journey_focus_visible", "journey_layout_shift"];
 const DECK_RUNTIME = '<script src="/runtime/deck-stage.js" defer></script>';
@@ -90,7 +90,7 @@ describe("design audit applicability and folding", () => {
 
 describe("rendered page measurements", () => {
   let browser: Browser;
-  beforeAll(async () => { browser = await launchChromium(AbortSignal.timeout(60_000)); });
+  beforeAll(async () => { browser = await launchTestChromium(60_000); });
   afterAll(async () => { await browser?.close(); });
 
   test("Given links without a destination and controls without a focus style When the journey is inspected Then dead links and unmarked keyboard stops are reported, while working links and marked stops pass", async () => {
@@ -283,7 +283,7 @@ describe("finding budget", () => {
   }, 120_000);
 
   test("CSS-05: Given exposed tokens and 25 stylesheet rules with literal colours When token usage is inspected Then 20 rules are reported and one anchorless summary stands for the rest", async () => {
-    const browser = await launchChromium(AbortSignal.timeout(60_000));
+    const browser = await launchTestChromium(60_000);
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
     try {
       const rules = Array.from({ length: 25 }, (_, index) => `.r${index}{color:#111111}`).join("");

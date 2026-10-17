@@ -1,4 +1,4 @@
-import { ASSET_README_HEADINGS, CONTENT_TYPE_FLOOR_PX, LAYOUT_SECTION_HEADINGS, layoutSectionKind, type DesignSurface, type DesignSystemLayout } from "@bg/shared";
+import { ASSET_README_HEADINGS, type DesignSystemRules, CONTENT_TYPE_FLOOR_PX, LAYOUT_SECTION_HEADINGS, layoutSectionKind, type DesignSurface, type DesignSystemLayout } from "@bg/shared";
 import { readDesignSystemAssetGuide } from "../services/design-system-assets";
 import { readDesignSystemPageCoverage } from "../services/design-system-pages";
 import { measuredLayoutPromptJson, measuredLayoutPromptSummary, readDesignSystemMeasuredLayout } from "../services/design-system-measured-layout";
@@ -8,6 +8,7 @@ import { pageCoveragePromptSummary } from "../services/extraction-pages";
 import { readDesignSystemLayout, readDesignSystemSourceFile } from "../services/design-system-layout";
 import path from "node:path";
 import { readDesignSystemSurface } from "../services/design-system-surface";
+import { readDesignSystemRules } from "../services/design-system-rules";
 import type { buildSessionContext } from "../services/context";
 
 type SessionContext = NonNullable<
@@ -175,6 +176,15 @@ export function appendDesignSystemStarter(lines: string[], pinnedContext: string
   lines.push("<design_system_starter>", JSON.stringify(plan).replace(/</g, "\\u003c"), "</design_system_starter>", STARTER_REQUIREMENT, "");
 }
 
+const RULES_REQUIREMENT = "- REQUIRED (DESIGN-SYSTEM RULES): every entry under do is a standing instruction and every entry under dont is forbidden on every surface, including in content the request adds. They were written or approved by the user for this system, so they outrank the system's other prose and defaults; only the user's explicit request in this turn overrides one. Check the finished output against each rule before replying.";
+
+/** The system's explicit do/don't list as one tagged block; nothing when the system has no rules. */
+export function appendDesignSystemRules(lines: string[], rules: DesignSystemRules): void {
+  if (rules.rules.length === 0) return;
+  const block = { do: rules.rules.filter(rule => rule.kind === "do").map(rule => rule.text), dont: rules.rules.filter(rule => rule.kind === "dont").map(rule => rule.text) };
+  lines.push("<selected_design_system_rules>", JSON.stringify(block).replace(/</g, "\\u003c"), "</selected_design_system_rules>", RULES_REQUIREMENT, "");
+}
+
 const ASSET_REQUIREMENT = "- REQUIRED: place, size, crop and colour logos, icons, illustrations, photography, backgrounds, patterns and motion by the matching usage rule in the asset guide above, including clear space and its do/don't rules. When generating a new image, start from the prompt of the matching asset kind, change only the subject to what this request needs, keep its palette, lighting, composition, texture and line weight, and append its negative constraints. Reuse supplied logo files unchanged; never generate a replacement logo when one is supplied. Each rule's Evidence line names what was observed in the source; only those observed facts and the extracted palette and type are brand decisions. Every other detail of a rule and its prompt is a default starting point: follow it unless the request, supplied assets or existing files indicate otherwise. The selected surface still owns framing and the image-uniqueness rules still apply. Explicit user overrides take precedence.";
 
 const SURFACE_REQUIREMENT: Readonly<Record<DesignSurface, string>> = {
@@ -250,6 +260,7 @@ export async function appendDesignSystemContext(
     lines.push(ASSET_REQUIREMENT, "");
   }
   await appendSurfaceContext(lines, designSystem, surface, pinned);
+  appendDesignSystemRules(lines, await readDesignSystemRules(designSystem));
 
   if (contextMode === "compact") {
     lines.push("### Compact design-system handling");

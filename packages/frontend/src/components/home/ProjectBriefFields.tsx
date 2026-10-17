@@ -4,14 +4,11 @@
  * only place that decides whether a project can be created.
  */
 import { useT } from "@/i18n/t";
-import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import type { DesignBriefContentSource, DesignBriefOutputSize } from "@bg/shared";
 import {
-  AUDIENCE_MAX_LENGTH,
   CONTENT_SOURCE_CHOICES,
   DENSITY_CHOICES,
-  OBJECTIVE_MAX_LENGTH,
   OUTPUT_SIZE_CHOICES,
   PROJECT_CONTROL_CLASS,
   PROJECT_LABEL_CLASS,
@@ -42,46 +39,7 @@ export default function ProjectBriefFields({
 }) {
   const t = useT();
   return (
-    <div className="space-y-4 border-t border-border pt-5">
-      <div className="text-xs font-semibold text-muted-foreground">
-        {t("home.brief.heading")}
-      </div>
-
-      <div className="space-y-1.5">
-        <label htmlFor="brief-audience" className={PROJECT_LABEL_CLASS}>
-          {t("home.brief.audience")}
-        </label>
-        <Input
-          id="brief-audience"
-          placeholder={t("home.brief.audiencePlaceholder")}
-          maxLength={AUDIENCE_MAX_LENGTH}
-          value={form.audience}
-          required
-          disabled={disabled}
-          onChange={(e) => onChange("audience", e.target.value)}
-        />
-      </div>
-
-      <div className="space-y-1.5">
-        <label htmlFor="brief-objective" className={PROJECT_LABEL_CLASS}>
-          {t("home.brief.objective")}
-        </label>
-        <textarea
-          id="brief-objective"
-          rows={2}
-          placeholder={t("home.brief.objectivePlaceholder")}
-          maxLength={OBJECTIVE_MAX_LENGTH}
-          value={form.objective}
-          required
-          disabled={disabled}
-          onChange={(e) => onChange("objective", e.target.value)}
-          className={`${PROJECT_CONTROL_CLASS} h-auto resize-none py-2 leading-relaxed`}
-        />
-      </div>
-
-      <details className="rounded-xl border border-border bg-muted/30 p-4">
-        <summary className="cursor-pointer text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t("home.brief.details")} <span className="ml-1 text-xs font-normal text-muted-foreground">{t("home.brief.detailsHint")}</span></summary>
-        <div className="mt-4 space-y-4">
+    <div className="space-y-4">
       <ChoiceField
         id="brief-content-source"
         label={t("home.brief.source")}
@@ -120,8 +78,6 @@ export default function ProjectBriefFields({
           onSelect={(v) => onChange("outputSize", v)}
         />
       )}
-        </div>
-      </details>
     </div>
   );
 }

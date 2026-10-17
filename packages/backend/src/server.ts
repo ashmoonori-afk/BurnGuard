@@ -160,7 +160,7 @@ export function classifyApiRoute(pathname: string, method: string): ApiRouteDoma
   if (pathname.startsWith("/api/learning")) return "learning";
   if (pathname.startsWith("/api/design-systems")) {
     if (/^\/api\/design-systems\/[^/]+\/files\//.test(pathname)) return "catalog";
-    return /\/(?:extract|upload|tokens|colors|fonts|pinterest)(?:\/|$)/.test(pathname) ? "system" : "catalog";
+    return /\/(?:extract|upload|tokens|colors|fonts|pinterest|rules|design-md|import-md)(?:\/|$)/.test(pathname) ? "system" : "catalog";
   }
   if (
     /^\/api\/exports\/[^/]+\/(?:download|parity\/pages\/\d+\/thumbnail)$/.test(
@@ -183,8 +183,8 @@ export function classifyApiRoute(pathname: string, method: string): ApiRouteDoma
     if (/\/checkpoints(?:\/|$)/.test(pathname)) return "session";
     if (/\/draws(?:\/|$)/.test(pathname) && (method === "GET" || method === "PUT")) return "managed-files";
     if (/\/fs(?:\/|$)/.test(pathname) && method === "GET" && !pathname.endsWith("/undo-info")) return "managed-files";
-    if (/\/(?:fs|operations|palette|history|alternatives)(?:\/|$)/.test(pathname)) return "artifact-operations";
-    if (/\/(?:files|artifacts|refresh|exports|design-audit|ux-review)(?:\/|$)/.test(pathname)) return "artifacts";
+    if (/\/(?:fs|operations|palette|history|alternatives|unverified-draft)(?:\/|$)/.test(pathname)) return "artifact-operations";
+    if (/\/(?:files|artifacts|refresh|exports|design-audit|photo-placements|ux-review)(?:\/|$)/.test(pathname)) return "artifacts";
     return "project";
   }
   return "not-found";

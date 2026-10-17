@@ -1,6 +1,6 @@
 export type BridgeServer = { readonly close: () => Promise<void> };
 export type BridgeLaunchOptions = { readonly channel?: string };
-export type BridgeLaunchOutcome = { readonly kind: "launched"; readonly server: BridgeServer } | { readonly kind: "failed" } | { readonly kind: "timeout" };
+export type BridgeLaunchOutcome = { readonly kind: "launched"; readonly server: BridgeServer } | { readonly kind: "failed"; readonly error: unknown } | { readonly kind: "timeout" };
 export type BridgeProbeVerdict = "usable" | "unusable" | "inconclusive";
 
 export const PROBE_INCONCLUSIVE_EXIT_CODE: number;

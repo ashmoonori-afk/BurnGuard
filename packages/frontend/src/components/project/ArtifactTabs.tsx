@@ -103,7 +103,7 @@ export default function ArtifactTabs({
               <button
                 type="button"
                 onClick={() => onClose?.(tab.id)}
-                className="mr-1 max-[900px]:min-h-11 max-[900px]:min-w-11 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                className="mr-1 inline-flex h-6 w-6 items-center justify-center rounded text-muted-foreground max-[900px]:h-11 max-[900px]:w-11 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                 aria-label={t("files.tabs.close", { name: title })}
               >
                 <X className="h-3 w-3" aria-hidden="true" />

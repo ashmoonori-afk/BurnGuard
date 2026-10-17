@@ -147,7 +147,7 @@ export default function FigmaImportDialog({
             }}
           />
           <span className="min-w-0 flex-1 truncate text-sm" title={node.name}>{node.name}</span>
-          <span className="font-mono text-[11px] text-muted-foreground">{node.node_type}</span>
+          <span className="font-mono text-xs text-muted-foreground">{node.node_type}</span>
         </label>)}
       </fieldset>}
       {error !== null && <p role="alert" className="rounded-lg bg-destructive/10 p-3 text-sm text-foreground">{error}</p>}

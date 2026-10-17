@@ -1,3 +1,4 @@
+import type { RenderPhaseCode } from "./export-render-phase";
 import { copyFile, cp, mkdir, readdir } from "node:fs/promises";
 import path from "node:path";
 import type { HandoffPage, HandoffSpec } from "@bg/shared";
@@ -42,7 +43,8 @@ export class HandoffExportError extends Error {
     | "chromium_not_installed"
     | "chromium_launch_timeout"
     | "artifact_not_ready"
-    | "render_failed";
+    | "render_failed"
+    | RenderPhaseCode;
 
   constructor(code: HandoffExportError["code"], message: string) {
     super(message);

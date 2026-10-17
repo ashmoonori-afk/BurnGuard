@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import type { TurnErrorCode, TurnNotApplied, TurnRejectionReason } from "@bg/shared";
 import { useT, type MessageKey } from "@/i18n/t";
 import { focusComposerOrReveal } from "@/lib/composer-focus";
+import { apiErrorCopy } from "@/lib/error-copy";
 
 /**
  * The finite rejection vocabulary, mapped onto shipped copy.
@@ -30,6 +31,8 @@ const TURN_REASON_MESSAGE_KEYS: Record<TurnRejectionReason, MessageKey> = {
 };
 
 const TURN_ERROR_MESSAGE_KEYS: Record<TurnErrorCode, MessageKey> = {
+  edit_scope_violation: "revision.blocked",
+  invalid_edit_scope: "revision.invalid",
   graphic_requires_authenticated_codex: "chat.error.graphicRequiresAuthenticatedCodex",
   graphic_starter_unchanged: "chat.error.graphicStarterUnchanged",
   logo_requires_authenticated_codex: "chat.error.logoRequiresAuthenticatedCodex",
@@ -84,7 +87,7 @@ export default function ErrorCard({
         <div className="min-w-0 flex-1">
           <div className="font-medium text-destructive">{t("chat.error.title")}</div>
           <div className="text-destructive/80 mt-0.5 break-words">
-            {t(TURN_ERROR_MESSAGE_KEYS[code ?? "turn_failed"])}
+            {code === "edit_scope_violation" || code === "invalid_edit_scope" ? apiErrorCopy({ code }) : t(TURN_ERROR_MESSAGE_KEYS[code ?? "turn_failed"])}
           </div>
           {reason !== undefined && (
             <div className="text-destructive/80 mt-1 break-words" data-qa="turn-error-reason">

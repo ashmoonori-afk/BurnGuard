@@ -14,18 +14,20 @@ Make websites, slides and graphics with AI, refine them on canvas and keep the f
 
 [Download the app](https://github.com/ashmoonori-afk/BurnGuard/releases/latest) · [Documentation](doc/README.md) · [한국어](README.ko.md) · [简体中文](README.zh-CN.md)
 
+[User guide](doc/user-guide.md): your first website, correcting an image, moving a project and finding your files.
+
 ## How it compares
 
-*As of 2026-09-28, from each product's public page or README ([sources](#comparison-sources)).*
+*Updated 2026-10-16 from public sources: canvas editing and sharing entries refreshed; other entries retain the 2026-09-28 review. This is not a desktop-app comparison test ([sources](#comparison-sources)).*
 
 | | BurnGuard | Claude Design | OpenDesign |
 |---|---|---|---|
 | Cost model | Free, Apache-2.0. Generation runs through your own Claude Code or Codex CLI and that provider account | Included in paid Claude plans; uses your plan's usage limits, with optional extra usage | Free, Apache-2.0. Bring your own coding-agent CLI or API key; optional paid OpenDesign Cloud models |
 | Where files live | On your computer (`~/.burnguard`) | Claude's hosted workspace; export or save as a folder | Local-first desktop app; Docker self-hosting |
 | Design-system rules | 41 bundled themes, each with navigation, hero and footer layout rules; add your own from files, websites, repositories or Figma | Built from your codebase and design files; admins can lock one approved system | `DESIGN.md` design systems, skills and plugins |
-| Canvas edit | Select, resize, rotate, typography, spacing and colors on the canvas; pinned comments | Inline comments, direct text edits, generated sliders; drag, resize and align | Iterate with the agent beside a sandboxed preview; comment-mode edits partially shipped (its roadmap) |
+| Canvas edit | Select, resize, rotate, typography, spacing and colors on the canvas; pinned comments | Inline comments, direct text edits, generated sliders; drag, resize and align | Direct element edits in a live preview; send team comments to the agent as one revision task |
 | Export formats | HTML ZIP, PDF, PPTX, PNG, PNG bundle, SVG (logos), handoff package, Cafe24 and Imweb packages | PDF, PPTX, standalone HTML, folder; Canva and other connectors; Claude Code handoff | HTML, PDF, PPTX, ZIP, Markdown, MP4 |
-| Publish | Publish to your own Vercel account with your token (one click once the token is saved in Settings and the export is verified) | Organization-scoped links; connectors including Vercel | Not documented in its README |
+| Publish | Publish to your own Vercel account with your token (one click once the token is saved in Settings and the export is verified) | Organization-scoped links; connectors including Vercel | Share designs for team viewing and comments; public website publishing not verified |
 | OS | Windows 10/11 x64; macOS 14+ on Apple silicon | Web and Claude apps, Claude Code | macOS (Apple silicon and Intel), Windows x64; Linux from source |
 
 ![BurnGuard website workspace with a conversation panel, model controls and the SONNEL sample in the canvas](doc/images/readme-website-workspace.png)
@@ -88,6 +90,8 @@ PPTX exports contain a high-resolution image of each slide and its text in speak
 - **Add source material.** Attach supported PDFs, slide decks, documents, images or text, or import an exported HTML project ZIP. Original attachments are retained separately from published website assets.
 - **Review before sharing.** Quality and UX panels identify issues and offer repair actions. Their findings are advisory; review the rendered result before exporting or publishing.
 
+The export menu's print check measures image resolution at print size: warnings below 300 ppi and strong warnings below 150 ppi. It checks intrinsic pixels of `<img>` elements after cropping and CSS background URLs from inline styles and stylesheets against each rendered element's box, including layered backgrounds. It cannot detect whether a source file was previously upscaled.
+
 ### Images, charts and 3D
 
 Give images a role in the design: a product hero, campaign scene, explanatory illustration or background. BurnGuard includes **21 image treatments** and **38 purpose recipes** across 13 domains. Generated images are **photorealistic by default**: abstract imagery is prohibited unless you ask for it, image prompts are written as a photographer's brief, and generated-art signatures such as plastic skin, glowing backdrops and garbled lettering are rejected at inspection. Non-photographic treatments apply only when you select or request them. Generation guidance calls for image production where the design needs it; the configured provider must support the requested generation. Graphic generation requires an authenticated Codex connection. [Image production guide](doc/image-production.md)
@@ -139,7 +143,7 @@ bun install --frozen-lockfile
 bun run scripts/dev-launcher.ts
 ```
 
-The launcher opens the frontend at `http://127.0.0.1:5173`; the backend uses `127.0.0.1:14070`. Stop it with Ctrl+C. On Windows, `Start-BurnGuard.bat` is a source-build launcher for development (requires Bun and the .NET 8 SDK); normal users should download the release installer from GitHub Releases instead. Use `--rebuild` after source changes.
+The launcher opens the frontend at `http://127.0.0.1:5173`; the backend uses `127.0.0.1:14070`. Stop it with Ctrl+C. On macOS, double-click `Start-BurnGuard.command` in Finder to run the same development stack (requires Bun); closing its Terminal window stops the servers. On Windows, `Start-BurnGuard.bat` is a source-build launcher for development (requires Bun and the .NET 8 SDK); use `--rebuild` after source changes. Normal users should download a release package instead of using either source launcher.
 
 To inspect the repository's theme examples, open `design system themes/previews/index.html` in a browser. The pages use bundled local fonts and images. After editing theme tokens, rebuild the token catalogue and website previews:
 
@@ -154,10 +158,11 @@ bun run previews
 bun run typecheck
 bun run check:whitespace
 bun run build:frontend
+node packages/backend/node_modules/playwright-core/cli.js install chromium
 bun test
 ```
 
-Run tests from the repository root so the preload provides an isolated temporary profile. Browser QA requires Node.js and Chrome/Edge; Windows runners may need an absolute Bun executable path. [Contributing and native builds](doc/CONTRIBUTING.md)
+Run tests from the repository root so the preload provides an isolated temporary profile. Browser-backed tests require Node.js; install the bundled browser with the command above after installing dependencies. When that build is missing, the default browser bridge tries installed Chrome, then Edge. Browser QA requires Node.js and Chrome/Edge; Windows runners may need an absolute Bun executable path. [Contributing and native builds](doc/CONTRIBUTING.md)
 
 <details>
 <summary>About the screenshots</summary>
@@ -176,7 +181,41 @@ The interface captures were selected from the repository's local `.omo/evidence`
 
 </details>
 
+### Read a project from your coding agent
+
+Your own coding agent can read a live BurnGuard project in place, without an export: from a source checkout run
+
+```bash
+bun scripts/burnguard-read.ts projects                 # active projects: id, type, name, design system
+bun scripts/burnguard-read.ts project <id>             # Markdown brief: directory, "always apply" note, design-system rules, files
+bun scripts/burnguard-read.ts project <id> --json
+```
+
+It reads the profile at `BG_APP_ROOT` (default `~/.burnguard`) with the database opened read-only, never writes, and opens no network port, so it is safe while the app is running.
+
 ## Changelog
+
+### 0.5.30
+
+- A generation refused by its design review can be opened as a separate unverified draft; the original project, revision and audit stay unchanged, and the draft stays unverified until an audit of its current content passes every check the failed review left incomplete. Expired, damaged or disallowed output is refused with a reason.
+- Edits can be limited to text only or images only, optionally for chosen pages, artboards or elements. BurnGuard compares the result with the previous revision before publishing (text, image references, asset bytes including images shared with CSS backgrounds, styles, scripts, structure and whitespace that changes what is shown) and does not publish an out-of-scope change. History lists the changed pages, kinds of change and text before and after; it is a source comparison, not a pixel comparison.
+- The export menu has a print check: page sizes, missing or remote fonts, browser readiness and each placed image's effective resolution after cropping (warning below 300 ppi, strong warning below 150 ppi; measured from the original pixels of `<img>` elements only). Each export step has its own time limit, and a hung or failed step is named with a recovery action.
+- The design review no longer reports a skip link revealed by keyboard focus as text overflow, and findings on elements without an element ID show a selector and position.
+- Photographs of real-world subjects can carry a placement record (sourced references, scale, whether references reached the generator as reported by the agent, compared candidates, crop-only placement) and are shown as reference-verified only when it is complete. Stretched photographs and reference photos copied into published files are must-fix findings.
+- Browser-based checks on Windows no longer fail partway through after a slow cold start.
+
+### 0.5.29
+
+- Checkpoint snapshots publish with integrity manifests and durable writes; an interrupted replacement recovers the previous verified pair, and an incomplete new snapshot is rejected rather than treated as legacy data.
+- Artifact publication and rollback flush durable state before committing, and design-token and font CSS updates use atomic replacement. Deleted projects can be restored from Recently Deleted during their retention period.
+- Database migrations back up existing databases, reject unknown newer schemas and check foreign-key integrity; CI rejects migration files that would reorder already published migrations.
+- Export publishing rechecks the validated archive digest and size limit; a damaged checkpoint receipt no longer blocks a project bundle export.
+- Provider stdout parsing is bounded, and cancellation tests cover owned children and detached descendants on Windows as well as POSIX. Codex image notifications no longer depend on a thread-ID filename hint, while the scanner still validates and selects the current thread's files.
+- Project watchers coalesce bursts and drain cleanly on shutdown, and browser launch and cleanup settle transports and bound resource lifetimes.
+- macOS finds provider CLIs from login-shell and Node-manager paths, and macOS update-cache pruning is serialized with download admission. Native shutdown and update dialogs are localized, closing during a running generation asks for confirmation, and comment drafts survive reopening.
+- Quick Comment uses Alt/Option+C, Ctrl+Y works in both history handlers, and CLI probe failures get a distinct explanation and recovery guidance. Oversized imports show the supported limit where available and retain entered values.
+- Local bootstrap requires launcher-held authority; an Origin header alone cannot obtain a capability. Token-bearing Figma requests refuse redirects, SVG direction previews receive protective raw-file headers, and archive extraction uses the containment resolver.
+- Provider logs and completion messages avoid private staging paths. Ubuntu CI runs every discovered test file without baseline exclusions, including Chromium conformance and PDF/PNG/PPTX smoke checks; watcher and image regressions also run on macOS and Windows.
 
 ### 0.5.28
 
@@ -272,10 +311,10 @@ The interface captures were selected from the repository's local `.omo/evidence`
 
 ## Documentation and license
 
-[Documentation index](doc/README.md) · [Architecture](doc/01-architecture.md) · [Design guidance](doc/design-craft.md) · [Installation and updates](https://github.com/ashmoonori-afk/BurnGuard/releases/latest)
+[User guide](doc/user-guide.md) · [Documentation index](doc/README.md) · [Architecture](doc/01-architecture.md) · [Design guidance](doc/design-craft.md) · [Installation and updates](https://github.com/ashmoonori-afk/BurnGuard/releases/latest)
 
 BurnGuard is licensed under **Apache-2.0**. See [LICENSE](LICENSE), [NOTICE](NOTICE) and the [image provenance notes](doc/images/README.md).
 
 ### Comparison sources
 
-Checked on 2026-09-28. Claude Design: [product page](https://claude.com/product/design) and [launch announcement](https://www.anthropic.com/news/claude-design-anthropic-labs). OpenDesign: [nexu-io/open-design README](https://github.com/nexu-io/open-design). BurnGuard: this README and [`scripts/build-mac.ts`](scripts/build-mac.ts) (macOS target). Product details change; open an issue if a row is out of date.
+Baseline checked on 2026-09-28. Claude Design: [product page](https://claude.com/product/design) and [launch announcement](https://www.anthropic.com/news/claude-design-anthropic-labs). OpenDesign: [nexu-io/open-design README](https://github.com/nexu-io/open-design); canvas editing and sharing entries refreshed on 2026-10-16 from its [homepage](https://open-design.ai/ko/), [editing tutorial](https://open-design.ai/tutorials/open-design-free-open-source-alternative-code-a-program/) and [team plan](https://open-design.ai/ko/pricing/?audience=team). Shared review is not evidence of public website publishing. BurnGuard: this README and [`scripts/build-mac.ts`](scripts/build-mac.ts) (macOS target). Product details change; open an issue if a row is out of date.

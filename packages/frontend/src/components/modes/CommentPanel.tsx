@@ -3,6 +3,7 @@ import type { Comment } from "@bg/shared";
 import { cn } from "@/lib/utils";
 import { useT, type MessageKey } from "@/i18n/t";
 import { localeTag, useLocaleStore } from "@/i18n/locale";
+import { ModePanelHeader } from "./ModePanelHeader";
 import { readCommentDraft, restoredCommentDraft, writeCommentDraft } from "@/lib/comment-draft";
 
 /** The list follows the active file and slide; resolved comments stay archived unless the panel asks for them. */
@@ -31,6 +32,7 @@ export default function CommentPanel({
   onToggleResolved,
   onRequestEdit,
   editDisabled,
+  onClose,
 }: {
   comments: Comment[];
   activeRelPath: string | null;
@@ -43,6 +45,7 @@ export default function CommentPanel({
   onToggleResolved: (id: string, resolved: boolean) => void;
   onRequestEdit?: (comment: Comment, body: string) => Promise<void>;
   editDisabled?: boolean;
+  onClose?: () => void;
 }) {
   const t = useT();
   const [showResolved, setShowResolved] = useState(false);
@@ -50,18 +53,12 @@ export default function CommentPanel({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="border-b border-border px-3 py-2">
-        <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-          {t("workspace.comments.heading")}
-        </div>
-        <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground [word-break:keep-all]">
-          {t("workspace.comments.help")}
-        </p>
-        <label className="mt-2 flex min-h-9 items-center gap-2 text-[11px] text-muted-foreground">
-          <input type="checkbox" data-qa="comments-show-resolved" checked={showResolved} onChange={(e) => setShowResolved(e.target.checked)} className="h-4 w-4 accent-accent" />
+      <ModePanelHeader title={t("workspace.comments.heading")} description={t("workspace.comments.help")} onClose={onClose}>
+        <label className="mt-2 flex min-h-9 cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+          <input type="checkbox" data-qa="comments-show-resolved" checked={showResolved} onChange={(e) => setShowResolved(e.target.checked)} className="h-4 w-4 shrink-0 cursor-pointer rounded-sm accent-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background" />
           {t("workspace.comments.showResolved")}
         </label>
-      </div>
+      </ModePanelHeader>
 
       <div className="flex-1 overflow-y-auto p-2 space-y-2">
         {visible.length === 0 && (
@@ -183,7 +180,7 @@ export function CommentItem({
       >
         <span
           className={cn(
-            "inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-semibold",
+            "inline-flex h-5 w-5 items-center justify-center rounded-full text-xs font-semibold",
             resolved
               ? "bg-muted text-muted-foreground"
               : "bg-accent text-accent-foreground",
@@ -191,10 +188,10 @@ export function CommentItem({
         >
           {index}
         </span>
-        <span className="flex-1 truncate font-mono text-[10px] text-muted-foreground">
+        <span className="flex-1 truncate font-mono text-xs text-muted-foreground">
           {comment.node_selector || "body"}
         </span>
-        <span className="text-[10px] text-muted-foreground">
+        <span className="text-xs text-muted-foreground">
           {t(resolved ? "workspace.comments.resolved" : "workspace.comments.open")}
         </span>
       </button>
@@ -230,16 +227,16 @@ export function CommentItem({
             catch { setSendStatus("workspace.comments.editSendError"); }
             finally { setSending(false); }
           }}>{t(sending ? "workspace.comments.sending" : "workspace.comments.saveAndEdit")}</button>}
-        {draft !== comment.body && <p className="text-[10px] text-muted-foreground">{t("workspace.comments.saveBeforeRequest")}</p>}
-        {sendStatus && <p role="status" className="mt-1 text-[10px] text-muted-foreground">{t(sendStatus)}</p>}
+        {draft !== comment.body && <p className="text-xs text-muted-foreground">{t("workspace.comments.saveBeforeRequest")}</p>}
+        {sendStatus && <p role="status" className="mt-1 text-xs text-muted-foreground">{t(sendStatus)}</p>}
         <div className="mt-1.5 flex items-center justify-between">
-          <span className="text-[10px] text-muted-foreground">
+          <span className="text-xs text-muted-foreground">
             {new Date(comment.created_at).toLocaleString(localeTag(locale))}
           </span>
           <button
             type="button"
             onClick={onToggleResolved}
-            className="text-[10px] text-muted-foreground hover:text-foreground"
+            className="text-xs text-muted-foreground hover:text-foreground"
           >
             {t(resolved ? "workspace.comments.reopen" : "workspace.comments.resolve")}
           </button>

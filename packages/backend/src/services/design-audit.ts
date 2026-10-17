@@ -10,12 +10,13 @@ import { inspectRenderedPage, type DomAuditFinding, type DomAuditObservation } f
 import { fingerprintHtmlNode, FilePatchError } from "./file-patch";
 import { launchChromium, openRenderSession, RenderSessionError, type RenderSession } from "./export-render-session";
 import { registerExportBrowser } from "./export-browser-registry";
+import { findReferencePhotoLeaks } from "./photo-placements";
 import { parseStoredProjectOptions } from "./project-options";
 import { buildSiteMap, type SiteMap } from "./site-map";
 import { auditSiteStructure, type SiteStructureFinding } from "./site-shared-blocks";
 
-/** Part of the on-demand audit cache key; bumped when the viewport or check policy changes (v8: data-bg-motion regions measured at rest). */
-export const DESIGN_AUDIT_POLICY_VERSION = "site-deck-copy-v8";
+/** Part of the on-demand audit cache key; bumped when the viewport or check policy changes (v9: a verified focus-revealed skip link is not text overflow; anonymous findings carry a locator; v10: stretched_image and reference_photo_leak checks). */
+export const DESIGN_AUDIT_POLICY_VERSION = "site-deck-copy-v10";
 
 /**
  * The fixed page a project renders into, or undefined for a responsive website audit. A logo
@@ -95,7 +96,13 @@ export async function auditRenderedTree(input: AuditRenderedTreeInput): Promise<
   const selected = rawPages.map((): DomAuditFinding[] => []);
   for (const severity of ["must_fix", "recommended"] as const) rawPages.forEach((page, index) => { for (const finding of page.raw) if (finding.severity === severity && available > 0) { selected[index]!.push(finding); available -= 1; } });
   for (const [index, page] of rawPages.entries()) if (selected[index]!.length > 0) renderedFindings.push(...await enrichFindings(selected[index]!, input, manifest, page.relPath));
-  const findings = [...renderedFindings, ...siteFindings].slice(0, 200);
+  // Reference photographs are inputs only: a copy of one inside the published tree is a must-fix finding.
+  const leakFindings: DesignAuditFinding[] = (await findReferencePhotoLeaks(input.projectDir, current.files)).map((leak, index) => ({
+    id: `reference_photo_leak:${createHash("sha256").update(`${leak.placement_id}\0${leak.deliverable_path}\0${index}`).digest("hex").slice(0, 24)}`,
+    check_code: "reference_photo_leak", severity: "must_fix", source: { rel_path: leak.deliverable_path, node_bg_id: null },
+    evidence: `Reference photograph for placement ${leak.placement_id} is present in the deliverable; reference photos are inputs only`, targeted_action: "remove_reference_photo",
+  }));
+  const findings = [...leakFindings, ...renderedFindings, ...siteFindings].slice(0, 200);
   // Site structure is never audited on a fixed canvas and a fixed canvas is never rendered narrow, so those checks cannot pass or fail there.
   const applicable = (code: DesignAuditCheckCode): boolean => !(fixedCanvas && (code === "narrow_width" || code.startsWith("site_") || code.startsWith("journey_") || code === "eyebrow_density" || code === "duplicate_cta_intent" || code === "cta_label_wrap" || code === "repeated_section_structure"));
   const checks = DESIGN_AUDIT_CHECK_CODES.map((code) => buildCheck(code, findings, code === "narrow_width" || code === "journey_mobile_nav" ? narrows : desktops, applicable(code)));
@@ -196,7 +203,7 @@ async function enrichFindings(raw: readonly DomAuditFinding[], input: AuditRende
   const html = htmlEntry === undefined ? null : await readFile(resolveWithin(input.projectDir, relPath), "utf8");
   return sorted.map((finding, index) => {
     const source = { rel_path: relPath, node_bg_id: finding.nodeId };
-    const base = { id: `${finding.code}:${createHash("sha256").update(`${relPath}\0${finding.nodeId ?? ""}\0${finding.evidence}\0${index}`).digest("hex").slice(0, 24)}`, check_code: finding.code, severity: finding.severity, source, evidence: finding.evidence, ...(finding.measured === undefined ? {} : { measured: finding.measured }), ...(finding.threshold === undefined ? {} : { threshold: finding.threshold }), targeted_action: finding.action };
+    const base = { id: `${finding.code}:${createHash("sha256").update(`${relPath}\0${finding.nodeId ?? ""}\0${finding.evidence}\0${index}`).digest("hex").slice(0, 24)}`, check_code: finding.code, severity: finding.severity, source, evidence: finding.evidence, ...(finding.measured === undefined ? {} : { measured: finding.measured }), ...(finding.threshold === undefined ? {} : { threshold: finding.threshold }), targeted_action: finding.action, ...(finding.locator === undefined ? {} : { locator: finding.locator }) };
     if (input.safeFix === false || finding.code !== "minimum_text_size" || finding.nodeId === null || finding.fix === undefined || html === null || htmlEntry === undefined) return base;
     try {
       const node = fingerprintHtmlNode(html, finding.nodeId);
@@ -208,6 +215,12 @@ async function enrichFindings(raw: readonly DomAuditFinding[], input: AuditRende
 /** Caches a review measured before commit under the identity it names, so the Quality panel's first fetch after the turn needs no second render. */
 export async function writeProjectAuditCache(projectDir: string, result: DesignAuditResult): Promise<void> {
   await writeCache(resolveWithin(projectDir, ".meta", "audits", `${result.artifact_revision}-${result.artifact_digest}-${DESIGN_AUDIT_POLICY_VERSION}.json`), result);
+}
+
+/** The cached audit for exactly this artifact identity, or null. Reads only; it never renders. */
+export async function readCachedProjectAudit(projectDir: string, projectId: string, revision: number, digest: string): Promise<DesignAuditResult | null> {
+  const cached = await readCache(resolveWithin(projectDir, ".meta", "audits", `${revision}-${digest}-${DESIGN_AUDIT_POLICY_VERSION}.json`));
+  return cached !== null && cached.project_id === projectId && cached.artifact_revision === revision && cached.artifact_digest === digest ? cached : null;
 }
 
 async function readCache(cachePath: string): Promise<DesignAuditResult | null> {

@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CatalogDesignSystemDetail, DesignSystemColorToken, DesignSystemDetail } from "@bg/shared";
-import { ArrowLeft, ArrowUpRight, CheckCircle2, Pencil, Plus, Upload } from "lucide-react";
+import { ArrowUpRight, CheckCircle2, Download, Pencil, Plus, Upload } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import {
+  downloadDesignMd,
   getDesignSystemTokens,
   uploadDesignSystemFont,
   upsertDesignSystemColor,
@@ -12,6 +13,7 @@ import { catalogDetailRows, getDesignSystem, updateDesignSystemWithConflictReloa
 import { DesignSystemLayoutPanel } from "@/components/systems/DesignSystemLayoutPanel";
 import { DesignSystemAssetsPanel } from "@/components/systems/DesignSystemAssetsPanel";
 import { DesignSystemPagesPanel } from "@/components/systems/DesignSystemPagesPanel";
+import { DesignSystemRulesPanel } from "@/components/systems/DesignSystemRulesPanel";
 import SystemPreviewGrid from "@/components/systems/SystemPreviewGrid";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -82,6 +84,19 @@ function DesignSystemEditor({ id }: { id: string }) {
   const [draftStatus, setDraftStatus] = useState<DesignSystemDetail["status"]>(
     "draft",
   );
+  const downloadSystemFile = async () => {
+    try {
+      const file = await downloadDesignMd(id);
+      const url = URL.createObjectURL(file.blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = file.filename;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      pushToast({ tone: "error", title: t("system.designMd.failed"), body: apiErrorCopy(error) });
+    }
+  };
   const tokensQuery = useQuery({ queryKey: ["design-systems", "tokens", id], queryFn: () => getDesignSystemTokens(id), retry: false });
   const colorTokens = tokensQuery.data?.colors ?? [];
   const tokenFilePath = tokensQuery.data?.token_file_path ?? null;
@@ -196,7 +211,9 @@ function DesignSystemEditor({ id }: { id: string }) {
     },
   });
 
+  const isDraft = system?.status === "draft";
   useEffect(() => {
+    if (!isDraft) return;
     const controller = new AbortController();
 
     // Best-effort fetch of the extraction report written by P4.1 / P4.2
@@ -219,7 +236,7 @@ function DesignSystemEditor({ id }: { id: string }) {
       });
 
     return () => controller.abort();
-  }, [id]);
+  }, [id, isDraft]);
 
   if (systemQuery.isError) {
     return <div role="alert" className="mx-auto my-12 max-w-lg space-y-4 px-6 text-center">
@@ -245,8 +262,7 @@ function DesignSystemEditor({ id }: { id: string }) {
   return (
     <div className="min-w-0 flex-1 overflow-y-auto bg-background">
       <div className="mx-auto max-w-6xl px-4 py-6 sm:px-8 sm:py-8">
-        <Link to="/?view=systems" className="mb-5 inline-flex min-h-9 items-center gap-2 rounded-md text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><ArrowLeft className="h-4 w-4" />{t("system.backToLibrary")}</Link>
-        <div className="border-y border-border bg-card p-5 sm:p-7">
+        <div className="rounded-2xl border border-border bg-card p-5 sm:p-7">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex flex-wrap items-center gap-2"><span className="text-xs font-medium text-muted-foreground">{t("system.title")}</span><Badge variant={system.status === "published" ? "accent" : "outline"}>{t(STATUS_LABELS[system.status])}</Badge>{system.is_template ? <Badge variant="outline">{t("system.template")}</Badge> : null}</div>
             {!editing ? (
@@ -266,6 +282,7 @@ function DesignSystemEditor({ id }: { id: string }) {
                 <Pencil className="h-3.5 w-3.5" />
                 {t("system.editDetails")}
               </Button>
+              <Button variant="outline" size="sm" data-qa="system-download-design-md" onClick={() => void downloadSystemFile()}><Download className="h-3.5 w-3.5" aria-hidden="true" />{t("system.designMd.download")}</Button>
               {system.status !== "published" ? <Button variant="cta" size="sm" onClick={() => updateMutation.mutate(system.status === "draft" ? "review" : "published")} disabled={updateMutation.isPending}>{updateMutation.isPending ? t("system.saving") : system.status === "draft" ? t("system.startReview") : t("system.publishSystem")}<ArrowUpRight className="h-3.5 w-3.5" /></Button> : null}
               </div>
             ) : null}
@@ -362,17 +379,18 @@ function DesignSystemEditor({ id }: { id: string }) {
           ) : null}
 
           <nav aria-label={t("system.sections")} className="mt-6 flex flex-wrap gap-2 border-t border-border pt-5">
-            {[{ id: "system-previews", label: t("system.previews") }, { id: "system-layout", label: t("system.layout.title") }, { id: "system-assets", label: t("system.assets.title") }, { id: "system-style-editor", label: t("system.colorsFonts") }, { id: "system-source-details", label: t("system.sourceDetails") }].map(({ id: sectionId, label }) => <Button key={sectionId} size="sm" variant="outline" onClick={() => { const section = document.getElementById(sectionId); if (section instanceof HTMLDetailsElement) section.open = true; section?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>{label}</Button>)}
+            {[{ id: "system-previews", label: t("system.previews") }, { id: "system-layout", label: t("system.layout.title") }, { id: "system-rules", label: t("system.rules.title") }, { id: "system-assets", label: t("system.assets.title") }, { id: "system-style-editor", label: t("system.colorsFonts") }, { id: "system-source-details", label: t("system.sourceDetails") }].map(({ id: sectionId, label }) => <Button key={sectionId} size="sm" variant="outline" onClick={() => { const section = document.getElementById(sectionId); if (section instanceof HTMLDetailsElement) section.open = true; section?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>{label}</Button>)}
           </nav>
         </div>
-        <section id="system-previews" className="mt-6 scroll-mt-6 border-y border-border bg-card">
+        <section id="system-previews" className="mt-6 scroll-mt-6 overflow-hidden rounded-2xl border border-border bg-card">
           <div className="border-b border-border px-5 py-5 sm:px-7"><h2 className="text-lg font-semibold">{t("system.previews")}</h2><p className="mt-1 text-sm text-muted-foreground">{t("system.previewHelp")}</p></div>
           <SystemPreviewGrid systemId={id} onEditColors={() => colorEditorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })} previewRefreshKey={previewRefreshKey} />
         </section>
         <div id="system-layout" className="scroll-mt-6"><DesignSystemLayoutPanel layout={tokensQuery.data?.layout} loading={tokensQuery.isPending} failed={tokensQuery.isError} /></div>
+        <div id="system-rules" className="scroll-mt-6"><DesignSystemRulesPanel systemId={id} rules={tokensQuery.data?.rules} loading={tokensQuery.isPending} /></div>
         <DesignSystemPagesPanel pages={tokensQuery.data?.pages} />
         <div id="system-assets" className="scroll-mt-6"><DesignSystemAssetsPanel assets={tokensQuery.data?.assets} loading={tokensQuery.isPending} failed={tokensQuery.isError} /></div>
-        <section id="system-style-editor" className="mt-8 scroll-mt-6">
+        <section id="system-style-editor" className="my-5 scroll-mt-6 rounded-2xl border border-border bg-card p-5">
           <div className="mb-4"><h2 className="text-lg font-semibold">{t("system.editColorsFonts")}</h2><p className="mt-1 text-sm text-muted-foreground">{t("system.styleHelp")}</p></div>
           {tokensQuery.isError ? <div role="alert" className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-card p-4"><p className="text-sm">{t("system.colorsLoadFailed")}</p><Button variant="outline" size="sm" disabled={tokensQuery.isFetching} onClick={() => void tokensQuery.refetch()}>{t("system.retry")}</Button></div> : null}
           <div className="grid min-w-0 gap-5 lg:grid-cols-[0.8fr_1.2fr]">
@@ -428,8 +446,8 @@ function DesignSystemEditor({ id }: { id: string }) {
             />}
           </div>
         </section>
-          <details id="system-source-details" className="mt-6 scroll-mt-6 rounded-2xl border border-border bg-card p-5">
-            <summary className="cursor-pointer text-sm font-medium">{t("system.sourceFiles")}</summary>
+          <details id="system-source-details" className="my-5 scroll-mt-6 rounded-2xl border border-border bg-card p-5">
+            <summary className="inline-flex min-h-8 cursor-pointer items-center text-sm font-medium">{t("system.sourceFiles")}</summary>
             <dl className="mt-4 grid gap-4 text-sm md:grid-cols-2">
               {catalogDetailRows(system).map((row) => {
                 const labelKey = CATALOG_DETAIL_LABELS[row.label];
@@ -479,7 +497,7 @@ function FontUploadCard({
 }) {
   const t = useT();
   return (
-    <section className="min-w-0 rounded-2xl border border-border bg-card p-5">
+    <section className="min-w-0 rounded-xl border border-border bg-background p-5">
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
@@ -510,7 +528,7 @@ function FontUploadCard({
             </span>
           </div>
           {file ? (
-            <div className="font-mono text-[11px] text-muted-foreground">
+            <div className="font-mono text-xs text-muted-foreground">
               {file.name}
             </div>
           ) : null}
@@ -593,7 +611,7 @@ export function ColorTokenEditor({
   const resolvedDraft = resolveTokenColor(value, tokens);
   const unresolvedReference = resolvedDraft === null && /^var\(/i.test(value.trim());
   return (
-    <section ref={refEl} className="min-w-0 rounded-2xl border border-border bg-card p-5">
+    <section ref={refEl} className="min-w-0 rounded-xl border border-border bg-background p-5">
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
@@ -690,7 +708,7 @@ export function ColorTokenEditor({
               />
               <div className="min-w-0 flex-1">
                 <div className="truncate font-mono text-xs">--{token.name}</div>
-                <div className="truncate font-mono text-[11px] text-muted-foreground">
+                <div className="truncate font-mono text-xs text-muted-foreground">
                   {token.value}
                 </div>
               </div>

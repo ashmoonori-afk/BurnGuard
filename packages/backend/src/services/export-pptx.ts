@@ -1,3 +1,4 @@
+import type { RenderPhaseCode } from "./export-render-phase";
 import PptxGenJS from "pptxgenjs";
 import type { PptxSize } from "@bg/shared";
 import { parsePng } from "./export-png-validation";
@@ -21,7 +22,7 @@ export function pptxLayoutForSize(size: PptxSize): PptxLayoutDims {
 }
 
 export class PptxExportError extends Error {
-  readonly code: "chromium_not_installed" | "chromium_launch_timeout" | "deck_not_ready" | "render_failed";
+  readonly code: "chromium_not_installed" | "chromium_launch_timeout" | "deck_not_ready" | "render_failed" | RenderPhaseCode;
 
   constructor(code: PptxExportError["code"], message: string) {
     super(message);

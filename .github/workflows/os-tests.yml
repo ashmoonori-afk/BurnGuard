@@ -58,6 +58,10 @@ jobs:
       - name: Platform-sensitive suites
         run: >-
           bun test --timeout 30000
+          packages/backend/tests/project-folder.test.ts
+          packages/frontend/tests/canvas-device-width.test.ts
+          packages/frontend/tests/toolbar-overflow.test.ts
+          packages/backend/tests/edit-scope.test.ts
           packages/backend/tests/os-portability.test.ts
           packages/backend/tests/decomposed-file-names.test.ts
           packages/backend/tests/artifact-tree-durability.test.ts
@@ -72,10 +76,19 @@ jobs:
           packages/backend/tests/design-system-contrast.test.ts
           packages/backend/tests/design-system-starter.test.ts
           packages/frontend/tests/canvas-edit-review.test.ts
+          packages/frontend/tests/revision-thumbnails.test.ts
+          packages/frontend/tests/settings-sections.test.ts
+          packages/frontend/tests/layout-notes.test.ts
           packages/backend/tests/design-system-starter-entrypoint.test.ts
           packages/backend/tests/design-system-layout-reference.test.ts
           packages/backend/tests/design-system-conformance.test.ts
           packages/backend/tests/design-system-pages.test.ts
+          packages/backend/tests/design-system-rules.test.ts
+          packages/backend/tests/design-md.test.ts
+          packages/backend/tests/project-instructions.test.ts
+          packages/backend/tests/project-reader.test.ts
+          packages/frontend/tests/correction-rule.test.ts
+          packages/frontend/tests/example-briefs.test.ts
           packages/backend/tests/design-workflow.test.ts
           packages/backend/tests/generation-output.test.ts
           packages/backend/tests/css-logo-check.test.ts
@@ -100,6 +113,8 @@ jobs:
           packages/frontend/tests/side-input.test.ts
           packages/frontend/tests/error-copy.test.ts
           packages/backend/tests/artifact-history.test.ts
+          packages/backend/tests/revision-thumbnails.test.ts
+          packages/backend/tests/review-failed-draft-recovery.test.ts
           packages/backend/tests/review-artifact-safety.test.ts
           packages/backend/tests/watchers.test.ts
           packages/frontend/tests/i18n-messages.test.ts
@@ -112,6 +127,11 @@ jobs:
           packages/backend/tests/image-fingerprint.test.ts
           packages/backend/tests/logo-moodboard.test.ts
           packages/backend/tests/logo-moodboard-routes.test.ts
+          packages/backend/tests/photo-placements.test.ts
+          packages/backend/tests/photo-record-publication.test.ts
+          packages/backend/tests/photo-record-crash-recovery.test.ts
+          packages/backend/tests/review-failed-photo-record.test.ts
+          packages/backend/tests/photo-stretch.browser.test.ts
           packages/backend/tests/logo-originality.test.ts
           packages/backend/tests/logo-pipeline-state.test.ts
           packages/backend/tests/logo-completion-gate.test.ts
@@ -136,8 +156,15 @@ jobs:
           packages/backend/tests/chromium-bridge-probe.test.ts
           packages/backend/tests/chromium-browser-paths.test.ts
           packages/backend/tests/export-render-launch.test.ts
+          packages/backend/tests/export-render-phase.test.ts
+          packages/backend/tests/print-preflight.test.ts
+          packages/backend/tests/print-preflight-measure.test.ts
+          packages/backend/tests/print-backgrounds.browser.test.ts
+          packages/backend/tests/export-render-phase-callers.test.ts
+          packages/frontend/tests/print-preflight-view.test.ts
           packages/backend/tests/chromium-process-tree.test.ts
           packages/backend/tests/chromium-launch-hardening.test.ts
+          packages/backend/tests/design-audit-skip-link.test.ts
           scripts/qa/check-os-matrix-coverage.test.ts
           scripts/qa/check-flake-patterns.test.ts
           scripts/qa/check-migration-order.test.ts
@@ -150,9 +177,19 @@ jobs:
           packages/frontend/tests/backend-restart-notice.test.ts
           packages/frontend/tests/settings-codex-progress.test.ts
           packages/frontend/tests/settings-language-note.test.ts
+          packages/frontend/tests/project-header-actions.test.ts
           packages/frontend/tests/workspace-narrow-layout.test.ts
           packages/frontend/tests/chat-status-slot-layout.test.ts
           packages/frontend/tests/generation-controls-guidance.test.ts
+          packages/frontend/tests/project-creation.test.ts
+          packages/frontend/tests/new-project-panel.test.ts
+          packages/frontend/tests/first-run-guide.test.ts
+          packages/frontend/tests/design-token-contrast.test.ts
+          packages/frontend/tests/design-token-usage.test.ts
+          packages/frontend/tests/ui-primitives.test.ts
+          packages/frontend/tests/home-card-display.test.ts
+          packages/backend/tests/first-run-project-origin.test.ts
+          packages/backend/tests/design-direction-workflow.test.ts
       # The first Windows PowerShell start on a runner loads .NET Framework and System.Drawing cold (1-9 s usually, over
       # 25 s on a slow runner), which is the font enumeration's whole limit; it is paid here, outside that limit.
       - name: Warm Windows PowerShell
@@ -184,6 +221,7 @@ jobs:
           packages/backend/tests/design-system-starter.test.ts
           packages/frontend/tests/deck-sandbox.browser.test.ts
           packages/frontend/tests/canvas-css-imports.browser.test.ts
+          packages/frontend/tests/project-first-message.browser.test.ts
       - name: Chromium popup and deck runtime
         env:
           BG_BROWSER_SMOKE: "1"

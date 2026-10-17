@@ -21,7 +21,7 @@ export default function CodexProgressMetricsToggle({ checked, userOtelConfigured
           aria-checked={checked}
           aria-describedby="codex-progress-metrics-hint"
           data-bg-setting="codex_progress_metrics"
-          className="h-4 w-4 accent-accent"
+          className="h-6 w-6 shrink-0 accent-accent"
           checked={checked}
           onChange={(e) => onChange(e.target.checked)}
         />

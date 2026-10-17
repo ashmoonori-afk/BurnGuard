@@ -26,7 +26,7 @@ export default function PromptSuggestions({
 
   return (
     <div data-qa="prompt-suggestions" className="mt-2 flex flex-wrap items-center gap-1.5">
-      <span className="text-[11px] font-medium text-muted-foreground">{translate("prompts.suggest.label")}</span>
+      <span className="text-xs font-medium text-muted-foreground">{translate("prompts.suggest.label")}</span>
       {suggestions.map((entry) => {
         const title = catalogT(promptMessageKey(entry.id, "title")) ?? entry.id;
         return (

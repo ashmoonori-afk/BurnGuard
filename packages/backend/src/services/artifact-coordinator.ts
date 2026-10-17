@@ -3,10 +3,14 @@ import { realpathSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { ulid } from "ulid";
+import { parseEditScope, type EditScope, type RevisionComparison } from "@bg/shared";
+import { assertEditScope, compareRevisionTrees, EditScopeViolationError } from "./revision-comparison";
+import { writeOperationScope, writeOperationComparison } from "./revision-comparison-storage";
 import { applyHtmlNodePatch, fingerprintHtmlNode, type PatchHtmlNodeInput } from "./file-patch";
 import { inspectCanonicalTree, validateCanonicalTree, type CanonicalTreeManifest } from "./canonical-tree-manifest";
 import { ArtifactPublicationPolicyError, diffManagedTrees, manifestEntry, materializeManagedTree, publishManagedTree, syncManagedTree, defaultManagedTreeIo, type ManagedTreeIo, type ArtifactFileDiff, type PublicationPolicy } from "./artifact-tree-storage";
 import { publishArtifactOperationEvent } from "./artifact-operation-events";
+import { PhotoRecordPublication, prepareStagedPhotoRecord, seedStagedPhotoRecord } from "./photo-placement-publication";
 import { beginArtifactPublication, endArtifactPublication } from "./artifact-publication-registry";
 import { replaceArtifactFileIndex, replaceArtifactFileIndexInTransaction } from "../db/artifact-file-index";
 import { adoptExistingArtifact, establishEmptyArtifactAuthority } from "./artifact-initialization";
@@ -61,6 +65,7 @@ type RunOperation = {
   readonly nodeFingerprint?: string;
   readonly publicationPolicy?: PublicationPolicy;
   readonly signal?: AbortSignal;
+  readonly editScope?: EditScope;
 };
 type PatchOperation = {
   readonly projectId: string;
@@ -89,6 +94,7 @@ export type CommittedArtifactOperation = {
   readonly resultRevision: number;
   readonly resultDigest: string;
   readonly diff: readonly ArtifactFileDiff[];
+  readonly comparison?: RevisionComparison;
 };
 type ProjectIdentity = { readonly revision: number; readonly digest: string | null };
 
@@ -160,6 +166,7 @@ export class ArtifactCoordinator {
   }
 
   async run(input: RunOperation): Promise<CommittedArtifactOperation> {
+    const scope = parseEditScope(input.editScope);
     this.assertNotHeld(input.projectId);
     await waitForStartupObservation(input.projectId);
     const id = input.operationId ?? ulid();
@@ -185,6 +192,9 @@ export class ArtifactCoordinator {
         await validateCanonicalTree(snapshotPath, base);
         await materializeManagedTree(input.projectDir, stagePath);
         await validateCanonicalTree(stagePath, base);
+        // The stage starts from the live photo placement record so a later generation can read and amend it.
+        await seedStagedPhotoRecord(input.projectDir, stagePath);
+        await writeOperationScope(ownedRoot, scope);
         this.insertWorking(id, input, base, snapshotPath, stagePath);
       } catch (error) {
         await rm(ownedRoot, { recursive: true, force: true });
@@ -193,9 +203,11 @@ export class ArtifactCoordinator {
     } finally { releaseAdmission(); }
     input.onPrepared?.(stagePath);
     let publicationStarted = false;
+    let photoPublication: PhotoRecordPublication | null = null;
     let releasePublication: (() => void) | null = null;
     let result: CanonicalTreeManifest;
     let diff: readonly ArtifactFileDiff[];
+    let comparison: RevisionComparison;
     const resultRevision = input.expectedRevision + 1;
     try {
       throwIfAcquisitionAborted(input.signal);
@@ -215,12 +227,20 @@ export class ArtifactCoordinator {
         // Imports add references; initialization (e.g. restoring a project bundle) may carry validated ones.
         input.kind === "figma_import" || input.kind === "initialize",
       );
+      // The original snapshot remains the base after all model repairs and runtime provisioning.
+      comparison = await compareRevisionTrees(snapshotPath, stagePath, scope);
+      if (comparison.base_digest !== base.tree_digest || comparison.result_digest !== result.tree_digest) throw new ArtifactOperationError("publication_failed", "Comparison identity changed");
+      await writeOperationComparison(ownedRoot, comparison);
+      assertEditScope(comparison);
       diff = diffManagedTrees(base, result);
       if (diff.length === 0) {
         this.terminal(id, "cancelled", input.expectedRevision, base.tree_digest);
         publishArtifactOperationEvent(this.db, { projectId: input.projectId, operationId: id, revision: input.expectedRevision, digest: base.tree_digest, outcome: "cancelled", diff });
-        return { id, kind: input.kind, status: "cancelled", baseRevision: input.expectedRevision, baseDigest: base.tree_digest, resultRevision: input.expectedRevision, resultDigest: base.tree_digest, diff };
+        return { id, kind: input.kind, status: "cancelled", baseRevision: input.expectedRevision, baseDigest: base.tree_digest, resultRevision: input.expectedRevision, resultDigest: base.tree_digest, diff, comparison };
       }
+      // A record the shared parser or file checks reject is not published and the previous one stays: the artifact is
+      // still the turn's result, and without a valid record the Quality panel can only report the placement unverified.
+      const stagedPhotoRecord = await prepareStagedPhotoRecord(stagePath);
       releasePublication = await acquireArtifactProjectLock(this.db, input.projectId);
       this.prepareResult(id, resultRevision, result, diff);
       beginArtifactPublication(input.projectId);
@@ -249,6 +269,10 @@ export class ArtifactCoordinator {
         },
       }, this.treeIo);
       await validateCanonicalTree(input.projectDir, result);
+      if (stagedPhotoRecord.kind === "ready") {
+        photoPublication = new PhotoRecordPublication(stagedPhotoRecord, input.projectDir, path.join(ownedRoot, "photo-backup"));
+        await photoPublication.install();
+      }
       // The agent wrote the stage; recovery adopts it as the baseline after a crash, so flush it before the commit.
       await syncManagedTree(stagePath, this.treeIo);
       this.faults.beforeDatabaseCommit?.();
@@ -260,6 +284,7 @@ export class ArtifactCoordinator {
       try {
         this.faults.beforeRollback?.();
         if (!securityFailure) await publishManagedTree(snapshotPath, input.projectDir);
+        await photoPublication?.rollback();
         await validateCanonicalTree(input.projectDir, base);
       } finally {
         if (publicationStarted) endArtifactPublication(input.projectId);
@@ -272,7 +297,7 @@ export class ArtifactCoordinator {
       }
       publishArtifactOperationEvent(this.db, { projectId: input.projectId, operationId: id, revision: input.expectedRevision, digest: base.tree_digest, outcome: "failed", diff: [] });
       if (securityFailure) throw new ArtifactOperationError("immutable_reference_escaped", "immutable_reference_escaped");
-      if (error instanceof ArtifactOperationError) throw error;
+      if (error instanceof ArtifactOperationError || error instanceof EditScopeViolationError) throw error;
       if (error instanceof ExtractionAcquisitionError) throw error;
       // Sanitized domain errors raised while staging keep their own codes after rollback.
       if (error instanceof AcquisitionLimitError || error instanceof FigmaImportError) throw error;
@@ -282,7 +307,7 @@ export class ArtifactCoordinator {
     catch (error) { console.warn("[artifact] committed operation requires baseline reconciliation", id, error); }
     finally { endArtifactPublication(input.projectId); releasePublication?.(); }
     publishArtifactOperationEvent(this.db, { projectId: input.projectId, operationId: id, revision: resultRevision, digest: result.tree_digest, outcome: "committed", diff });
-    return { id, kind: input.kind, status: "committed", baseRevision: input.expectedRevision, baseDigest: base.tree_digest, resultRevision, resultDigest: result.tree_digest, diff };
+    return { id, kind: input.kind, status: "committed", baseRevision: input.expectedRevision, baseDigest: base.tree_digest, resultRevision, resultDigest: result.tree_digest, diff, comparison };
   }
 
   async undo(input: UndoOperation): Promise<CommittedArtifactOperation> {
