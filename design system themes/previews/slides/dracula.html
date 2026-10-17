@@ -1,95 +1,95 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dracula Built-in Theme · Slide compositions</title><link rel="stylesheet" href="../../../assets/fonts/fonts.css"><style>
 
-/* Derived from daisyUI (https://github.com/saadeghi/daisyui) - MIT License, Copyright (c) 2020 Pouya Saadeghi. Converted for BurnGuard. */
-/* OKLCH values were converted offline to sRGB, gamut-clipped, and rounded to the nearest 8-bit channel. */
+/* Dracula Theme - colour palette authored for BurnGuard. */
+/* Text and component pairs meet WCAG 2.2 AA; bundled-seed-themes.test.ts measures them. */
 
 :root {
   color-scheme: dark;
 
   /* Neutrals */
-  --gray-100: #D6D7DB;
-  --gray-90: #282A36;
-  --gray-80: #3D3F4A;
-  --gray-70: #52545E;
-  --gray-60: #676871;
-  --gray-50: #7C7D85;
-  --gray-40: #909299;
-  --gray-30: #A2A3AA;
-  --gray-20: #B3B4BA;
-  --gray-10: #C5C6CA;
+  --gray-100: #E4DFEE;
+  --gray-90: #1F1B2A;
+  --gray-80: #373342;
+  --gray-70: #4E4A59;
+  --gray-60: #666271;
+  --gray-50: #7E7988;
+  --gray-40: #9591A0;
+  --gray-30: #A9A4B3;
+  --gray-20: #BDB8C7;
+  --gray-10: #D0CBDA;
 
   /* Brand and accents */
-  --primary-blue: #FF79C6;
-  --action-blue: #FF79C6;
-  --red-60: #FF5555;
-  --red-50: #F86C6D;
-  --red-10: #DDC0C3;
-  --orange-50: #FFB86C;
-  --orange-10: #DDD1C7;
-  --yellow-30: #F1FA8C;
-  --yellow-10: #DBDDCD;
-  --green-60: #51FA7B;
-  --green-50: #69F48C;
-  --green-10: #BEDDCA;
-  --teal-50: #FFB86C;
-  --teal-10: #DDD1C7;
-  --aqua-60: #8BE9FD;
-  --aqua-10: #C8DAE1;
-  --blue-90: #282A36;
-  --blue-80: #C3639E;
-  --blue-70: #E16EB2;
-  --blue-60: #FF79C6;
-  --blue-50: #F88ACA;
-  --blue-30: #E8ADD2;
-  --blue-10: #DDC8D8;
-  --ultramarine-60: #FF79C6;
-  --purple-60: #BD93F9;
-  --pink-60: #BD93F9;
+  --primary-blue: #F4388D;
+  --action-blue: #F4388D;
+  --red-60: #DE2B34;
+  --red-50: #C12933;
+  --red-10: #3C1D2C;
+  --orange-50: #CCB631;
+  --orange-10: #3E372B;
+  --yellow-30: #F19233;
+  --yellow-10: #45302C;
+  --green-60: #5FDAA8;
+  --green-50: #55BD95;
+  --green-10: #2B3D41;
+  --teal-50: #CCB631;
+  --teal-10: #3E372B;
+  --aqua-60: #58CCE1;
+  --aqua-10: #293B4B;
+  --blue-90: #1F1B2A;
+  --blue-80: #BF3174;
+  --blue-70: #DA3581;
+  --blue-60: #F4388D;
+  --blue-50: #C93279;
+  --blue-30: #7F2857;
+  --blue-10: #3F1F39;
+  --ultramarine-60: #F4388D;
+  --purple-60: #7B9DFF;
+  --pink-60: #7B9DFF;
 
   /* Semantic */
-  --success: #51FA7B;
-  --warning-yellow: #F1FA8C;
-  --warning-orange: #FFB86C;
-  --error: #FF5555;
-  --info: #8BE9FD;
+  --success: #5FDAA8;
+  --warning-yellow: #F19233;
+  --warning-orange: #CCB631;
+  --error: #DE2B34;
+  --info: #58CCE1;
 
   /* Surface and text */
-  --bg: #282A36;
-  --bg-subtle: #232530;
-  --bg-muted: #1F202A;
-  --surface: #282A36;
-  --surface-inverse: #414558;
-  --fg-1: #F8F8F3;
-  --fg-2: #F8F8F3;
-  --fg-3: #F8F8F3;
-  --fg-4: #909299;
-  --fg-on-dark: #D6D7DB;
-  --fg-on-brand: #16050E;
-  --border: #1F202A;
-  --border-strong: #A2A3AA;
-  --focus-ring: #FF79C6;
+  --bg: #1F1B2A;
+  --bg-subtle: #252032;
+  --bg-muted: #2D273C;
+  --surface: #252032;
+  --surface-inverse: #3B3350;
+  --fg-1: #F2EEF9;
+  --fg-2: #D7D0E6;
+  --fg-3: #BBB2CF;
+  --fg-4: #958DA4;
+  --fg-on-dark: #F2EEF9;
+  --fg-on-brand: #360C1F;
+  --border: #2D273C;
+  --border-strong: #6C6778;
+  --focus-ring: #F4388D;
 
-  /* Paired donor colors retained for accessible combinations */
-  --secondary: #BD93F9;
-  --fg-on-secondary: #0D0815;
-  --accent: #FFB86C;
-  --fg-on-accent: #160D04;
-  --fg-on-info: #071316;
-  --fg-on-success: #021505;
-  --fg-on-warning: #141507;
-  --fg-on-error: #160202;
+  /* Paired foregrounds for accessible combinations */
+  --secondary: #7B9DFF;
+  --fg-on-secondary: #1B2338;
+  --accent: #CCB631;
+  --fg-on-accent: #2D280B;
+  --fg-on-info: #132D31;
+  --fg-on-success: #153025;
+  --fg-on-warning: #35200B;
+  --fg-on-error: #FEFAFA;
 
   /* Charts */
-  --chart-1: #FF79C6;
-  --chart-2: #BD93F9;
-  --chart-3: #FFB86C;
-  --chart-4: #8BE9FD;
-  --chart-5: #51FA7B;
-  --chart-6: #F1FA8C;
-  --chart-7: #FF5555;
-  --chart-8: #DE86E0;
-  --chart-9: #C5D0B4;
-  --chart-10: #A8BAA0;
+  --chart-1: #F4388D;
+  --chart-2: #7B9DFF;
+  --chart-3: #CCB631;
+  --chart-4: #58CCE1;
+  --chart-5: #5FDAA8;
+  --chart-6: #F19233;
+  --chart-7: #DE2B34;
+  --chart-8: #B56BD9;
+  --chart-9: #C4E155;
+  --chart-10: #D88DA3;
 
   /* Type families */
   --font-display: "Space Grotesk", "Pretendard", sans-serif;

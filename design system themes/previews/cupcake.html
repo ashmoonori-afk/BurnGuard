@@ -4,96 +4,96 @@
 <title>Cupcake Built-in Theme — 웹사이트 미리보기</title>
 <link rel="stylesheet" href="../../assets/fonts/fonts.css">
 <style>
-/* Derived from daisyUI (https://github.com/saadeghi/daisyui) - MIT License, Copyright (c) 2020 Pouya Saadeghi. Converted for BurnGuard. */
-/* OKLCH values were converted offline to sRGB, gamut-clipped, and rounded to the nearest 8-bit channel. */
+/* Cupcake Theme - colour palette authored for BurnGuard. */
+/* Text and component pairs meet WCAG 2.2 AA; bundled-seed-themes.test.ts measures them. */
 
 :root {
   color-scheme: light;
 
   /* Neutrals */
-  --gray-100: #FAF7F5;
-  --gray-90: #262629;
-  --gray-80: #3F3F41;
-  --gray-70: #59585A;
-  --gray-60: #727172;
-  --gray-50: #8C8A8B;
-  --gray-40: #A5A3A3;
-  --gray-30: #BAB8B8;
-  --gray-20: #D0CDCC;
-  --gray-10: #E5E2E1;
+  --gray-100: #FFF7F2;
+  --gray-90: #3A2633;
+  --gray-80: #523F4A;
+  --gray-70: #695861;
+  --gray-60: #817178;
+  --gray-50: #998A8F;
+  --gray-40: #B0A3A6;
+  --gray-30: #C4B8B9;
+  --gray-20: #D8CDCC;
+  --gray-10: #EBE2DF;
 
   /* Brand and accents */
-  --primary-blue: #44EBD3;
-  --action-blue: #44EBD3;
-  --red-60: #FE1C55;
-  --red-50: #FD4372;
-  --red-10: #FBD0D8;
-  --orange-50: #FFD6A7;
-  --orange-10: #FBF1E7;
-  --yellow-30: #EEAF00;
-  --yellow-10: #F8EAC9;
-  --green-60: #00BA7B;
-  --green-50: #2DC591;
-  --green-10: #CDECDF;
-  --teal-50: #FFD6A7;
-  --teal-10: #FBF1E7;
-  --aqua-60: #00A4F2;
-  --aqua-10: #CDE8F4;
-  --blue-90: #262629;
-  --blue-80: #3CB4A3;
-  --blue-70: #40CFBB;
-  --blue-60: #44EBD3;
-  --blue-50: #65EDD9;
-  --blue-30: #A8F2E6;
-  --blue-10: #DDF5F0;
-  --ultramarine-60: #44EBD3;
-  --purple-60: #F9CBE5;
-  --pink-60: #F9CBE5;
+  --primary-blue: #7A62CF;
+  --action-blue: #7A62CF;
+  --red-60: #D0506E;
+  --red-50: #D76881;
+  --red-10: #F8DAD7;
+  --orange-50: #B6E0A5;
+  --orange-10: #F2EFDE;
+  --yellow-30: #D99233;
+  --yellow-10: #F8E1C9;
+  --green-60: #349871;
+  --green-50: #52A683;
+  --green-10: #DAE2D4;
+  --teal-50: #B6E0A5;
+  --teal-10: #F2EFDE;
+  --aqua-60: #8898DB;
+  --aqua-10: #EAE2E7;
+  --blue-90: #3A2633;
+  --blue-80: #6A53A8;
+  --blue-70: #725BBC;
+  --blue-60: #7A62CF;
+  --blue-50: #957FD4;
+  --blue-30: #C3B1DE;
+  --blue-10: #EBDCE6;
+  --ultramarine-60: #7A62CF;
+  --purple-60: #FCA2BE;
+  --pink-60: #FCA2BE;
 
   /* Semantic */
-  --success: #00BA7B;
-  --warning-yellow: #EEAF00;
-  --warning-orange: #FFD6A7;
-  --error: #FE1C55;
-  --info: #00A4F2;
+  --success: #349871;
+  --warning-yellow: #D99233;
+  --warning-orange: #B6E0A5;
+  --error: #D0506E;
+  --info: #8898DB;
 
   /* Surface and text */
-  --bg: #FAF7F5;
-  --bg-subtle: #EFEAE6;
-  --bg-muted: #E7E2DF;
-  --surface: #FAF7F5;
-  --surface-inverse: #262629;
-  --fg-1: #291334;
-  --fg-2: #291334;
-  --fg-3: #291334;
-  --fg-4: #A5A3A3;
-  --fg-on-dark: #E4E4E7;
-  --fg-on-brand: #005D58;
-  --border: #E7E2DF;
-  --border-strong: #BAB8B8;
-  --focus-ring: #44EBD3;
+  --bg: #FFF2EA;
+  --bg-subtle: #F8E7DC;
+  --bg-muted: #EFDACD;
+  --surface: #FFFCFA;
+  --surface-inverse: #3A2633;
+  --fg-1: #3A2433;
+  --fg-2: #55394B;
+  --fg-3: #6B5161;
+  --fg-4: #725B69;
+  --fg-on-dark: #FBEFF4;
+  --fg-on-brand: #FBFAFE;
+  --border: #EFDACD;
+  --border-strong: #9C8686;
+  --focus-ring: #7A62CF;
 
-  /* Paired donor colors retained for accessible combinations */
-  --secondary: #F9CBE5;
-  --fg-on-secondary: #A0004A;
-  --accent: #FFD6A7;
-  --fg-on-accent: #9F2D00;
-  --fg-on-info: #042E49;
-  --fg-on-success: #002C21;
-  --fg-on-warning: #411E03;
-  --fg-on-error: #4D0218;
+  /* Paired foregrounds for accessible combinations */
+  --secondary: #FCA2BE;
+  --fg-on-secondary: #37242A;
+  --accent: #B6E0A5;
+  --fg-on-accent: #283124;
+  --fg-on-info: #1E2130;
+  --fg-on-success: #0B2119;
+  --fg-on-warning: #30200B;
+  --fg-on-error: #1E0C10;
 
   /* Charts */
-  --chart-1: #44EBD3;
-  --chart-2: #F9CBE5;
-  --chart-3: #FFD6A7;
-  --chart-4: #00A4F2;
-  --chart-5: #00BA7B;
-  --chart-6: #EEAF00;
-  --chart-7: #FE1C55;
-  --chart-8: #9EDBDC;
-  --chart-9: #80BDCC;
-  --chart-10: #22D2A7;
+  --chart-1: #7A62CF;
+  --chart-2: #FCA2BE;
+  --chart-3: #B6E0A5;
+  --chart-4: #8898DB;
+  --chart-5: #349871;
+  --chart-6: #D99233;
+  --chart-7: #D0506E;
+  --chart-8: #C9A0E8;
+  --chart-9: #EDB488;
+  --chart-10: #C58BB0;
 
   /* Type families */
   --font-display: "DM Serif Display", "Gowun Batang", "Pretendard", serif;

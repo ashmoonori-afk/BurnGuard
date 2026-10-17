@@ -1,6 +1,6 @@
 # Light Built-in Theme
 
-A crisp neutral canvas with saturated violet, pink, and teal accents.
+A crisp neutral canvas with saturated cobalt, crimson, and jade accents.
 
 ## Files
 
@@ -9,13 +9,11 @@ A crisp neutral canvas with saturated violet, pink, and teal accents.
 
 ## Design token contract
 
-The donor palette is expressed through BurnGuard's canonical neutral, brand, semantic, surface, chart, type, spacing, radius, elevation, and motion tokens. Use the complete `--gray-*` and `--chart-*` ramps for hierarchy and data visualization, and use `--r-*`, `--shadow-*`, and `--dur-*` tokens rather than introducing component-local scales.
+The palette is expressed through BurnGuard's canonical neutral, brand, semantic, surface, chart, type, spacing, radius, elevation, and motion tokens. Use the complete `--gray-*` and `--chart-*` ramps for hierarchy and data visualization, and use `--r-*`, `--shadow-*`, and `--dur-*` tokens rather than introducing component-local scales.
 
 ## Provenance
 
-Derived from the daisyUI `light` theme: https://github.com/saadeghi/daisyui/blob/master/packages/daisyui/src/themes/light.css
-
-Licensed under the MIT License, Copyright (c) 2020 Pouya Saadeghi. Source OKLCH values were converted offline to sRGB, gamut-clipped, and rounded to the nearest 8-bit channel. See the repository `NOTICE` file.
+Palette authored for BurnGuard. The colour values were chosen for this theme and every text and component pair is checked for WCAG 2.2 AA contrast; no third-party theme, stylesheet or palette is included, and it carries no external licence obligation. The `light` slug is kept from earlier releases because seeded workspaces key off `builtin-theme-light`.
 
 ## Local typography
 
@@ -53,7 +51,7 @@ Keep page margins and section rhythm from colors_and_type.css. The legacy --layo
 
 Navigation floating-island → hero media-bottom (58% copy zone, below media, 16 / 9, 580px minimum) → retain the existing theme-specific body hierarchy → footer centered-cta.
 
-Keep the neutral canvas crisp; violet, pink and teal provide accents while aligned feature rows carry evidence beneath the opening. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
+Keep the neutral canvas crisp; cobalt, crimson and jade provide accents while aligned feature rows carry evidence beneath the opening. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
 ## Responsive
 
@@ -109,7 +107,7 @@ Sequence: cover > claim > evidence > implication > closing; repeat claim/evidenc
 
 Each artboard is one fixed frame at the size the request declares. The requested kind's own rules come first - frame sizes, platform exclusion zones, print trim and bleed, and a product detail page's full-height section sequence with its closing call to action - and the rules below govern how each frame or section looks. Keep required content inside the safe inset (7% of the shorter side), place the primary figure at `--content-figure` (0.57) of the shorter side anchored bottom, and nothing crosses the safe area because `--content-bleed` is `0`.
 
-- Frame: the crisp neutral canvas, kept open; violet, pink or teal touches one element per frame.
+- Frame: the crisp neutral canvas, kept open; cobalt, crimson or jade touches one element per frame.
 - Composition: aligned evidence rows and a flat hierarchy; let the canvas stay open rather than filling it. In a multi-frame set the first frame follows the cover rule above and the last carries the call to action; on a product detail page these rules apply per section.
 - Type: one claim per frame at `--content-type-hero` (116px at a 1080px shorter side, scaled by `--content-scale`), support at `--content-type-sub` (52px), and nothing below `--content-type-caption` (24px) or 12px once scaled.
 - Figure: one clean product or scene image, never a grey placeholder box.

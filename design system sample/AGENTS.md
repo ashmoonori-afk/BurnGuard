@@ -25,7 +25,7 @@ design system sample/
 | Seeding | `packages/backend/src/bootstrap.ts` `seedSampleDesignSystems` | Copies this tree to `systems/northvale-capital`, filtered by `isSampleSourcePathAllowed` |
 | Upload exclusion | `isSampleSourcePathAllowed`, `.gitignore` | Anything under `uploads/` is excluded from seeding, packaging, and git |
 | Packaging | `scripts/package-runtime.ts` | Ships the `design system sample/` prefix except `design system sample/uploads/` |
-| Verification | `packages/backend/tests/package-resources.test.ts`, `daisyui-seed-themes.test.ts` | Assert the uploads exclusion and the system shape |
+| Verification | `packages/backend/tests/package-resources.test.ts`, `bundled-seed-themes.test.ts` | Assert the uploads exclusion and the system shape |
 
 ## CONVENTIONS
 

@@ -23,8 +23,8 @@ const themesRoot = path.join(repoRoot, "design system themes");
 const registryPath = path.join(repoRoot, "packages/backend/src/data/bundled-design-systems.ts");
 const outputPath = path.join(themesRoot, "catalogue.html");
 
-/** Themes converted from donor palettes; everything else in the registry is original. */
-const DONOR = new Set([
+/** The first ten built-in themes; their slugs predate the design families. Every palette is original. */
+const CLASSIC = new Set([
   "light", "dark", "cupcake", "retro", "cyberpunk",
   "synthwave", "luxury", "dracula", "nord", "business",
 ]);
@@ -67,8 +67,8 @@ function layoutBlock(css: string): string {
 
 function card(slug: string, css: string): string {
   const bars = Array.from({ length: 10 }, (_, i) => `<i style="background:var(--chart-${i + 1})"></i>`).join("");
-  const origin = DONOR.has(slug)
-    ? '<span class="origin">DONOR</span>'
+  const origin = CLASSIC.has(slug)
+    ? '<span class="origin">CLASSIC</span>'
     : '<span class="origin original">ORIGINAL</span>';
   return `
 <article class="card" data-theme="${slug}">
@@ -92,7 +92,7 @@ ${layoutBlock(css)}
 `;
 }
 
-function page(themes: string, cards: string, total: number, donor: number): string {
+function page(themes: string, cards: string, total: number, classic: number): string {
   return `<!doctype html>
 <html lang="ko"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -140,7 +140,7 @@ ${themes}
 <body><div class="page">
 <h1>Bundled design systems</h1>
 <p class="sub">Every card below is rendered by its own theme's tokens — ground, foreground steps, one action, the semantic pairs, the ten-step chart ramp, and its layout signature. Nothing here restyles a theme, so the page is the evidence.</p>
-<p class="count">${total} systems · ${donor} donor-derived · ${total - donor} original</p>
+<p class="count">${total} original systems · ${classic} classic · ${total - classic} by design family</p>
 <div class="grid">
 ${cards}
 </div>
@@ -157,9 +157,9 @@ export async function buildThemeCatalogue(): Promise<string> {
     sheets.push(scopedCss(slug, css));
     cards.push(card(slug, css));
   }
-  const donor = slugs.filter((slug) => DONOR.has(slug)).length;
-  await writeFile(outputPath, page(sheets.join("\n"), cards.join(""), slugs.length, donor), "utf8");
-  return `${outputPath} — ${slugs.length} cards (${donor} donor, ${slugs.length - donor} original)`;
+  const classic = slugs.filter((slug) => CLASSIC.has(slug)).length;
+  await writeFile(outputPath, page(sheets.join("\n"), cards.join(""), slugs.length, classic), "utf8");
+  return `${outputPath} — ${slugs.length} cards (${classic} classic, ${slugs.length - classic} by design family)`;
 }
 
 if (import.meta.main) console.log(await buildThemeCatalogue());
