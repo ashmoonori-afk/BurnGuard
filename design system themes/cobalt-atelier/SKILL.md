@@ -76,19 +76,13 @@ Read Navigation, Hero, Footer, Layout and Responsive in README.md before arrangi
 
 Follow README.md's Navigation section and the corresponding --layout-* tokens. Use top navigation with a 1260px maximum width and 72px header height. At compact widths, use the FAQ chip and a single-column FAQ card. Keep the anchored popover within viewport width and preserve direct CTA access.
 
-Reference: https://www.navbar.gallery/navbar/hosier-brown
-
 ## Hero
 
 Follow README.md's Hero section and the corresponding --layout-* tokens. Use a short stacked display at left, a large isolated figure at right and a low horizontal selection strip; preserve the original cobalt emphasis. Retain the theme's existing image-fit, palette, font family and locally generated art unless a written theme invariant requires a more protective framing.
 
-Reference: https://supahero.io/hero/anubi
-
 ## Footer
 
 Follow README.md's Footer section and the corresponding --layout-* tokens. Reserve 560px as the desktop minimum closing height with 4 information columns or groups. Use an asymmetrical studio directory whose location pair is a first-class structural feature. Do not collapse the whole footer to a generic four-column sitemap.
-
-Reference: https://www.footer.design/sites/reality-is
 
 ## Surfaces
 

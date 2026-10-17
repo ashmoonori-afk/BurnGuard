@@ -85,19 +85,13 @@ Read Navigation, Hero, Footer, Layout and Responsive in README.md before arrangi
 
 Follow README.md's Navigation section and the corresponding --layout-* tokens. Use top navigation with a 1220px maximum width and 104px header height. At compact widths, use brand plus close control and stacked product/service disclosures. Stack columns and move featured content below links.
 
-Reference: https://www.navbar.gallery/navbar/chesapeake-plywood
-
 ## Hero
 
 Follow README.md's Hero section and the corresponding --layout-* tokens. Keep portrait or document cards as whole visible figures in a horizontal editorial strip beneath the centered introduction; preserve publication margins. Retain object-fit: contain for the original artwork: the whole building, document or object must remain visible. Interpret oversized/cropped reference geometry through the frame and typography, not by clipping the artwork.
 
-Reference: https://supahero.io/hero/dribbble
-
 ## Footer
 
 Follow README.md's Footer section and the corresponding --layout-* tokens. Reserve 480px as the desktop minimum closing height with 2 information columns or groups. Separate a useful navigation band from an original local photo strip. Decorative shapes must not obscure or intercept links. Do not copy the person's portrait or brand assets.
-
-Reference: https://www.footer.design/sites/carolyn-lee
 
 ## Surfaces
 

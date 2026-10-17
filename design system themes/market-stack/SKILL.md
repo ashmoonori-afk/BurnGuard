@@ -85,19 +85,13 @@ Read Navigation, Hero, Footer, Layout and Responsive in README.md before arrangi
 
 Follow README.md's Navigation section and the corresponding --layout-* tokens. Use top navigation with a 1400px maximum width and 112px header height. At compact widths, use brand plus close control and stacked product/service disclosures. Stack columns and move featured content below links.
 
-Reference: https://www.navbar.gallery/navbar/chesapeake-plywood
-
 ## Hero
 
 Follow README.md's Hero section and the corresponding --layout-* tokens. Make the invitation a small center while original product figures form an asymmetric orbit; the retail directory must remain a distinct lower band. Retain the theme's existing image-fit, palette, font family and locally generated art unless a written theme invariant requires a more protective framing.
 
-Reference: https://supahero.io/hero/superpower
-
 ## Footer
 
 Follow README.md's Footer section and the corresponding --layout-* tokens. Reserve 560px as the desktop minimum closing height with 4 information columns or groups. Use native details/summary for the narrow-screen navigation groups if disclosure is needed. The desktop gallery screenshot does not establish a working subscription form, so provide one only when backed by a real flow.
-
-Reference: https://www.footer.design/sites/outway
 
 ## Surfaces
 

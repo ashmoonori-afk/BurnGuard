@@ -28,19 +28,13 @@ Read Navigation, Hero, Footer, Layout and Responsive in README.md before arrangi
 
 Follow README.md's Navigation section and the corresponding --layout-* tokens. Use overlay navigation with a 1100px maximum width and 76px header height. At compact widths, use product/use-case/enterprise disclosure rows. Use single-column disclosures; keep the promotional card secondary.
 
-Reference: https://www.navbar.gallery/navbar/velt
-
 ## Hero
 
 Follow README.md's Hero section and the corresponding --layout-* tokens. Expose a single large product panel below the centered heading; the island navigation and compact closing action must leave this panel dominant. Retain the theme's existing image-fit, palette, font family and locally generated art unless a written theme invariant requires a more protective framing.
 
-Reference: https://supahero.io/hero/wope
-
 ## Footer
 
 Follow README.md's Footer section and the corresponding --layout-* tokens. Reserve 420px as the desktop minimum closing height with one information group. Use a conversion-focused footer with one primary action and a small secondary link row. Keep decorative wordmarks separate from accessible link labels.
-
-Reference: https://www.footer.design/sites/cronicle
 
 ## Surfaces
 

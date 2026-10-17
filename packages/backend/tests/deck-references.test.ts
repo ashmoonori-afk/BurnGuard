@@ -44,8 +44,8 @@ describe("Reference-driven slide systems", () => {
         await writeFile(cssPath, legacy.css.replace(/\n/g, newline));
         await writeFile(readmePath, legacy.readme.replace(/\n/g, newline));
         const updated = (await readDesignSystemSurface(system, "slides")).contract;
-        expect(updated.sections.find(section => section.kind === "slides")?.text).toBe(deckReferenceSection(DECK_REFERENCES.config));
-        expect(updated.tokens["--slide-type-hero"]).toBe(`${DECK_REFERENCES.config.hero}px`);
+        expect(updated.sections.find(section => section.kind === "slides")?.text).toBe(deckReferenceSection(DECK_REFERENCES.geometric));
+        expect(updated.tokens["--slide-type-hero"]).toBe(`${DECK_REFERENCES.geometric.hero}px`);
         expect(updated.supplied).toContain("slides");
         expect(await readFile(readmePath, "utf8")).toBe(legacy.readme.replace(/\n/g, newline));
       }
