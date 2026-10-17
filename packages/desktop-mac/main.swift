@@ -44,6 +44,8 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
     private var smokeProjectId: String?
     private var smokePageReport: [String: Any]?
     private var smokeDownloads: [String] = []
+    /// The reload/export script reports after its downloads start; the report is written only once both have happened.
+    private var smokeExportsReported = false
     private var smokeDownloadNames: [ObjectIdentifier: String] = [:]
     private var pendingReplacements: [ObjectIdentifier: (temporary: URL, target: URL)] = [:]
     private var smokeStage = 0
@@ -243,7 +245,7 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
         guard smokeReportPath != nil else { return }
         let name = smokeDownloadNames.removeValue(forKey: ObjectIdentifier(download)) ?? "unknown"
         smokeDownloads.append(name)
-        if smokePageReport != nil && smokeDownloads.count == 2 { finishSmoke() }
+        if smokeExportsReported && smokeDownloads.count == 2 { finishSmoke() }
     }
 
     func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
@@ -315,6 +317,7 @@ final class BurnGuardAppDelegate: NSObject, NSApplicationDelegate, NSWindowDeleg
                 guard let report = value as? [String: Any] else { self.fail("Native export report was invalid."); return }
                 for (key, value) in report { self.smokePageReport?[key] = value }
                 if let error = report["error"] as? String { self.fail(error); return }
+                self.smokeExportsReported = true
                 if self.smokeDownloads.count == 2 { self.finishSmoke() }
             case .failure(let error): self.fail(String(describing: error))
             }
