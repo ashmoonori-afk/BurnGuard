@@ -121,23 +121,17 @@ Use `side-rail` at `side`, with `80px` minimum height and `200px` width (0px fil
 
 Mobile: below --layout-bp-md, bound navigation to the viewport and put links in semantic native disclosures where needed. Side, overlay or bottom navigation returns to a compact header in normal flow; preserve focus and reading order.
 
-Structural reference: [side-rail](https://www.navbar.gallery/navbar/big-dirty-agency). This is an original BurnGuard arrangement informed by the gallery screenshot; donor code, imagery, fonts and brand marks are not included.
-
 ## Hero
 
 Use `split-reverse`: copy share `52%`, media at `left` in a `4 / 5` frame, minimum height `680px`, title measure `14ch`, alignment `end` and desktop offset `80px`. Preserve a complete document or image on the left and a narrow right heading, with a second substantial paragraph aligned along the lower baseline. Retain object-fit: contain for the original artwork: the whole building, document or object must remain visible. Interpret oversized/cropped reference geometry through the frame and typography, not by clipping the artwork.
 
 Mobile: Below the theme's existing compact breakpoint: Place the image and text in a single column with the visual lead preserved; remove the desktop offset and keep readable text order. Convert the side rail into a compact top control with a native expandable navigation; release its desktop width. Mobile stacks logo, actions and legal information into ruled horizontal sections; the decorative band remains at the bottom.
 
-Structural reference: [split-reverse](https://supahero.io/hero/habito). Reuse this theme's original imagery and typography; the reference supplies hierarchy and arrangement only.
-
 ## Footer
 
 Use `ruled-community` with `3` desktop groups and `420px` minimum height. Reserve 420px as the desktop minimum closing height with 3 information columns or groups. Use a three-part community directory with a separate decorative baseline. Preserve real semantic links and a clear primary join action; use original local artwork.
 
 Mobile stacks logo, actions and legal information into ruled horizontal sections; the decorative band remains at the bottom. Allow links to wrap and let the closing region grow with content.
-
-Structural reference: [ruled-community](https://www.footer.design/sites/harvest-hall). Adapt the structural idea with this theme's own tokens and content; do not copy donor assets or brand marks.
 
 ## Surfaces
 

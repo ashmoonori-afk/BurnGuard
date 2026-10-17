@@ -105,23 +105,17 @@ Use `side-rail` at `side`, with `80px` minimum height and `184px` width (0px fil
 
 Mobile: below --layout-bp-md, bound navigation to the viewport and put links in semantic native disclosures where needed. Side, overlay or bottom navigation returns to a compact header in normal flow; preserve focus and reading order.
 
-Structural reference: [side-rail](https://www.navbar.gallery/navbar/big-dirty-agency). This is an original BurnGuard arrangement informed by the gallery screenshot; donor code, imagery, fonts and brand marks are not included.
-
 ## Hero
 
 Use `filmstrip`: copy share `86%`, media at `below` in a `3 / 4` frame, minimum height `700px`, title measure `16ch`, alignment `center` and desktop offset `0px`. Introduce work as a cinematic horizontal strip after a centered masthead; a persistent narrow left rail replaces a conventional full-width header. Retain the theme's existing image-fit, palette, font family and locally generated art unless a written theme invariant requires a more protective framing.
 
 Mobile: Below the theme's existing compact breakpoint: Keep a clearly grouped strip; use a finite two-column or single-column selection instead of body-level horizontal overflow. Convert the side rail into a compact top control with a native expandable navigation; release its desktop width. Mobile gives the scene its own tall area above a dark information region. Navigation becomes a two-column grid; a row of three small marks and the tagline follow.
 
-Structural reference: [filmstrip](https://supahero.io/hero/did-global-cinema). Reuse this theme's original imagery and typography; the reference supplies hierarchy and arrangement only.
-
 ## Footer
 
 Use `scenic-overlay` with `3` desktop groups and `640px` minimum height. Reserve 640px as the desktop minimum closing height with 3 information columns or groups. Reserve a scenic field above a readable information zone on narrow screens. Use an original local background; do not depend on WebGL or video for access to navigation.
 
 Mobile gives the scene its own tall area above a dark information region. Navigation becomes a two-column grid; a row of three small marks and the tagline follow. Allow links to wrap and let the closing region grow with content.
-
-Structural reference: [scenic-overlay](https://www.footer.design/sites/eclipse-space). Adapt the structural idea with this theme's own tokens and content; do not copy donor assets or brand marks.
 
 ## Surfaces
 

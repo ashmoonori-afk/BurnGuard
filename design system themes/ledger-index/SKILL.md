@@ -76,19 +76,13 @@ Read Navigation, Hero, Footer, Layout and Responsive in README.md before arrangi
 
 Follow README.md's Navigation section and the corresponding --layout-* tokens. Use side navigation with a 220px maximum width and 72px header height. At compact widths, use compact icon/hamburger top bar and large vertical text menu. Convert the desktop rail to an overlay so content retains width.
 
-Reference: https://www.navbar.gallery/navbar/big-dirty-agency
-
 ## Hero
 
 Follow README.md's Hero section and the corresponding --layout-* tokens. Offset the main page by a real navigation rail, then center a concise introduction above overlapping interface/device panels. Retain the theme's existing image-fit, palette, font family and locally generated art unless a written theme invariant requires a more protective framing.
 
-Reference: https://supahero.io/hero/easlo
-
 ## Footer
 
 Follow README.md's Footer section and the corresponding --layout-* tokens. Reserve 480px as the desktop minimum closing height with 4 information columns or groups. Use native details/summary for the narrow-screen navigation groups if disclosure is needed. The desktop gallery screenshot does not establish a working subscription form, so provide one only when backed by a real flow.
-
-Reference: https://www.footer.design/sites/outway
 
 ## Surfaces
 

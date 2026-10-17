@@ -121,23 +121,17 @@ Use `mega-feature` at `top`, with `104px` minimum height and `1220px` width (0px
 
 Mobile: below --layout-bp-md, bound navigation to the viewport and put links in semantic native disclosures where needed. Side, overlay or bottom navigation returns to a compact header in normal flow; preserve focus and reading order.
 
-Structural reference: [mega-feature](https://www.navbar.gallery/navbar/chesapeake-plywood). This is an original BurnGuard arrangement informed by the gallery screenshot; donor code, imagery, fonts and brand marks are not included.
-
 ## Hero
 
 Use `filmstrip`: copy share `68%`, media at `below` in a `4 / 5` frame, minimum height `620px`, title measure `20ch`, alignment `center` and desktop offset `20px`. Keep portrait or document cards as whole visible figures in a horizontal editorial strip beneath the centered introduction; preserve publication margins. Retain object-fit: contain for the original artwork: the whole building, document or object must remain visible. Interpret oversized/cropped reference geometry through the frame and typography, not by clipping the artwork.
 
 Mobile: Below the theme's existing compact breakpoint: Keep a clearly grouped strip; use a finite two-column or single-column selection instead of body-level horizontal overflow.
 
-Structural reference: [filmstrip](https://supahero.io/hero/dribbble). Reuse this theme's original imagery and typography; the reference supplies hierarchy and arrangement only.
-
 ## Footer
 
 Use `photo-strip` with `2` desktop groups and `480px` minimum height. Reserve 480px as the desktop minimum closing height with 2 information columns or groups. Separate a useful navigation band from an original local photo strip. Decorative shapes must not obscure or intercept links. Do not copy the person's portrait or brand assets.
 
 Mobile puts the logo first, keeps the two link columns side by side underneath, then shows a tighter photograph crop below the credit line. Allow links to wrap and let the closing region grow with content.
-
-Structural reference: [photo-strip](https://www.footer.design/sites/carolyn-lee). Adapt the structural idea with this theme's own tokens and content; do not copy donor assets or brand marks.
 
 ## Surfaces
 

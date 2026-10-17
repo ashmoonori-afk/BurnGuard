@@ -85,19 +85,13 @@ Read Navigation, Hero, Footer, Layout and Responsive in README.md before arrangi
 
 Follow README.md's Navigation section and the corresponding --layout-* tokens. Use overlay navigation with a 840px maximum width and 72px header height. At compact widths, use an expanded dark vertical menu with brand and close control. Preserve compact header and expand links vertically.
 
-Reference: https://www.navbar.gallery/navbar/supaste
-
 ## Hero
 
 Follow README.md's Hero section and the corresponding --layout-* tokens. Give the existing warm room photograph the full first fold, placing the introduction near the upper-left with readable ground-backed text. Retain the theme's existing image-fit, palette, font family and locally generated art unless a written theme invariant requires a more protective framing.
 
-Reference: https://supahero.io/hero/integratedbio
-
 ## Footer
 
 Follow README.md's Footer section and the corresponding --layout-* tokens. Reserve 600px as the desktop minimum closing height with 3 information columns or groups. Reserve a scenic field above a readable information zone on narrow screens. Use an original local background; do not depend on WebGL or video for access to navigation.
-
-Reference: https://www.footer.design/sites/eclipse-space
 
 ## Surfaces
 

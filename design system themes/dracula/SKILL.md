@@ -28,19 +28,13 @@ Read Navigation, Hero, Footer, Layout and Responsive in README.md before arrangi
 
 Follow README.md's Navigation section and the corresponding --layout-* tokens. Use top navigation with a 1320px maximum width and 80px header height. At compact widths, use one vertical large-link list with close control. Stack links first; featured work and contact information follow.
 
-Reference: https://www.navbar.gallery/navbar/clonix
-
 ## Hero
 
 Follow README.md's Hero section and the corresponding --layout-* tokens. Let the display masthead and lower product silhouette carry the first fold; retain dark negative space and an asymmetric studio address ending. Retain the theme's existing image-fit, palette, font family and locally generated art unless a written theme invariant requires a more protective framing.
 
-Reference: https://supahero.io/hero/shaga-odyssey
-
 ## Footer
 
 Follow README.md's Footer section and the corresponding --layout-* tokens. Reserve 520px as the desktop minimum closing height with 4 information columns or groups. Use an asymmetrical studio directory whose location pair is a first-class structural feature. Do not collapse the whole footer to a generic four-column sitemap.
-
-Reference: https://www.footer.design/sites/reality-is
 
 ## Surfaces
 

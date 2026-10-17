@@ -65,23 +65,17 @@ Use `profile-popover` at `top`, with `68px` minimum height and `960px` width (0p
 
 Mobile: below --layout-bp-md, bound navigation to the viewport and put links in semantic native disclosures where needed. Side, overlay or bottom navigation returns to a compact header in normal flow; preserve focus and reading order.
 
-Structural reference: [profile-popover](https://www.navbar.gallery/navbar/hosier-brown). This is an original BurnGuard arrangement informed by the gallery screenshot; donor code, imagery, fonts and brand marks are not included.
-
 ## Hero
 
 Use `media-bottom`: copy share `66%`, media at `below` in a `4 / 3` frame, minimum height `620px`, title measure `20ch`, alignment `center` and desktop offset `40px`. Allow the image to cross a rounded lower panel boundary; retain soft corners and a compact profile chip rather than dense top navigation. Retain the theme's existing image-fit, palette, font family and locally generated art unless a written theme invariant requires a more protective framing.
 
 Mobile: Below the theme's existing compact breakpoint: Keep copy above the media; remove negative overlap when it would cover the heading and preserve the image's intended framing.
 
-Structural reference: [media-bottom](https://supahero.io/hero/maggie-app). Reuse this theme's original imagery and typography; the reference supplies hierarchy and arrangement only.
-
 ## Footer
 
 Use `ruled-community` with `3` desktop groups and `400px` minimum height. Reserve 400px as the desktop minimum closing height with 3 information columns or groups. Use a three-part community directory with a separate decorative baseline. Preserve real semantic links and a clear primary join action; use original local artwork.
 
 Mobile stacks logo, actions and legal information into ruled horizontal sections; the decorative band remains at the bottom. Allow links to wrap and let the closing region grow with content.
-
-Structural reference: [ruled-community](https://www.footer.design/sites/harvest-hall). Adapt the structural idea with this theme's own tokens and content; do not copy donor assets or brand marks.
 
 ## Surfaces
 

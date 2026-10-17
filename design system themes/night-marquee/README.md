@@ -121,23 +121,17 @@ Use `side-rail` at `side`, with `72px` minimum height and `160px` width (0px fil
 
 Mobile: below --layout-bp-md, bound navigation to the viewport and put links in semantic native disclosures where needed. Side, overlay or bottom navigation returns to a compact header in normal flow; preserve focus and reading order.
 
-Structural reference: [side-rail](https://www.navbar.gallery/navbar/big-dirty-agency). This is an original BurnGuard arrangement informed by the gallery screenshot; donor code, imagery, fonts and brand marks are not included.
-
 ## Hero
 
 Use `type-marquee`: copy share `100%`, media at `below` in a `21 / 9` frame, minimum height `700px`, title measure `8ch`, alignment `end` and desktop offset `120px`. Use a large empty field and bottom-entering display word as the first fold, with a narrow side rail and a separate window-stage closing rhythm. Retain the theme's existing image-fit, palette, font family and locally generated art unless a written theme invariant requires a more protective framing.
 
 Mobile: Below the theme's existing compact breakpoint: Scale display lettering within the viewport; keep a static readable ticker and honor reduced motion if any movement is introduced. Convert the side rail into a compact top control with a native expandable navigation; release its desktop width. Mobile centers the title and one visible link window in a vertical stack, retaining the ticker and three equal bottom glyph cells.
 
-Structural reference: [type-marquee](https://supahero.io/hero/exat). Reuse this theme's original imagery and typography; the reference supplies hierarchy and arrangement only.
-
 ## Footer
 
 Use `window-stage` with `3` desktop groups and `600px` minimum height. Reserve 600px as the desktop minimum closing height with 3 information columns or groups. Build the footer as title stage, compact link panels, then a three-cell brand band. Keep panels in normal document flow on narrow screens; animation is optional.
 
 Mobile centers the title and one visible link window in a vertical stack, retaining the ticker and three equal bottom glyph cells. Allow links to wrap and let the closing region grow with content.
-
-Structural reference: [window-stage](https://www.footer.design/sites/the-design-society). Adapt the structural idea with this theme's own tokens and content; do not copy donor assets or brand marks.
 
 ## Surfaces
 

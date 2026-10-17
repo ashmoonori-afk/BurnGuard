@@ -12,8 +12,6 @@ Five fictional brands, fifteen finished examples, and five matching design syste
 
 `assets/hero.png` in each brand folder is a newly generated 1536×1024 image. The seed process copies that shared asset into each project and design-system directory. HTML references `assets/hero.png`; relative links work inside the resulting self-contained app projects and exports. Decks inline BurnGuard's existing deck runtime. No reference-site images or text are bundled.
 
-Broad references, reviewed September 9, 2026: [teenage engineering](https://teenage.engineering/) for product-led industrial hierarchy; [COOL HUNTING](https://coolhunting.com/) for editorial curation; [Heretic](https://www.heretic.wtf/) for expressive scale and studio storytelling; [Luxury Clone](https://luxurycloneaustralia.com/) for collection-led presentation. The sample concepts and visual compositions were developed independently.
-
 Generated image directions:
 
 - SONNEL: an invented cobalt-blue triangular sound instrument with a precision silver dial, photographed in an icy architectural studio with hard daylight and cold stone.

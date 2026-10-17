@@ -85,19 +85,13 @@ Read Navigation, Hero, Footer, Layout and Responsive in README.md before arrangi
 
 Follow README.md's Navigation section and the corresponding --layout-* tokens. Use top navigation with a 1280px maximum width and 72px header height. Mobile screenshot has product CTA and close above large stacked product/ecosystem/company rows. Keep grouping and use stacked drill-down rows.
 
-Reference: https://www.navbar.gallery/navbar/consensys
-
 ## Hero
 
 Follow README.md's Hero section and the corresponding --layout-* tokens. Present one complete specimen against a broad neutral field with a small inset detail and separated metadata; retain disciplined technical labeling. Retain the theme's existing image-fit, palette, font family and locally generated art unless a written theme invariant requires a more protective framing.
 
-Reference: https://supahero.io/hero/haptikos
-
 ## Footer
 
 Follow README.md's Footer section and the corresponding --layout-* tokens. Reserve 540px as the desktop minimum closing height with 4 information columns or groups. Use an asymmetrical studio directory whose location pair is a first-class structural feature. Do not collapse the whole footer to a generic four-column sitemap.
-
-Reference: https://www.footer.design/sites/reality-is
 
 ## Surfaces
 

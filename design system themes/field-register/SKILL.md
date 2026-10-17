@@ -86,19 +86,13 @@ Read Navigation, Hero, Footer, Layout and Responsive in README.md before arrangi
 
 Follow README.md's Navigation section and the corresponding --layout-* tokens. Use top navigation with a 1400px maximum width and 112px header height. At compact widths, use category rows with chevrons under a compact brand/close bar. Collapse taxonomy columns into grouped disclosures.
 
-Reference: https://www.navbar.gallery/navbar/cloudflare
-
 ## Hero
 
 Follow README.md's Hero section and the corresponding --layout-* tokens. Balance a short left statement against one strong right specimen, separated by open space; reinforce field-note order with a ruled closing directory. Retain the theme's existing image-fit, palette, font family and locally generated art unless a written theme invariant requires a more protective framing.
 
-Reference: https://supahero.io/hero/dialweb
-
 ## Footer
 
 Follow README.md's Footer section and the corresponding --layout-* tokens. Reserve 460px as the desktop minimum closing height with 3 information columns or groups. Use a three-part community directory with a separate decorative baseline. Preserve real semantic links and a clear primary join action; use original local artwork.
-
-Reference: https://www.footer.design/sites/harvest-hall
 
 ## Surfaces
 
