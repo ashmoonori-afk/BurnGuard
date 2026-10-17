@@ -118,6 +118,8 @@ Current limitations:
 
 Interrupt is supported: the session interrupt route aborts the turn and the owned process tree is killed.
 
+While a turn runs, the provider process ownership (POSIX PID with its birth identity, or the Windows named Job token) is recorded on the session row. If the backend dies, startup reaps any recorded process before restoring project files, and startup fails when termination cannot be proven (`adapters/owned-process-record.ts`, `services/session-process-recovery.ts`).
+
 ## 6. Codex Adapter
 
 ### 6.1 Execution model

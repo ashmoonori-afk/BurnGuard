@@ -135,7 +135,8 @@ CREATE TABLE sessions (
   backend_id            TEXT NOT NULL,
   backend_session_state TEXT,                        -- CLI-specific serialized state (nullable)
   status                TEXT NOT NULL CHECK(status IN ('idle','running','awaiting_tool','error','terminated')),
-  pid                   INTEGER,                     -- Current PTY PID (nullable)
+  pid                   INTEGER,                     -- Current provider process PID (nullable)
+  process_owner_json    TEXT,                        -- Provider process ownership record, reaped at startup (0022)
   last_turn_id          TEXT,
   usage_input_tokens    INTEGER NOT NULL DEFAULT 0,
   usage_output_tokens   INTEGER NOT NULL DEFAULT 0,
