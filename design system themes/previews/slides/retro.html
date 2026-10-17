@@ -1,95 +1,95 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Retro Built-in Theme · Slide compositions</title><link rel="stylesheet" href="../../../assets/fonts/fonts.css"><style>
 
-/* Derived from daisyUI (https://github.com/saadeghi/daisyui) - MIT License, Copyright (c) 2020 Pouya Saadeghi. Converted for BurnGuard. */
-/* OKLCH values were converted offline to sRGB, gamut-clipped, and rounded to the nearest 8-bit channel. */
+/* Retro Theme - colour palette authored for BurnGuard. */
+/* Text and component pairs meet WCAG 2.2 AA; bundled-seed-themes.test.ts measures them. */
 
 :root {
   color-scheme: light;
 
   /* Neutrals */
-  --gray-100: #ECE3CA;
-  --gray-90: #56524C;
-  --gray-80: #68635B;
-  --gray-70: #7A756A;
-  --gray-60: #8C8679;
-  --gray-50: #9E9888;
-  --gray-40: #B0A998;
-  --gray-30: #BFB7A4;
-  --gray-20: #CEC6B1;
-  --gray-10: #DDD4BD;
+  --gray-100: #F1E5D1;
+  --gray-90: #3B2B1F;
+  --gray-80: #514134;
+  --gray-70: #67584A;
+  --gray-60: #7D6E5F;
+  --gray-50: #928474;
+  --gray-40: #A89B8A;
+  --gray-30: #BAAD9C;
+  --gray-20: #CDC0AD;
+  --gray-10: #DFD2BF;
 
   /* Brand and accents */
-  --primary-blue: #FF9FA0;
-  --action-blue: #FF9FA0;
-  --red-60: #FF6266;
-  --red-50: #FC7978;
-  --red-10: #EFCCB8;
-  --orange-50: #D08700;
-  --orange-10: #E7D2A6;
-  --yellow-30: #F34700;
-  --yellow-10: #EDC7A6;
-  --green-60: #00776F;
-  --green-50: #2A8A7F;
-  --green-10: #C2D0BA;
-  --teal-50: #D08700;
-  --teal-10: #E7D2A6;
-  --aqua-60: #0082CE;
-  --aqua-10: #C2D2CB;
-  --blue-90: #56524C;
-  --blue-80: #D08988;
-  --blue-70: #E79494;
-  --blue-60: #FF9FA0;
-  --blue-50: #FCABA8;
-  --blue-30: #F5C4B7;
-  --blue-10: #EFD8C3;
-  --ultramarine-60: #FF9FA0;
-  --purple-60: #B7F6CD;
-  --pink-60: #B7F6CD;
+  --primary-blue: #B95257;
+  --action-blue: #B95257;
+  --red-60: #A82E2A;
+  --red-50: #B1473E;
+  --red-10: #DEB99D;
+  --orange-50: #D3AB47;
+  --orange-10: #E3CB9E;
+  --yellow-30: #C8601B;
+  --yellow-10: #E1BD96;
+  --green-60: #517434;
+  --green-50: #688247;
+  --green-10: #CCC19B;
+  --teal-50: #D3AB47;
+  --teal-10: #E3CB9E;
+  --aqua-60: #205775;
+  --aqua-10: #C3BCA6;
+  --blue-90: #3B2B1F;
+  --blue-80: #9A4849;
+  --blue-70: #AA4D50;
+  --blue-60: #B95257;
+  --blue-50: #C26C69;
+  --blue-30: #D29889;
+  --blue-10: #E0BFA3;
+  --ultramarine-60: #B95257;
+  --purple-60: #75A062;
+  --pink-60: #75A062;
 
   /* Semantic */
-  --success: #00776F;
-  --warning-yellow: #F34700;
-  --warning-orange: #D08700;
-  --error: #FF6266;
-  --info: #0082CE;
+  --success: #517434;
+  --warning-yellow: #C8601B;
+  --warning-orange: #D3AB47;
+  --error: #A82E2A;
+  --info: #205775;
 
   /* Surface and text */
-  --bg: #ECE3CA;
-  --bg-subtle: #E4D8B4;
-  --bg-muted: #DBCA9B;
-  --surface: #ECE3CA;
-  --surface-inverse: #56524C;
-  --fg-1: #793205;
-  --fg-2: #793205;
-  --fg-3: #793205;
-  --fg-4: #B0A998;
-  --fg-on-dark: #D4D0CE;
-  --fg-on-brand: #801518;
-  --border: #DBCA9B;
-  --border-strong: #BFB7A4;
-  --focus-ring: #FF9FA0;
+  --bg: #E7D2B1;
+  --bg-subtle: #DEC7A2;
+  --bg-muted: #D3B98F;
+  --surface: #F6ECDC;
+  --surface-inverse: #3B2B1F;
+  --fg-1: #33241A;
+  --fg-2: #47352A;
+  --fg-3: #56432F;
+  --fg-4: #7A6450;
+  --fg-on-dark: #F3E9D8;
+  --fg-on-brand: #FCF8F8;
+  --border: #D3B98F;
+  --border-strong: #897459;
+  --focus-ring: #B95257;
 
-  /* Paired donor colors retained for accessible combinations */
-  --secondary: #B7F6CD;
-  --fg-on-secondary: #00642E;
-  --accent: #D08700;
-  --fg-on-accent: #793205;
-  --fg-on-info: #FEF2C6;
-  --fg-on-success: #FEF2C6;
-  --fg-on-warning: #FEF2C6;
-  --fg-on-error: #7C2808;
+  /* Paired foregrounds for accessible combinations */
+  --secondary: #75A062;
+  --fg-on-secondary: #1A2316;
+  --accent: #D3AB47;
+  --fg-on-accent: #2E2610;
+  --fg-on-info: #E9EEF1;
+  --fg-on-success: #EEF1EB;
+  --fg-on-warning: #211005;
+  --fg-on-error: #F6EAEA;
 
   /* Charts */
-  --chart-1: #FF9FA0;
-  --chart-2: #B7F6CD;
-  --chart-3: #D08700;
-  --chart-4: #0082CE;
-  --chart-5: #00776F;
-  --chart-6: #F34700;
-  --chart-7: #FF6266;
-  --chart-8: #DBCAB6;
-  --chart-9: #688467;
-  --chart-10: #808B88;
+  --chart-1: #B95257;
+  --chart-2: #75A062;
+  --chart-3: #D3AB47;
+  --chart-4: #205775;
+  --chart-5: #517434;
+  --chart-6: #C8601B;
+  --chart-7: #A82E2A;
+  --chart-8: #7E5A8C;
+  --chart-9: #2B4549;
+  --chart-10: #925631;
 
   /* Type families */
   --font-display: "DM Serif Display", "Gowun Batang", "Pretendard", serif;

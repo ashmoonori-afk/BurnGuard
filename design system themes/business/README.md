@@ -1,6 +1,6 @@
 # Business Built-in Theme
 
-A sober charcoal system with muted blue, steel, orange, and compact geometry.
+A sober charcoal system with muted cobalt, olive, copper, and compact geometry.
 
 ## Files
 
@@ -9,13 +9,11 @@ A sober charcoal system with muted blue, steel, orange, and compact geometry.
 
 ## Design token contract
 
-The donor palette is expressed through BurnGuard's canonical neutral, brand, semantic, surface, chart, type, spacing, radius, elevation, and motion tokens. Use the complete `--gray-*` and `--chart-*` ramps for hierarchy and data visualization, and use `--r-*`, `--shadow-*`, and `--dur-*` tokens rather than introducing component-local scales.
+The palette is expressed through BurnGuard's canonical neutral, brand, semantic, surface, chart, type, spacing, radius, elevation, and motion tokens. Use the complete `--gray-*` and `--chart-*` ramps for hierarchy and data visualization, and use `--r-*`, `--shadow-*`, and `--dur-*` tokens rather than introducing component-local scales.
 
 ## Provenance
 
-Derived from the daisyUI `business` theme: https://github.com/saadeghi/daisyui/blob/master/packages/daisyui/src/themes/business.css
-
-Licensed under the MIT License, Copyright (c) 2020 Pouya Saadeghi. Source OKLCH values were converted offline to sRGB, gamut-clipped, and rounded to the nearest 8-bit channel. See the repository `NOTICE` file.
+Palette authored for BurnGuard. The colour values were chosen for this theme and every text and component pair is checked for WCAG 2.2 AA contrast; no third-party theme, stylesheet or palette is included, and it carries no external licence obligation. The `business` slug is kept from earlier releases because seeded workspaces key off `builtin-theme-business`.
 
 ## Local typography
 
@@ -109,7 +107,7 @@ Sequence: cover > claim > evidence > implication > closing; repeat claim/evidenc
 
 Each artboard is one fixed frame at the size the request declares. The requested kind's own rules come first - frame sizes, platform exclusion zones, print trim and bleed, and a product detail page's full-height section sequence with its closing call to action - and the rules below govern how each frame or section looks. Keep required content inside the safe inset (7% of the shorter side), place the primary figure at `--content-figure` (0.49) of the shorter side anchored bottom, and nothing crosses the safe area because `--content-bleed` is `0`.
 
-- Frame: the sober charcoal ground; muted blue marks the decision value.
+- Frame: the sober charcoal ground; muted cobalt marks the decision value.
 - Composition: metrics, filters and one table in decision order, with numeric columns aligned. In a multi-frame set the first frame follows the cover rule above and the last carries the call to action; on a product detail page these rules apply per section.
 - Type: one claim per frame at `--content-type-hero` (124px at a 1080px shorter side, scaled by `--content-scale`), support at `--content-type-sub` (60px), and nothing below `--content-type-caption` (24px) or 12px once scaled.
 - Figure: a wide evidence panel or chart; stay text-first so PPTX export survives.

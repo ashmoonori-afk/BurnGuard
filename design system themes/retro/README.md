@@ -1,6 +1,6 @@
 # Retro Built-in Theme
 
-A warm paper-like system with muted coral, mint, amber, and sturdy geometry.
+A warm kraft-paper system with dusty rose, sage, ochre, and sturdy geometry.
 
 ## Files
 
@@ -9,13 +9,11 @@ A warm paper-like system with muted coral, mint, amber, and sturdy geometry.
 
 ## Design token contract
 
-The donor palette is expressed through BurnGuard's canonical neutral, brand, semantic, surface, chart, type, spacing, radius, elevation, and motion tokens. Use the complete `--gray-*` and `--chart-*` ramps for hierarchy and data visualization, and use `--r-*`, `--shadow-*`, and `--dur-*` tokens rather than introducing component-local scales.
+The palette is expressed through BurnGuard's canonical neutral, brand, semantic, surface, chart, type, spacing, radius, elevation, and motion tokens. Use the complete `--gray-*` and `--chart-*` ramps for hierarchy and data visualization, and use `--r-*`, `--shadow-*`, and `--dur-*` tokens rather than introducing component-local scales.
 
 ## Provenance
 
-Derived from the daisyUI `retro` theme: https://github.com/saadeghi/daisyui/blob/master/packages/daisyui/src/themes/retro.css
-
-Licensed under the MIT License, Copyright (c) 2020 Pouya Saadeghi. Source OKLCH values were converted offline to sRGB, gamut-clipped, and rounded to the nearest 8-bit channel. See the repository `NOTICE` file.
+Palette authored for BurnGuard. The colour values were chosen for this theme and every text and component pair is checked for WCAG 2.2 AA contrast; no third-party theme, stylesheet or palette is included, and it carries no external licence obligation. The `retro` slug is kept from earlier releases because seeded workspaces key off `builtin-theme-retro`.
 
 ## Local typography
 

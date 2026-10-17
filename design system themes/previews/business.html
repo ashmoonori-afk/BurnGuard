@@ -4,96 +4,96 @@
 <title>Business Built-in Theme — 웹사이트 미리보기</title>
 <link rel="stylesheet" href="../../assets/fonts/fonts.css">
 <style>
-/* Derived from daisyUI (https://github.com/saadeghi/daisyui) - MIT License, Copyright (c) 2020 Pouya Saadeghi. Converted for BurnGuard. */
-/* OKLCH values were converted offline to sRGB, gamut-clipped, and rounded to the nearest 8-bit channel. */
+/* Business Theme - colour palette authored for BurnGuard. */
+/* Text and component pairs meet WCAG 2.2 AA; bundled-seed-themes.test.ts measures them. */
 
 :root {
   color-scheme: dark;
 
   /* Neutrals */
-  --gray-100: #CECFD0;
-  --gray-90: #202020;
-  --gray-80: #353535;
-  --gray-70: #4A4A4A;
-  --gray-60: #5F5F5F;
-  --gray-50: #747474;
-  --gray-40: #88898A;
-  --gray-30: #9A9A9B;
-  --gray-20: #ABACAD;
-  --gray-10: #BDBEBE;
+  --gray-100: #E3E5E8;
+  --gray-90: #1A1C1F;
+  --gray-80: #323437;
+  --gray-70: #4A4C4F;
+  --gray-60: #626467;
+  --gray-50: #7A7C7F;
+  --gray-40: #939598;
+  --gray-30: #A7A9AC;
+  --gray-20: #BBBDC0;
+  --gray-10: #CFD1D4;
 
   /* Brand and accents */
-  --primary-blue: #1C4E80;
-  --action-blue: #1C4E80;
-  --red-60: #AC3E31;
-  --red-50: #B2584E;
-  --red-10: #C8B5B3;
-  --orange-50: #EA6947;
-  --orange-10: #D3BDB7;
-  --yellow-30: #DBAE5A;
-  --yellow-10: #D0C9BB;
-  --green-60: #6BB187;
-  --green-50: #7DB694;
-  --green-10: #BCCAC3;
-  --teal-50: #EA6947;
-  --teal-10: #D3BDB7;
-  --aqua-60: #0291D5;
-  --aqua-10: #A9C4D1;
-  --blue-90: #202020;
-  --blue-80: #1D4165;
-  --blue-70: #1D4873;
-  --blue-60: #1C4E80;
-  --blue-50: #3C658E;
-  --blue-30: #7E95AC;
-  --blue-10: #B2BAC3;
-  --ultramarine-60: #1C4E80;
-  --purple-60: #7C909A;
-  --pink-60: #7C909A;
+  --primary-blue: #3470C1;
+  --action-blue: #3470C1;
+  --red-60: #D6312B;
+  --red-50: #BA2E29;
+  --red-10: #351E20;
+  --orange-50: #D58A3A;
+  --orange-10: #3B2F23;
+  --yellow-30: #FBCA6A;
+  --yellow-10: #423A2C;
+  --green-60: #1EA262;
+  --green-50: #1D8E58;
+  --green-10: #1A332A;
+  --teal-50: #D58A3A;
+  --teal-10: #3B2F23;
+  --aqua-60: #4EACDF;
+  --aqua-10: #233541;
+  --blue-90: #1A1C1F;
+  --blue-80: #2E5B99;
+  --blue-70: #3166AE;
+  --blue-60: #3470C1;
+  --blue-50: #2F5FA0;
+  --blue-30: #254167;
+  --blue-10: #1D2836;
+  --ultramarine-60: #3470C1;
+  --purple-60: #8A9A5B;
+  --pink-60: #8A9A5B;
 
   /* Semantic */
-  --success: #6BB187;
-  --warning-yellow: #DBAE5A;
-  --warning-orange: #EA6947;
-  --error: #AC3E31;
-  --info: #0291D5;
+  --success: #1EA262;
+  --warning-yellow: #FBCA6A;
+  --warning-orange: #D58A3A;
+  --error: #D6312B;
+  --info: #4EACDF;
 
   /* Surface and text */
-  --bg: #202020;
-  --bg-subtle: #1C1C1C;
-  --bg-muted: #181818;
-  --surface: #202020;
-  --surface-inverse: #23282E;
-  --fg-1: #CDCDCD;
-  --fg-2: #CDCDCD;
-  --fg-3: #CDCDCD;
-  --fg-4: #88898A;
-  --fg-on-dark: #CECFD0;
-  --fg-on-brand: #D0DAE5;
-  --border: #181818;
-  --border-strong: #9A9A9B;
-  --focus-ring: #1C4E80;
+  --bg: #191B1E;
+  --bg-subtle: #16181A;
+  --bg-muted: #121315;
+  --surface: #1F2226;
+  --surface-inverse: #2A3038;
+  --fg-1: #E3E5E8;
+  --fg-2: #C9CDD2;
+  --fg-3: #AEB3BA;
+  --fg-4: #7E848C;
+  --fg-on-dark: #E3E5E8;
+  --fg-on-brand: #F1F5FB;
+  --border: #121315;
+  --border-strong: #666769;
+  --focus-ring: #3470C1;
 
-  /* Paired donor colors retained for accessible combinations */
-  --secondary: #7C909A;
-  --fg-on-secondary: #050708;
-  --accent: #EA6947;
-  --fg-on-accent: #130402;
-  --fg-on-info: #000710;
-  --fg-on-success: #040B07;
-  --fg-on-warning: #110B03;
-  --fg-on-error: #F2D8D4;
+  /* Paired foregrounds for accessible combinations */
+  --secondary: #8A9A5B;
+  --fg-on-secondary: #1E2214;
+  --accent: #D58A3A;
+  --fg-on-accent: #2F1E0D;
+  --fg-on-info: #112631;
+  --fg-on-success: #072416;
+  --fg-on-warning: #372C17;
+  --fg-on-error: #FDF6F6;
 
   /* Charts */
-  --chart-1: #1C4E80;
-  --chart-2: #7C909A;
-  --chart-3: #EA6947;
-  --chart-4: #0291D5;
-  --chart-5: #6BB187;
-  --chart-6: #DBAE5A;
-  --chart-7: #AC3E31;
-  --chart-8: #4C6F8D;
-  --chart-9: #767D8E;
-  --chart-10: #448084;
+  --chart-1: #3470C1;
+  --chart-2: #8A9A5B;
+  --chart-3: #D58A3A;
+  --chart-4: #4EACDF;
+  --chart-5: #1EA262;
+  --chart-6: #FBCA6A;
+  --chart-7: #D6312B;
+  --chart-8: #9078B7;
+  --chart-9: #95794A;
+  --chart-10: #1C6E5D;
 
   /* Type families */
   --font-display: "Space Grotesk", "Pretendard", sans-serif;

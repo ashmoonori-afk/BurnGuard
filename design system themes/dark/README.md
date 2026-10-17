@@ -1,6 +1,6 @@
 # Dark Built-in Theme
 
-A cool charcoal canvas with vivid violet, pink, and teal accents.
+A cool charcoal canvas with vivid azure, rose, and lime accents.
 
 ## Files
 
@@ -9,13 +9,11 @@ A cool charcoal canvas with vivid violet, pink, and teal accents.
 
 ## Design token contract
 
-The donor palette is expressed through BurnGuard's canonical neutral, brand, semantic, surface, chart, type, spacing, radius, elevation, and motion tokens. Use the complete `--gray-*` and `--chart-*` ramps for hierarchy and data visualization, and use `--r-*`, `--shadow-*`, and `--dur-*` tokens rather than introducing component-local scales.
+The palette is expressed through BurnGuard's canonical neutral, brand, semantic, surface, chart, type, spacing, radius, elevation, and motion tokens. Use the complete `--gray-*` and `--chart-*` ramps for hierarchy and data visualization, and use `--r-*`, `--shadow-*`, and `--dur-*` tokens rather than introducing component-local scales.
 
 ## Provenance
 
-Derived from the daisyUI `dark` theme: https://github.com/saadeghi/daisyui/blob/master/packages/daisyui/src/themes/dark.css
-
-Licensed under the MIT License, Copyright (c) 2020 Pouya Saadeghi. Source OKLCH values were converted offline to sRGB, gamut-clipped, and rounded to the nearest 8-bit channel. See the repository `NOTICE` file.
+Palette authored for BurnGuard. The colour values were chosen for this theme and every text and component pair is checked for WCAG 2.2 AA contrast; no third-party theme, stylesheet or palette is included, and it carries no external licence obligation. The `dark` slug is kept from earlier releases because seeded workspaces key off `builtin-theme-dark`.
 
 ## Local typography
 
@@ -109,7 +107,7 @@ Sequence: cover > claim > evidence > implication > closing; repeat claim/evidenc
 
 Each artboard is one fixed frame at the size the request declares. The requested kind's own rules come first - frame sizes, platform exclusion zones, print trim and bleed, and a product detail page's full-height section sequence with its closing call to action - and the rules below govern how each frame or section looks. Keep required content inside the safe inset (7% of the shorter side), place the primary figure at `--content-figure` (0.55) of the shorter side anchored center, and one deliberate full-bleed figure may cross the safe area because `--content-bleed` is `1`.
 
-- Frame: the dark workspace ground; steel blue marks the live metric or control and nothing else.
+- Frame: the dark workspace ground; azure marks the live metric or control and nothing else.
 - Composition: compact metric rows and contextual controls on the slide grid, one operational takeaway per frame. In a multi-frame set the first frame follows the cover rule above and the last carries the call to action; on a product detail page these rules apply per section.
 - Type: one claim per frame at `--content-type-hero` (120px at a 1080px shorter side, scaled by `--content-scale`), support at `--content-type-sub` (56px), and nothing below `--content-type-caption` (24px) or 12px once scaled.
 - Figure: an interface panel or scenic field dark enough for type to cross it.
