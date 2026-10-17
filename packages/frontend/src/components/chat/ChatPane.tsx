@@ -127,12 +127,14 @@ export default function ChatPane({
           setActive={setTab}
           icon={<MessageCircleMore className="h-3.5 w-3.5" />}
         >
-          {t("chat.tab.comments")} {openCommentCount > 0 && <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{openCommentCount}</span>}
+          {t("chat.tab.comments")} {openCommentCount > 0 && <span className="rounded-full bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">{openCommentCount}</span>}
         </ChatTab>
-        <div className="ml-auto shrink-0"><BackendToggle current={session.backend_id} disabled={switchBackend.isPending || sessionRunning} onSwitch={(next) => switchBackend.mutate(next)} /></div>
-
       </div>
       <div hidden={tab !== "chat"} className={tab === "chat" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
+          <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2">
+            <span className="text-xs font-medium text-muted-foreground">{t("chat.backend.label")}</span>
+            <BackendToggle current={session.backend_id} disabled={switchBackend.isPending || sessionRunning} onSwitch={(next) => switchBackend.mutate(next)} />
+          </div>
           <MessageStream
             events={events}
             session={session}
@@ -198,7 +200,7 @@ export function BackendToggle({
   const t = useT();
   const options = backendToggleOptions(current);
   return (
-    <div className="flex gap-1 rounded-lg border border-border bg-muted/40 p-0.5" role="group" aria-label={t("chat.backend.selection")}>
+    <div className="flex gap-1 rounded-lg border border-border bg-background p-0.5" role="group" aria-label={t("chat.backend.selection")}>
       {options.map((opt) => (
         <button
           key={opt}
@@ -217,11 +219,11 @@ export function BackendToggle({
                 : t("chat.backend.next", { name: backendLabel(opt) })
           }
           className={cn(
-            "min-h-8 rounded-md px-2 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-[900px]:min-h-11 max-[900px]:min-w-11",
+            "min-h-9 rounded-md px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-[900px]:min-h-11 max-[900px]:min-w-11",
             opt === current
-              ? "bg-background text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground",
-            disabled && opt !== current && "opacity-40 cursor-not-allowed",
+              ? "bg-primary text-primary-foreground shadow-app-1"
+              : "text-foreground hover:bg-muted",
+            disabled && opt !== current && "cursor-not-allowed",
           )}
         >
           {backendLabel(opt)}
