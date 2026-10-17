@@ -162,7 +162,7 @@ export default function ExportStatusRow({
           {findings.map((finding) => (
             <li key={`${finding.code}-${finding.page}`} className="flex items-start gap-1 text-[10px]">
               <AlertTriangle
-                className={finding.severity === "error" ? "mt-0.5 h-3 w-3 shrink-0 text-destructive" : "mt-0.5 h-3 w-3 shrink-0 text-warning"}
+                className={finding.severity === "error" ? "mt-0.5 h-3 w-3 shrink-0 text-destructive" : "mt-0.5 h-3 w-3 shrink-0 text-warning-text"}
                 aria-hidden="true"
               />
               <span className="text-pretty break-keep text-muted-foreground">

@@ -186,7 +186,7 @@ export default function TweaksLayer({
     >
       {active && hoverRect && (
         <div
-          className="absolute pointer-events-none border-2 border-emerald-500/70 bg-emerald-500/10"
+          className="absolute pointer-events-none border-2 border-accent/70 bg-accent/10"
           style={{
             left: hoverRect.left,
             top: hoverRect.top,
@@ -197,7 +197,7 @@ export default function TweaksLayer({
       )}
       {active && box && (
         <div
-          className="absolute pointer-events-none border-2 border-emerald-500 bg-emerald-500/15"
+          className="absolute pointer-events-none border-2 border-accent bg-accent/15"
           style={{
             left: box.left,
             top: box.top,
@@ -207,7 +207,7 @@ export default function TweaksLayer({
           }}
         >
           {([['e', t("canvas.handles.width"), '100%', '50%'], ['s', t("canvas.handles.height"), '50%', '100%'], ['se', t("canvas.handles.size"), '100%', '100%'], ['rotate', t("canvas.handles.rotation"), '50%', '-24px']] as const).map(([kind, label, left, top]) => (
-            <button key={kind} aria-label={label} disabled={saving} className="absolute h-3 w-3 border border-emerald-700 bg-white pointer-events-auto disabled:opacity-50" style={{ left, top, borderRadius: kind === 'rotate' ? '50%' : 0, transform: 'translate(-50%, -50%)', touchAction: 'none', cursor: kind === 'rotate' ? 'grab' : `${kind}-resize` }} onPointerDown={(event) => start(event, kind)} onPointerMove={move} onPointerUp={(event) => finish(event, true)} onPointerCancel={(event) => finish(event, false)} onClick={(event) => event.stopPropagation()} />
+            <button key={kind} aria-label={label} disabled={saving} className="absolute h-3 w-3 border border-accent bg-card pointer-events-auto disabled:opacity-50" style={{ left, top, borderRadius: kind === 'rotate' ? '50%' : 0, transform: 'translate(-50%, -50%)', touchAction: 'none', cursor: kind === 'rotate' ? 'grab' : `${kind}-resize` }} onPointerDown={(event) => start(event, kind)} onPointerMove={move} onPointerUp={(event) => finish(event, true)} onPointerCancel={(event) => finish(event, false)} onClick={(event) => event.stopPropagation()} />
           ))}
         </div>
       )}

@@ -27,7 +27,7 @@ export default function ToastContainer() {
           className={cn(
             "pointer-events-auto rounded-md border shadow-app-3 bg-background p-3",
             t.tone === "error" && "border-destructive/40",
-            t.tone === "warn" && "border-yellow-300",
+            t.tone === "warn" && "border-warning",
             t.tone === "success" && "border-accent/40",
           )}
         >

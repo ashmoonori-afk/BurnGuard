@@ -25,7 +25,7 @@ export default function PhotoPlacementsSection({ projectId }: { readonly project
         const derived = derivePhotoPlacementStatus(placement);
         return (
           <article key={placement.id} className="rounded-md border border-border px-3 py-2 text-xs">
-            <div className="flex items-start justify-between gap-2"><span className="min-w-0 break-words font-medium">{placement.purpose}</span><span className={derived.status === "reference_verified" ? "shrink-0 font-semibold" : "shrink-0 font-semibold text-warning"}>{t(STATUS_KEY[derived.status])}</span></div>
+            <div className="flex items-start justify-between gap-2"><span className="min-w-0 break-words font-medium">{placement.purpose}</span><span className={derived.status === "reference_verified" ? "shrink-0 font-semibold" : "shrink-0 font-semibold text-warning-text"}>{t(STATUS_KEY[derived.status])}</span></div>
             {derived.missing.length > 0 && <ul className="mt-1 list-disc pl-4 text-muted-foreground">{derived.missing.map((item) => <li key={item}>{t(MISSING_KEY[item])}</li>)}</ul>}
             <div className="mt-2 grid grid-cols-2 gap-2">
               <div><div className="font-medium">{t("modes.photo.references")}</div><ul className="mt-1 space-y-1 text-muted-foreground">{placement.references.map((reference) => <li key={reference.sha256} className="break-all">{reference.url} ({reference.licence})</li>)}</ul></div>

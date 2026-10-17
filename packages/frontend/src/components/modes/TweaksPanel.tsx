@@ -234,7 +234,7 @@ function RowLabel({ children }: { children: React.ReactNode }) {
 function inputCls(extra?: string) {
   return cn(
     "rounded border border-border bg-background px-1.5 py-0.5 font-mono text-[11px]",
-    "focus:outline-none focus:ring-1 focus:ring-emerald-500",
+    "focus:outline-none focus:ring-1 focus:ring-ring",
     extra,
   );
 }
@@ -364,7 +364,7 @@ export function TweaksPaletteSwatches({ projectId, relPath, onPick }: { projectI
               type="button"
               onClick={() => onPick(color.value)}
               title={color.name === color.value ? color.value : `${color.name} ${color.value}`}
-              className="h-5 w-5 rounded border border-border hover:ring-2 hover:ring-emerald-500"
+              className="h-5 w-5 rounded border border-border hover:ring-2 hover:ring-ring"
               style={{ backgroundColor: color.value }}
             />
           ))}
@@ -454,7 +454,7 @@ function ColorRow({
           disabled={saving}
           className={cn(
             "flex min-w-0 flex-1 items-center gap-1.5 rounded border border-border bg-background px-1.5 py-0.5 font-mono text-[11px]",
-            "hover:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500",
+            "hover:border-accent focus:outline-none focus:ring-1 focus:ring-ring",
             saving && "opacity-50",
           )}
         >

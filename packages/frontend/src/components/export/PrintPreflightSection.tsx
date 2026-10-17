@@ -33,7 +33,7 @@ function PreflightBody({ data }: { readonly data: PrintPreflightV1 }) {
       {view.remoteFonts.length > 0 && <li>{t("export.preflight.fontsRemote", { list: view.remoteFonts.join(", ") })}</li>}
       {view.lowImages.length === 0 && <li>{t("export.preflight.imagesOk")}</li>}
       {view.lowImages.slice(0, MAX_LISTED).map((image) => (
-        <li key={`${image.page}-${image.locator}`} className={image.severity === "strong_warn" ? "text-destructive" : "text-warning"}>
+        <li key={`${image.page}-${image.locator}`} className={image.severity === "strong_warn" ? "text-destructive" : "text-warning-text"}>
           {t("export.preflight.imageLow", { page: image.page, locator: image.locator, ppi: Math.round(image.effective_ppi) })}
         </li>
       ))}

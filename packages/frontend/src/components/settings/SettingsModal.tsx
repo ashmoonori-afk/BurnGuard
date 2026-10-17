@@ -513,7 +513,7 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
                 <h3 id="settings-updates-title" className="text-xs font-medium text-muted-foreground">{t("settings.updates")}</h3>
                 <div className="rounded-md border border-border bg-muted/30 p-3">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span aria-hidden="true" className={`inline-block h-2 w-2 shrink-0 rounded-full ${updateApplying || updateChecking || updateView?.busy ? "bg-amber-500 animate-pulse" : updateError || updateQuery.isError || updateQuery.data?.state === "error" ? "bg-red-500" : updateView?.canApply || (updateQuery.data?.state === "idle" && updateQuery.data.checked_at !== null) ? "bg-emerald-500" : "bg-muted-foreground/40"}`} />
+                    <span aria-hidden="true" className={`inline-block h-2 w-2 shrink-0 rounded-full ${updateApplying || updateChecking || updateView?.busy ? "bg-warning animate-pulse" : updateError || updateQuery.isError || updateQuery.data?.state === "error" ? "bg-destructive" : updateView?.canApply || (updateQuery.data?.state === "idle" && updateQuery.data.checked_at !== null) ? "bg-success" : "bg-muted-foreground/40"}`} />
                     <span className="min-w-0 flex-1 text-xs" role="status">
                       {updateApplying ? t("settings.updateApplying") : updateQuery.isError ? t("settings.updateFailed") : updateView?.label ?? t("settings.loading")}
                     </span>
@@ -659,11 +659,11 @@ function PlaywrightStateDot({
 }) {
   const color =
     state === "success"
-      ? "bg-emerald-500"
+      ? "bg-success"
       : state === "installing"
-        ? "bg-amber-500 animate-pulse"
+        ? "bg-warning animate-pulse"
         : state === "error"
-          ? "bg-red-500"
+          ? "bg-destructive"
           : "bg-muted-foreground/40";
   return <span className={`inline-block h-2 w-2 rounded-full ${color}`} />;
 }
@@ -689,15 +689,15 @@ function PyStateDot({ py }: { py: PythonSettings | null }) {
   let color = "bg-muted-foreground/40";
   if (py) {
     if (py.install.state === "installing") {
-      color = "bg-amber-500 animate-pulse";
+      color = "bg-warning animate-pulse";
     } else if (!py.health.python.found) {
-      color = "bg-red-500";
+      color = "bg-destructive";
     } else if (py.health.pypdf.found && py.health.pypdf.supported) {
-      color = "bg-emerald-500";
+      color = "bg-success";
     } else if (py.health.pypdf.found) {
-      color = "bg-amber-500";
+      color = "bg-warning";
     } else if (py.install.state === "error") {
-      color = "bg-red-500";
+      color = "bg-destructive";
     } else {
       color = "bg-muted-foreground/40";
     }

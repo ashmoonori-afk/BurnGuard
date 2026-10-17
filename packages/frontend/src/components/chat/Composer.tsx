@@ -277,7 +277,7 @@ export default function Composer({
       />
       <PromptSuggestions library={promptLibrary.data} draft={text} disabled={disabled || sending || !draft.ready} onInsert={insertPrompt} />
 
-      {noAiTool && <p id={`composer-send-blocked-${sessionId}`} data-bg-send-blocked="no-ai-tool" className="mt-2 rounded-md bg-amber-500/10 px-2.5 py-2 text-xs leading-relaxed text-amber-800 dark:text-amber-200">
+      {noAiTool && <p id={`composer-send-blocked-${sessionId}`} data-bg-send-blocked="no-ai-tool" className="mt-2 rounded-md bg-warning/10 px-2.5 py-2 text-xs leading-relaxed text-warning-text">
         {translate("workspace.composer.noAiTool")}{" "}
         <button type="button" onClick={() => setSettingsOpen(true)} className="font-medium underline underline-offset-2 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{translate("workspace.composer.openSettings")}</button>
       </p>}
