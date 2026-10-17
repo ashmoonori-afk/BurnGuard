@@ -24,7 +24,7 @@ export default function ExportStatusList({
   if (jobs.length === 0) return null;
   return (
     <div className="px-2 py-1.5">
-      <div className="mb-1 px-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+      <div className="mb-1 px-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
         {t("export.recent")}
       </div>
       <ul className="space-y-1">

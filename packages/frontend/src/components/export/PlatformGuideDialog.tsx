@@ -73,8 +73,8 @@ export default function PlatformGuideDialog({
                     <span
                       className={
                         step.badge === t("export.guide.unverified")
-                          ? "rounded-full bg-warning/20 px-2 py-0.5 text-[10px] text-foreground"
-                          : "rounded-full bg-accent-soft px-2 py-0.5 text-[10px] text-accent"
+                          ? "rounded-full bg-warning/20 px-2 py-0.5 text-xs text-foreground"
+                          : "rounded-full bg-accent-soft px-2 py-0.5 text-xs text-accent"
                       }
                     >
                       {step.badge}
@@ -87,7 +87,7 @@ export default function PlatformGuideDialog({
           </section>
           <Section title={t("export.guide.rollback")} items={guide.rollback} />
           <Section title={t("export.guide.unsupported")} items={guide.unsupported} />
-          <p className="text-pretty break-keep rounded-md bg-muted/50 p-2 text-[11px] leading-relaxed text-muted-foreground">
+          <p className="text-pretty break-keep rounded-md bg-muted/50 p-2 text-xs leading-relaxed text-muted-foreground">
             {guide.verificationNote} {t("export.guide.checkedOn", { name: guide.checkedOn })}
           </p>
         </div>

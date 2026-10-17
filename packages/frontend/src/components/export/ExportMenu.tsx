@@ -4,6 +4,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Download,
   FileDown,
+  History,
+  ScanSearch,
+  SlidersHorizontal,
   FileType2,
   PenTool,
   Presentation,
@@ -33,7 +36,8 @@ import {
   type ExportJob,
 } from "@/api/export";
 import { useUIStore } from "@/state/uiStore";
-import ExportStatusList from "./ExportStatusList";
+import { cn } from "@/lib/utils";
+import ExportDetailsDialog, { type ExportDetailsSection } from "./ExportDetailsDialog";
 import { exportTransitions } from "./export-job-state";
 import { apiErrorCopy } from "@/lib/error-copy";
 import {
@@ -44,8 +48,6 @@ import {
   CHROMIUM_FAILURE_MESSAGE,
   EXPORT_DISABLED_LABEL,
 } from "./export-options";
-import ExportOptionFields from "./ExportOptionFields";
-import PrintPreflightSection from "./PrintPreflightSection";
 import { platformCheckFailureCopy, platformFindings } from "./export-delivery";
 import { platformFixRequest } from "@/lib/platform-fix-request";
 import { useExportOptionValues } from "./useExportOptionValues";
@@ -79,6 +81,7 @@ export default function ExportMenu({ projectId, projectType, projectOptionsJson,
   const pushToast = useUIStore((s) => s.pushToast);
   const oweStarPrompt = useUIStore((s) => s.oweStarPrompt);
   const [open, setOpen] = useState(false);
+  const [details, setDetails] = useState<ExportDetailsSection | null>(null);
   const [optionValues, setOptionValues] = useExportOptionValues(projectId);
   const openQuality = () => {
     setOpen(false);
@@ -137,6 +140,8 @@ export default function ExportMenu({ projectId, projectType, projectOptionsJson,
 
   const jobs = jobsQuery.data ?? [];
   const menuModel = buildExportMenuModel(projectType, projectOptionsJson, optionValues);
+  const hasSettingsFields = menuModel.options.some((option) => option.disabledReason === undefined && (option.fields?.length ?? 0) > 0);
+  const activeJobs = jobs.filter((job) => job.status === "pending" || job.status === "running").length;
 
   // Surface async outcomes via a toast — the createMutation onError only
   // catches synchronous create-call errors. Background pipeline failures
@@ -178,6 +183,7 @@ export default function ExportMenu({ projectId, projectType, projectOptionsJson,
   }, [jobs, pushToast, oweStarPrompt, jobsQuery.status, t]);
 
   return (
+    <>
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
         <Button
@@ -189,38 +195,29 @@ export default function ExportMenu({ projectId, projectType, projectOptionsJson,
           <Download className="h-3.5 w-3.5" /> {t("export.title")}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent data-export-menu-content align="end" className="z-[100] max-h-[var(--radix-dropdown-menu-content-available-height)] w-80 max-w-[calc(100vw-24px)] overflow-y-auto p-2">
+      <DropdownMenuContent data-export-menu-content align="end" collisionPadding={12} className="z-[100] max-h-[var(--radix-dropdown-menu-content-available-height)] w-80 max-w-[calc(100vw-24px)] overflow-y-auto p-2">
         <DropdownMenuLabel>{t("export.formats")}</DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        {jobsQuery.isError && <div role="alert" className="p-2 text-xs"><p>{t("export.listFailed")}</p><button type="button" className="mt-2 underline" onClick={() => void jobsQuery.refetch()}>{t("export.retry")}</button></div>}
-        {qualityGate !== null && <div className="mx-2 mb-2 rounded-md border border-destructive/30 bg-destructive/10 p-2">
+        {jobsQuery.isError && <div role="alert" className="p-2 text-xs"><p>{t("export.listFailed")}</p><button type="button" className="mt-2 min-h-8 underline" onClick={() => void jobsQuery.refetch()}>{t("export.retry")}</button></div>}
+        {qualityGate !== null && <div className="mx-1 mb-2 rounded-control border border-destructive/30 bg-destructive/10 p-2">
           <p className="text-pretty break-keep text-xs text-foreground">{t(qualityGate.copyKey, { count: qualityGate.mustFixCount })}</p>
           <Button type="button" variant="outline" size="sm" className="mt-2 h-8 w-full max-[900px]:min-h-11" onClick={openQuality}>{t("export.openQuality")}</Button>
         </div>}
-        <PrintPreflightSection projectId={projectId} enabled={open} />
         {!menuModel.ok && (
-          <p className="mx-2 rounded-md border border-warning/30 bg-warning/15 p-2 text-pretty break-keep text-xs">
+          <p className="mx-1 mb-2 rounded-control border border-warning/30 bg-warning/15 p-2 text-pretty break-keep text-xs">
             {menuModel.message}
           </p>
         )}
-        <ExportOptionFields
-          options={menuModel.options}
-          values={optionValues}
-          disabled={createMutation.isPending}
-          onChange={setOptionValues}
-        />
         {menuModel.options.map((option) => {
           const Icon = OPTION_ICON[option.format];
-          const disabled =
-            option.disabledReason !== undefined || createMutation.isPending;
+          const unavailable = option.disabledReason !== undefined;
+          const disabled = unavailable || createMutation.isPending;
           return (
             <DropdownMenuItem
               key={option.key}
-              className="min-h-11 gap-3 rounded-md px-3"
+              className={cn("min-h-11 gap-3 rounded-control px-3 data-[disabled]:opacity-100", unavailable && "text-muted-foreground")}
               disabled={disabled}
               onClick={(event) => {
                 if (disabled) return;
-                // Keep the dropdown open so the user can watch the status list.
                 event.preventDefault();
                 createMutation.mutate({
                   format: option.format,
@@ -228,48 +225,75 @@ export default function ExportMenu({ projectId, projectType, projectOptionsJson,
                 });
               }}
             >
-              <Icon className="h-3.5 w-3.5" />
-              <span className="flex-1">
+              <Icon className={cn("h-4 w-4 shrink-0", unavailable && "opacity-70")} aria-hidden="true" />
+              <span className="min-w-0 flex-1 text-sm">
                 {option.label}
                 {option.note !== undefined && (
-                  <span className="mt-0.5 block text-pretty break-keep text-[10px] font-normal text-muted-foreground">
+                  <span className="mt-0.5 block text-pretty break-keep text-xs font-normal text-muted-foreground">
                     {option.note}
                   </span>
                 )}
+                {option.disabledReason !== undefined && (
+                  <span className="mt-0.5 block text-pretty break-keep text-xs font-normal text-muted-foreground">
+                    {EXPORT_DISABLED_LABEL[option.disabledReason]}
+                  </span>
+                )}
               </span>
-              {option.disabledReason !== undefined && (
-                <span className="text-[10px] text-muted-foreground">
-                  {EXPORT_DISABLED_LABEL[option.disabledReason]}
-                </span>
-              )}
             </DropdownMenuItem>
           );
         })}
-        {jobs.length > 0 && (
-          <>
-            <DropdownMenuSeparator />
-            <ExportStatusList
-              jobs={jobs}
-              onRetry={(job) => {
-                actionMutation.mutate({ action: "retry", job });
-              }}
-              onCancel={(job) => actionMutation.mutate({ action: "cancel", job })}
-              onDownload={(job) => actionMutation.mutate({ action: "download", job })}
-              retryDisabled={createMutation.isPending || actionMutation.isPending}
-              {...(platformFix === undefined || platformFix.disabled
-                ? {}
-                : {
-                    onRequestFix: (job: ExportJob) => {
-                      const prompt = platformFixRequest(platformFindings(job));
-                      if (prompt === null) return;
-                      setOpen(false);
-                      platformFix.onRequest(prompt);
-                    },
-                  })}
-            />
-          </>
+        <DropdownMenuSeparator />
+        {hasSettingsFields && (
+          <DropdownMenuItem className="min-h-11 gap-3 rounded-control px-3" onSelect={() => setDetails("settings")}>
+            <SlidersHorizontal className="h-4 w-4 shrink-0" aria-hidden="true" />
+            <span className="min-w-0 flex-1 text-sm">
+              {t("export.menu.settings")}
+              <span className="mt-0.5 block text-pretty break-keep text-xs font-normal text-muted-foreground">{t("export.menu.settingsHint")}</span>
+            </span>
+          </DropdownMenuItem>
         )}
+        <DropdownMenuItem className="min-h-11 gap-3 rounded-control px-3" onSelect={() => setDetails("print")}>
+          <ScanSearch className="h-4 w-4 shrink-0" aria-hidden="true" />
+          <span className="min-w-0 flex-1 text-sm">
+            {t("export.preflight.title")}
+            <span className="mt-0.5 block text-pretty break-keep text-xs font-normal text-muted-foreground">{t("export.menu.printHint")}</span>
+          </span>
+        </DropdownMenuItem>
+        <DropdownMenuItem className="min-h-11 gap-3 rounded-control px-3" onSelect={() => setDetails("status")}>
+          <History className="h-4 w-4 shrink-0" aria-hidden="true" />
+          <span className="min-w-0 flex-1 text-sm">
+            {t("export.recent")}
+            <span className="mt-0.5 block text-pretty break-keep text-xs font-normal text-muted-foreground">
+              {activeJobs > 0 ? t("export.menu.recentActive", { count: activeJobs }) : t("export.menu.recentHint")}
+            </span>
+          </span>
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+      <ExportDetailsDialog
+        section={details}
+        onClose={() => setDetails(null)}
+        projectId={projectId}
+        options={menuModel.options}
+        values={optionValues}
+        onValuesChange={setOptionValues}
+        optionsDisabled={createMutation.isPending}
+        jobs={jobs}
+        onRetry={(job) => { actionMutation.mutate({ action: "retry", job }); }}
+        onCancel={(job) => actionMutation.mutate({ action: "cancel", job })}
+        onDownload={(job) => actionMutation.mutate({ action: "download", job })}
+        statusBusy={createMutation.isPending || actionMutation.isPending}
+        {...(platformFix === undefined || platformFix.disabled
+          ? {}
+          : {
+              onRequestFix: (job: ExportJob) => {
+                const prompt = platformFixRequest(platformFindings(job));
+                if (prompt === null) return;
+                setDetails(null);
+                platformFix.onRequest(prompt);
+              },
+            })}
+      />
+    </>
   );
 }

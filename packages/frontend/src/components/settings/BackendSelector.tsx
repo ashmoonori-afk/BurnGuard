@@ -30,7 +30,6 @@ export default function BackendSelector({
               className={cn(
                 "rounded-xl border transition-colors",
                 active ? "border-accent bg-accent/5" : "border-border",
-                !b.found && "opacity-60",
               )}
             >
               <button
@@ -49,7 +48,7 @@ export default function BackendSelector({
                   ) : (
                     <XCircle className="h-4 w-4 text-muted-foreground shrink-0" />
                   )}
-                  <span className="text-sm font-medium capitalize">
+                  <span className={cn("text-sm font-medium capitalize", !b.found && "text-muted-foreground")}>
                     {backendLabel(b.id)}
                   </span>
                   {state === "ready" && b.version && (
@@ -70,7 +69,7 @@ export default function BackendSelector({
                 )}
               </button>
               {state !== "ready" && (
-                <a href={BACKEND_INSTALL_URLS[b.id]} target="_blank" rel="noreferrer" className="text-xs text-accent px-4 pb-4 -mt-2 inline-flex items-center gap-1">
+                <a href={BACKEND_INSTALL_URLS[b.id]} target="_blank" rel="noreferrer" className="-mt-2 mb-2 ml-4 inline-flex min-h-8 items-center gap-1 rounded-control text-xs text-accent underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                   <ExternalLink className="h-3 w-3" />
                   {t("settings.installBackend", { name: backendLabel(b.id) })}
                 </a>

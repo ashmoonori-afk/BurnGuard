@@ -12,7 +12,7 @@ export default function PrintPreflightSection({ projectId, enabled }: { readonly
   const query = useQuery({ queryKey: ["project", projectId, "print-preflight"], queryFn: () => getPrintPreflight(projectId), enabled });
   if (!enabled) return null;
   return (
-    <section aria-label={t("export.preflight.title")} className="mx-2 mb-2 space-y-1 rounded-md border border-border p-2 text-[11px]">
+    <section aria-label={t("export.preflight.title")} className="mx-2 mb-2 space-y-1 rounded-md border border-border p-2 text-xs">
       <h3 className="text-xs font-medium">{t("export.preflight.title")}</h3>
       {query.isPending && <p className="text-muted-foreground">{t("export.preflight.loading")}</p>}
       {query.isError && <p role="alert">{t("export.preflight.failed")}</p>}

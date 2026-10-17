@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Activity, Download, RefreshCw, UserRound, Sparkles, Monitor, FileOutput, Link2 } from "lucide-react";
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import type {
@@ -16,6 +16,8 @@ import {
   busyDialogProps,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+import { SETTINGS_SECTION_IDS, activeSettingsSection, type SettingsSectionId } from "@/lib/settings-sections";
 import { Button } from "@/components/ui/button";
 import BackendSelector from "./BackendSelector";
 import GenerationControls from "./GenerationControls";
@@ -45,6 +47,14 @@ import RuntimeDiagnosticsSection from "./RuntimeDiagnostics";
 
 const CHAT_CONTEXT_MODE_LABELS = { compact: "settings.compact", full: "settings.full" } as const;
 const THEME_LABELS = { light: "settings.light", dark: "settings.dark", auto: "settings.auto" } as const;
+const SETTINGS_NAV: readonly { readonly id: SettingsSectionId; readonly labelKey: MessageKey; readonly icon: typeof UserRound }[] = [
+  { id: "user", labelKey: "settings.user", icon: UserRound },
+  { id: "generation", labelKey: "settings.generation", icon: Sparkles },
+  { id: "runtime", labelKey: "settings.runtime", icon: Activity },
+  { id: "appearance", labelKey: "settings.appearance", icon: Monitor },
+  { id: "files", labelKey: "settings.files", icon: FileOutput },
+  { id: "connections", labelKey: "settings.connections", icon: Link2 },
+];
 const LANGUAGE_NAMES = { ko: "한국어", en: "English", "zh-CN": "简体中文" } as const;
 
 /** Language applies at once and is saved to the shared profile on the click itself, as settings.languageHint promises. */
@@ -65,6 +75,38 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
   const t = useT();
   const locale = useLocaleStore((s) => s.locale);
   const [providerSaving, setProviderSaving] = useState(false);
+  const paneRef = useRef<HTMLDivElement>(null);
+  const navRef = useRef<HTMLElement>(null);
+  const navButtons = useRef<Partial<Record<SettingsSectionId, HTMLButtonElement | null>>>({});
+  const [activeSection, setActiveSection] = useState<SettingsSectionId>("user");
+  const jumpTarget = useRef<number | null>(null);
+  const syncActiveSection = useCallback(() => {
+    const pane = paneRef.current;
+    if (pane === null) return;
+    if (jumpTarget.current !== null) {
+      if (Math.abs(pane.scrollTop - jumpTarget.current) > 2) return;
+      jumpTarget.current = null;
+    }
+    const paneTop = pane.getBoundingClientRect().top;
+    const offsets = SETTINGS_SECTION_IDS.flatMap((id) => {
+      const el = document.getElementById(`settings-${id}`);
+      return el === null ? [] : [{ id, top: el.getBoundingClientRect().top - paneTop }];
+    });
+    const atEnd = pane.scrollTop + pane.clientHeight >= pane.scrollHeight - 2;
+    const next = activeSettingsSection(offsets, atEnd);
+    if (next !== null) setActiveSection(next);
+  }, []);
+  function jumpToSection(id: SettingsSectionId) {
+    const pane = paneRef.current;
+    const target = document.getElementById(`settings-${id}`);
+    if (pane === null || target === null) return;
+    const top = target.getBoundingClientRect().top - pane.getBoundingClientRect().top + pane.scrollTop - 16;
+    const maxTop = pane.scrollHeight - pane.clientHeight;
+    const destination = Math.min(Math.max(0, top), maxTop);
+    jumpTarget.current = Math.abs(pane.scrollTop - destination) > 2 ? destination : null;
+    pane.scrollTo({ top: destination, behavior: "smooth" });
+    setActiveSection(id);
+  }
   const pushToast = useUIStore((s) => s.pushToast);
   const queryClient = useQueryClient();
   const [returnFocusTarget] = useState(() => typeof document !== "undefined" && document.activeElement instanceof HTMLElement ? document.activeElement : null);
@@ -105,6 +147,14 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
   const [vercelTokenSaving, setVercelTokenSaving] = useState(false);
   const [commandcodeKey, setCommandcodeKey] = useState("");
   const [commandcodeSaving, setCommandcodeSaving] = useState(false);
+
+  useEffect(() => {
+    const nav = navRef.current;
+    const button = navButtons.current[activeSection];
+    if (nav === null || button === null || button === undefined) return;
+    if (nav.scrollWidth <= nav.clientWidth) return;
+    nav.scrollTo({ left: button.offsetLeft - 12, behavior: "smooth" });
+  }, [activeSection]);
 
   async function saveCommandcodeKey(value: string | null) {
     setCommandcodeSaving(true);
@@ -270,10 +320,13 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
         </DialogHeader>
 
         <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-          <nav aria-label={t("settings.sections")} className="flex shrink-0 gap-1 overflow-x-auto border-b border-border bg-muted/30 p-3 md:w-44 md:flex-col md:border-b-0 md:border-r md:p-4">
-            {[{ id: "user", title: t("settings.user"), icon: UserRound }, { id: "generation", title: t("settings.generation"), icon: Sparkles }, { id: "runtime", title: t("settings.runtime"), icon: Activity }, { id: "appearance", title: t("settings.appearance"), icon: Monitor }, { id: "files", title: t("settings.files"), icon: FileOutput }, { id: "connections", title: t("settings.connections"), icon: Link2 }].map(({ id, title, icon: Icon }) => <button key={id} type="button" onClick={() => document.getElementById(`settings-${id}`)?.scrollIntoView({ block: "start", behavior: "smooth" })} className="flex min-h-10 shrink-0 items-center gap-2 rounded-lg px-3 text-left text-sm font-medium text-muted-foreground hover:bg-background hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><Icon className="h-4 w-4" aria-hidden="true" />{title}</button>)}
-          </nav>
-          <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain bg-muted/15 p-4 sm:p-6">
+          <div className="relative shrink-0 md:w-48 md:border-r md:border-border">
+            <nav ref={navRef} aria-label={t("settings.sections")} className="flex gap-1 overflow-x-auto border-b border-border bg-muted/30 p-3 pr-10 md:h-full md:flex-col md:overflow-x-visible md:overflow-y-auto md:border-b-0 md:p-4 md:pr-4">
+              {SETTINGS_NAV.map(({ id, labelKey, icon: Icon }) => <button key={id} ref={(node) => { navButtons.current[id] = node; }} type="button" aria-current={activeSection === id ? "true" : undefined} onClick={() => jumpToSection(id)} className={cn("flex min-h-10 shrink-0 items-center gap-2 whitespace-nowrap rounded-control px-3 text-left text-sm font-medium hover:bg-background hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", activeSection === id ? "bg-background text-foreground shadow-app-1" : "text-muted-foreground")}><Icon className="h-4 w-4 shrink-0" aria-hidden="true" /><span>{t(labelKey)}</span></button>)}
+            </nav>
+            <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-card to-transparent md:hidden" />
+          </div>
+          <div ref={paneRef} onScroll={syncActiveSection} onWheel={() => { jumpTarget.current = null; }} onTouchStart={() => { jumpTarget.current = null; }} onKeyDown={() => { jumpTarget.current = null; }} className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain bg-muted/15 p-4 sm:p-6">
         {!settings && settingsQuery.isError ? (
           <SettingsLoadError title={t("settings.loadFailed")} error={settingsQuery.error} retry={() => void settingsQuery.refetch()} pending={settingsQuery.isFetching} />
         ) : !settings ? (
@@ -320,7 +373,7 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
               <label className="flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
-                  className="h-4 w-4 accent-accent"
+                  className="h-6 w-6 shrink-0 accent-accent"
                   checked={settings.web_asset_search}
                   onChange={(e) => setSettings((draft) => draft ? { ...draft, web_asset_search: e.target.checked } : draft)}
                 />
@@ -614,7 +667,7 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
               <label className="flex items-center gap-2 pt-1 text-sm">
                 <input
                   type="checkbox"
-                  className="h-4 w-4 accent-accent"
+                  className="h-6 w-6 shrink-0 accent-accent"
                   checked={settings.publish_made_with_badge}
                   onChange={(e) => setSettings((draft) => draft ? { ...draft, publish_made_with_badge: e.target.checked } : draft)}
                 />
