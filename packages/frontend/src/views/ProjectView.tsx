@@ -1473,7 +1473,7 @@ export default function ProjectView() {
         )}
 
         {activeTab?.kind === "file" && (
-          <div className="flex min-h-0 min-w-0 flex-1 max-[1000px]:flex-col">
+          <div className="relative flex min-h-0 min-w-0 flex-1">
             <Canvas
               projectType={project.type}
               loading={projectQuery.isPending || filesQuery.isPending || artifactsQuery.isPending}

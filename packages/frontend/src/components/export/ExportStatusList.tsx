@@ -1,8 +1,6 @@
 import { useT } from "@/i18n/t";
-import { useState } from "react";
 import type { ExportJob } from "@/api/export";
 import ExportStatusRow from "./ExportStatusRow";
-import PlatformGuideDialog from "./PlatformGuideDialog";
 
 export default function ExportStatusList({
   jobs,
@@ -11,16 +9,17 @@ export default function ExportStatusList({
   onCancel,
   onDownload,
   onRequestFix,
+  onOpenGuide,
 }: {
   jobs: ExportJob[];
   onRetry?: (job: ExportJob) => void;
   onCancel?: (job: ExportJob) => void;
   onDownload?: (job: ExportJob) => void;
   onRequestFix?: (job: ExportJob) => void;
+  onOpenGuide: (job: ExportJob) => void;
   retryDisabled?: boolean;
 }) {
   const t = useT();
-  const [guideJob, setGuideJob] = useState<ExportJob | null>(null);
   if (jobs.length === 0) return null;
   return (
     <div className="px-2 py-1.5">
@@ -37,19 +36,12 @@ export default function ExportStatusList({
               onCancel,
               onDownload,
               onRequestFix,
-              onOpenGuide: setGuideJob,
+              onOpenGuide,
               busy: retryDisabled === true,
             }}
           />
         ))}
       </ul>
-      {guideJob !== null && (
-        <PlatformGuideDialog
-          format={guideJob.format}
-          open
-          onOpenChange={(open) => { if (!open) setGuideJob(null); }}
-        />
-      )}
     </div>
   );
 }
