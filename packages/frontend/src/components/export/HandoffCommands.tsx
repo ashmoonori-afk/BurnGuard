@@ -22,11 +22,11 @@ export default function HandoffCommands({
 
   return (
     <div className="ml-6 space-y-2 rounded-md bg-muted/70 p-2">
-      <div className="flex items-center gap-1.5 text-[10px] font-medium text-foreground">
+      <div className="flex items-center gap-1.5 text-xs font-medium text-foreground">
         <Terminal className="h-3 w-3" aria-hidden="true" />
         {t("export.handoff.continue")}
       </div>
-      <p className="text-pretty text-[10px] text-muted-foreground">
+      <p className="text-pretty text-xs text-muted-foreground">
         {t("export.handoff.commandHint", {
           path: continuation.prompt_file,
         })}
@@ -34,12 +34,12 @@ export default function HandoffCommands({
       {(["claude_code", "codex"] as const).map((name) => (
         <div key={name} className="space-y-1">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[10px] font-medium text-foreground">
+            <span className="text-xs font-medium text-foreground">
               {name === "claude_code" ? "Claude Code" : "Codex"}
             </span>
             <button
               type="button"
-              className="inline-flex min-h-8 items-center gap-1 rounded px-1.5 text-[10px] text-accent hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="inline-flex min-h-8 items-center gap-1 rounded px-1.5 text-xs text-accent hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label={t("export.handoff.copyCommand", {
                 name: name === "claude_code" ? "Claude Code" : "Codex",
               })}
@@ -53,13 +53,13 @@ export default function HandoffCommands({
                 : t("export.handoff.copy")}
             </button>
           </div>
-          <code className="block select-all overflow-x-auto whitespace-nowrap rounded bg-background px-2 py-1.5 text-[10px] text-foreground">
+          <code className="block select-all overflow-x-auto whitespace-nowrap rounded bg-background px-2 py-1.5 text-xs text-foreground">
             {continuation.commands[name]}
           </code>
         </div>
       ))}
       {copied === "failed" && (
-        <p role="alert" className="text-pretty text-[10px] text-destructive">
+        <p role="alert" className="text-pretty text-xs text-destructive">
           {t("export.handoff.copyFailed")}
         </p>
       )}

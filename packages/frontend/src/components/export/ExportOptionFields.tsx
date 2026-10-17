@@ -51,7 +51,7 @@ export default function ExportOptionFields({
       {fields.map((field) =>
         field.kind === "asset_base_url" ? (
           <div key={field.kind} className="space-y-1">
-            <label htmlFor="export-asset-base-url" className="text-[11px] font-medium text-foreground/80">
+            <label htmlFor="export-asset-base-url" className="text-xs font-medium text-foreground/80">
               {field.label}
             </label>
             <input
@@ -63,14 +63,14 @@ export default function ExportOptionFields({
               disabled={disabled}
               onChange={(event) => onChange({ ...values, assetBaseUrl: event.target.value })}
             />
-            {field.hints.map((hint) => <p key={hint} className="text-pretty break-keep text-[10px] text-muted-foreground">{hint}</p>)}
+            {field.hints.map((hint) => <p key={hint} className="text-pretty break-keep text-xs text-muted-foreground">{hint}</p>)}
           </div>
         ) : (
           <div key={field.kind} className="space-y-1">
-            <span className="text-[11px] font-medium text-foreground/80">{field.label}</span>
+            <span className="text-xs font-medium text-foreground/80">{field.label}</span>
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
-                <label htmlFor="export-slice-height" className="text-[10px] text-muted-foreground">{t("export.field.maxHeight")}</label>
+                <label htmlFor="export-slice-height" className="text-xs text-muted-foreground">{t("export.field.maxHeight")}</label>
                 <select
                   id="export-slice-height"
                   className={CONTROL_CLASS}
@@ -83,7 +83,7 @@ export default function ExportOptionFields({
                 </select>
               </div>
               <div className="space-y-1">
-                <label htmlFor="export-slice-format" className="text-[10px] text-muted-foreground">{t("export.field.imageFormat")}</label>
+                <label htmlFor="export-slice-format" className="text-xs text-muted-foreground">{t("export.field.imageFormat")}</label>
                 <select
                   id="export-slice-format"
                   className={CONTROL_CLASS}
@@ -98,7 +98,7 @@ export default function ExportOptionFields({
             </div>
             {values.sliceFormat === "jpeg" && (
               <div className="space-y-1">
-                <label htmlFor="export-jpeg-quality" className="text-[10px] text-muted-foreground">
+                <label htmlFor="export-jpeg-quality" className="text-xs text-muted-foreground">
                   {t("export.field.jpegQuality", { count: values.jpegQuality })}
                 </label>
                 <input
@@ -114,7 +114,7 @@ export default function ExportOptionFields({
                 />
               </div>
             )}
-            <p className="text-pretty break-keep text-[10px] text-muted-foreground">{field.hint}</p>
+            <p className="text-pretty break-keep text-xs text-muted-foreground">{field.hint}</p>
           </div>
         ),
       )}
