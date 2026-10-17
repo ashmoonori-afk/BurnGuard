@@ -67,7 +67,7 @@ export default function PermissionDialog({
               <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
                 {t("chat.permission.input")}
               </div>
-              <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px]">
+              <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-xs">
                 {formatInput(request.input)}
               </pre>
             </div>

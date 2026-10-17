@@ -126,7 +126,7 @@ export function TurnStanding({ disposition, turnId }: { disposition: TurnDisposi
     <div
       data-qa={disposition === "not_applied" ? "turn-not-applied" : "turn-standing"}
       {...(turnId === undefined ? {} : { "data-turn-id": turnId, "data-turn-disposition": disposition })}
-      className={`mt-1.5 flex items-start gap-1.5 text-[11px] leading-5 ${tone}`}
+      className={`mt-1.5 flex items-start gap-1.5 text-xs leading-5 ${tone}`}
     >
       <Icon className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
       <span>{t(key)}</span>
