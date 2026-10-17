@@ -96,9 +96,9 @@ export async function terminateOwnedProcess(
 
 export function closeOwnedProcess(
   owned: OwnedProcess<ProcessHandle>,
-  options: { readonly timeoutMs: number; readonly runCommand?: HostCommandRunner; readonly readReceipt?: ReceiptReader; readonly now?: () => number },
+  options: { readonly timeoutMs: number; readonly requireTermination?: boolean; readonly runCommand?: HostCommandRunner; readonly readReceipt?: ReceiptReader; readonly now?: () => number },
 ): Promise<void> {
-  if (owned.ownership.kind === "posix-process") return closeOwnedProcessTree(owned.ownership.pid);
+  if (owned.ownership.kind === "posix-process") return closeOwnedProcessTree(owned.ownership.pid, { requireTermination: options.requireTermination });
   const ownership = owned.ownership;
   const lifecycle = bindWindowsProcess(ownership, owned.proc);
   lifecycle.control ??= controlWindowsJob({ proc: owned.proc, ownership }, options);
@@ -207,7 +207,7 @@ function disposeWindowsOwnership(ownership: WindowsJobOwnership): Promise<void> 
   return lifecycle.disposal;
 }
 
-async function runHostCommand(command: readonly string[], timeoutMs: number) {
+export async function runHostCommand(command: readonly string[], timeoutMs: number) {
   const child = Bun.spawn([...command], { stdin: "ignore", stdout: "pipe", stderr: "pipe" });
   let timer: ReturnType<typeof setTimeout> | undefined;
   timer = setTimeout(() => child.kill(), timeoutMs);
@@ -219,6 +219,6 @@ async function runHostCommand(command: readonly string[], timeoutMs: number) {
   }
 }
 
-async function readReceiptFile(receiptPath: string): Promise<string> {
+export async function readReceiptFile(receiptPath: string): Promise<string> {
   return readFile(receiptPath, "utf8");
 }

@@ -45,6 +45,8 @@ export interface AdapterRunInput {
   onEvent: (event: NormalizedEvent) => Promise<void>;
   /** Proof of life that is not an event: it resets the inactivity watchdog and is never persisted or published. */
   onProgress?: () => void;
+  /** Persist ownership synchronously; returned callback clears it only after termination proof. */
+  onProcessStarted?: (owned: import("./owned-process").OwnedProcess<{ readonly pid: number; readonly exited: Promise<number>; kill: () => void }>) => () => void;
   onStderr?: (line: string) => Promise<void>;
   /**
    * Register a handler that will be invoked whenever the session's

@@ -40,7 +40,7 @@ export function ownedProcessSpawnOptions(): { readonly detached: boolean } {
   return { detached: process.platform !== "win32" };
 }
 
-export async function closeOwnedProcessTree(processId: number): Promise<void> {
+export async function closeOwnedProcessTree(processId: number, options: { readonly requireTermination?: boolean; readonly verifyOwnership?: () => boolean } = {}): Promise<void> {
   if (process.platform === "win32") throw new OwnedProcessTreeCleanupError(processId);
   // Snapshot before signalling any ancestor: detached tools have their own
   // process group and lose their ownership link when the CLI exits. Do not
@@ -48,12 +48,16 @@ export async function closeOwnedProcessTree(processId: number): Promise<void> {
   // Without a snapshot (no `ps` on the host) the group kill below still reaps the owned group.
   let descendants: number[];
   try { descendants = snapshotDescendants(processId); }
-  catch {
+  catch (error) {
+    if (options.requireTermination) throw error;
     console.warn(`[adapter] cannot snapshot owned process tree ${processId}`);
     descendants = [];
   }
-  for (const pid of descendants.reverse()) killIfPresent(pid);
-  killIfPresent(-processId);
+  // Snapshotting invokes ps. Recheck the durable birth identity afterwards,
+  // before any signal, so a root replaced during that probe is never killed.
+  if (options.verifyOwnership !== undefined && !options.verifyOwnership()) return;
+  for (const pid of descendants.reverse()) killIfPresent(pid, options.requireTermination);
+  killIfPresent(-processId, options.requireTermination);
   // Real elapsed time, not scheduler ticks: the previous setImmediate loop
   // drained in a couple of milliseconds and reported failure long before a
   // signalled process group had a chance to be reaped.
@@ -62,7 +66,10 @@ export async function closeOwnedProcessTree(processId: number): Promise<void> {
     if (!isProcessGroupPresent(processId) && !descendants.some(isProcessPresent)) return;
     await new Promise<void>((resolve) => setTimeout(resolve, CLEANUP_POLL_MS));
   }
-  if (isProcessGroupPresent(processId) || descendants.some(isProcessPresent)) warnCleanupIncomplete(processId);
+  if (isProcessGroupPresent(processId) || descendants.some(isProcessPresent)) {
+    if (options.requireTermination) throw new OwnedProcessTreeCleanupError(processId);
+    warnCleanupIncomplete(processId);
+  }
 }
 
 function snapshotDescendants(processId: number): number[] {
@@ -86,12 +93,13 @@ function snapshotDescendants(processId: number): number[] {
   return [...owned];
 }
 
-function killIfPresent(pid: number): void {
+function killIfPresent(pid: number, requireTermination = false): void {
   try { process.kill(pid, "SIGKILL"); }
   catch (error) {
     if (error instanceof Error && "code" in error) {
       if (error.code === "ESRCH") return;
       if (error.code === "EPERM") {
+        if (requireTermination) throw error;
         console.warn(`[adapter] cannot signal process ${pid}: EPERM`);
         return;
       }

@@ -184,7 +184,7 @@ export async function runCodexTurn(
     // A watcher callback can fail while stdout is silent. Treat that failure as a reader failure
     // so settlement kills the owned writer before waiting for its pipes, not after natural exit.
     const drained = Promise.all(readers).then(() => undefined);
-    exitCode = await settleProcessStreams(owned, [...readers, Promise.race([drained, deliveryFailed.promise])], input.signal);
+    exitCode = await settleProcessStreams(owned, [...readers, Promise.race([drained, deliveryFailed.promise])], input.signal, input.onProcessStarted);
     closeIntake();
     await queue;
   } catch (error) {
