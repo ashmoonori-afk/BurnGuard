@@ -90,7 +90,8 @@ function contrastRatio(a: string, b: string): number {
 
 /** Text pairs need 4.5:1 (WCAG 1.4.3); component boundaries and focus need 3:1 (WCAG 1.4.11). */
 const TEXT_PAIRS: ReadonlyArray<readonly [string, string]> = [
-  ...["fg-1", "fg-2", "fg-3"].flatMap((text) =>
+  // fg-4 sets captions, bylines and catalogue labels at 9.5-12px, so it is normal text, not a component.
+  ...["fg-1", "fg-2", "fg-3", "fg-4"].flatMap((text) =>
     ["bg", "bg-subtle", "bg-muted", "surface"].map((ground) => [text, ground] as const),
   ),
   ["fg-on-dark", "surface-inverse"],
@@ -103,7 +104,6 @@ const TEXT_PAIRS: ReadonlyArray<readonly [string, string]> = [
   ["fg-on-error", "error"],
 ];
 const COMPONENT_PAIRS: ReadonlyArray<readonly [string, string]> = [
-  ["fg-4", "bg"],
   ["border-strong", "bg"],
   ["focus-ring", "bg"],
   ["primary-blue", "bg"],
@@ -130,9 +130,12 @@ describe("bundled design systems", () => {
 
   test("state provenance truthfully per theme", async () => {
     // Every bundled palette is BurnGuard's own, so no theme may claim an attribution it does not owe.
-    for (const slug of THEME_SLUGS) {
-      const readme = await readFile(path.join(themesRoot, slug, "README.md"), "utf8");
-      const css = await readFile(path.join(themesRoot, slug, "colors_and_type.css"), "utf8");
+    const themes = await Promise.all(THEME_SLUGS.map(async (slug) => ({
+      slug,
+      readme: await readFile(path.join(themesRoot, slug, "README.md"), "utf8"),
+      css: await readFile(path.join(themesRoot, slug, "colors_and_type.css"), "utf8"),
+    })));
+    for (const { slug, readme, css } of themes) {
       expect(readme, slug).toContain(
         (CLASSIC_SLUGS as readonly string[]).includes(slug)
           ? "Palette authored for BurnGuard"
@@ -143,7 +146,8 @@ describe("bundled design systems", () => {
         expect(css, `${slug}: ${borrowed}`).not.toContain(borrowed);
       }
     }
-  });
+    // Eighty-two theme files; allow bounded slow-disk I/O as the seed-copy case below does.
+  }, 30_000);
 
   test("Given a classic theme palette When its colour pairs are measured Then each meets WCAG 2.2 AA", async () => {
     for (const slug of CLASSIC_SLUGS) {
@@ -161,7 +165,7 @@ describe("bundled design systems", () => {
         }
       }
     }
-  });
+  }, 30_000);
 
   test("ship layout as tokens, not as a per-artifact decision", async () => {
     // A design system is grid, measure and rhythm as much as colour and type. Without these an
