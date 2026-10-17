@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { ArrowLeft } from "lucide-react";
 import { useT, type MessageKey } from "@/i18n/t";
 import {
@@ -33,6 +33,7 @@ const HINT_KEY: Record<ExportDetailsSection, MessageKey> = {
 export default function ExportDetailsDialog({
   section,
   onClose,
+  returnFocusRef,
   projectId,
   options,
   values,
@@ -47,6 +48,7 @@ export default function ExportDetailsDialog({
 }: {
   readonly section: ExportDetailsSection | null;
   readonly onClose: () => void;
+  readonly returnFocusRef: RefObject<HTMLButtonElement>;
   readonly projectId: string;
   readonly options: readonly ExportMenuOption[];
   readonly values: ExportOptionValues;
@@ -71,7 +73,13 @@ export default function ExportDetailsDialog({
   if (section === null) return null;
   return (
     <Dialog open onOpenChange={(open) => { if (!open) { setGuideJob(null); guideOpenerRef.current = null; onClose(); } }}>
-      <DialogContent className="flex max-h-[min(640px,calc(100dvh-2rem))] max-w-lg flex-col gap-4 overflow-hidden">
+      <DialogContent
+        className="flex max-h-[min(640px,calc(100dvh-2rem))] max-w-lg flex-col gap-4 overflow-hidden"
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          returnFocusRef.current?.focus({ preventScroll: true });
+        }}
+      >
         {guide !== null && <button ref={backRef} type="button" onClick={() => setGuideJob(null)} className="inline-flex min-h-9 shrink-0 items-center gap-2 self-start rounded-control px-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"><ArrowLeft className="h-4 w-4" aria-hidden="true" />{t("export.guide.back")}</button>}
         <DialogHeader className="shrink-0 pr-8">
           <DialogTitle>{guide?.title ?? t(TITLE_KEY[section])}</DialogTitle>
