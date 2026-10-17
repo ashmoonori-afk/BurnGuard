@@ -64,7 +64,7 @@ export default function DrawPanel({
                 "flex min-h-12 flex-col items-center justify-center gap-1 rounded-control border px-2 py-2 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                 tool === item.id
                   ? "border-accent bg-accent/10 font-medium text-accent"
-                  : "border-border text-muted-foreground hover:bg-muted hover:text-foreground",
+                  : "border-input text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
             >
               <item.icon className="h-4 w-4" aria-hidden="true" />
@@ -88,17 +88,14 @@ export default function DrawPanel({
                 onClick={() => onChangeColor(c)}
                 title={c}
                 aria-label={t("modes.draw.colorLabel", { color: c })}
-                className="relative flex h-9 w-9 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background max-[900px]:h-11 max-[900px]:w-11"
+                style={{ backgroundColor: c }}
+                className={cn(
+                  "relative h-9 w-9 rounded-full border-2 border-input focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background max-[900px]:h-11 max-[900px]:w-11",
+                  selected && "ring-2 ring-foreground ring-offset-2 ring-offset-background",
+                )}
               >
-                <span
-                  className={cn(
-                    "block h-7 w-7 rounded-full border border-foreground/40",
-                    selected && "ring-2 ring-foreground ring-offset-2 ring-offset-background",
-                  )}
-                  style={{ backgroundColor: c }}
-                />
                 {selected && (
-                  <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-foreground text-background">
+                  <span className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-foreground text-background">
                     <Check className="h-3 w-3" aria-hidden="true" />
                   </span>
                 )}
@@ -123,7 +120,7 @@ export default function DrawPanel({
                 "flex min-h-12 flex-col items-center justify-center gap-1 rounded-control border px-2 py-2 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                 strokeWidth === w.value
                   ? "border-accent bg-accent/10 font-medium text-accent"
-                  : "border-border text-muted-foreground hover:bg-muted hover:text-foreground",
+                  : "border-input text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
             >
               <span className="inline-block rounded-full bg-current" style={{ width: w.value * 2, height: w.value * 2 }} aria-hidden="true" />

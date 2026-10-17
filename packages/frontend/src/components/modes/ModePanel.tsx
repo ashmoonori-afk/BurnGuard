@@ -143,7 +143,7 @@ export default function ModePanel({
           onClose={onClose}
         />
       )}
-      {mode === "quality" && <><ModePanelHeader title={t("canvas.toolbar.quality")} onClose={onClose} /><Tabs defaultValue="quality" className="flex min-h-0 flex-1 flex-col">
+      {mode === "quality" && <><ModePanelHeader title={t("modes.panel.review")} onClose={onClose} /><Tabs defaultValue="quality" className="flex min-h-0 flex-1 flex-col">
         <TabsList aria-label={t("modes.panel.review")} className="m-2 h-auto shrink-0"><TabsTrigger value="quality" className="min-h-11 flex-1">{t("modes.panel.quality")}</TabsTrigger><TabsTrigger value="ux" className="min-h-11 flex-1">{t("modes.panel.ux")}</TabsTrigger></TabsList>
         <TabsContent value="quality" className="min-h-0 flex-1 data-[state=active]:flex data-[state=active]:flex-col"><QualityPanel quality={quality} extra={<PhotoPlacementsSection projectId={projectId} />} /></TabsContent>
         <TabsContent value="ux" className="min-h-0 flex-1 data-[state=active]:flex data-[state=active]:flex-col"><UxReviewPanel key={`${uxReview.projectId}:${uxReview.relPath}:${uxReview.digest}:${uxReview.revision}`} binding={uxReview} /></TabsContent>
