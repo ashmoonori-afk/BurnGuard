@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowUpRight, RefreshCw } from "lucide-react";
+import { ArrowUpRight, ChevronRight, RefreshCw } from "lucide-react";
 import type {
   RuntimeBackendDiagnostic,
   RuntimeCapability,
@@ -124,17 +124,23 @@ function BackendDiagnosticCard({ backend }: { readonly backend: RuntimeBackendDi
         <h3 className="font-medium">{backendLabel(backend.id)}</h3>
         <Badge variant={backend.cli.status === "detected" ? "accent" : "outline"}>{t(backend.cli.status === "detected" ? "settings.runtimeDetected" : "settings.runtimeMissing")}</Badge>
       </div>
-      <dl className="grid grid-cols-[auto,minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
-        <dt className="text-muted-foreground">{t("settings.runtimeVersion")}</dt>
-        <dd className="truncate font-mono">{backend.cli.version ?? t("settings.runtimeNotReported")}</dd>
-        <dt className="text-muted-foreground">{t("settings.runtimeTransport")}</dt>
-        <dd data-prompt-transport={backend.prompt_transport} className="font-mono">{t(backend.prompt_transport === "stdin" ? "settings.runtimeTransportStdin" : "settings.runtimeTransportFile")}</dd>
-        <dt className="text-muted-foreground">{t("settings.runtimeModels")}</dt>
-        <dd data-model-source={backend.model_catalog.source}>{modelFreshness(backend, t, localeTag(locale))}</dd>
-      </dl>
-      <div className="flex flex-wrap gap-1.5">
-        {backend.capabilities.map((capability) => <Badge key={capability} data-capability={capability} variant="secondary">{t(CAPABILITY_KEYS[capability])}</Badge>)}
-      </div>
+      <details className="group rounded-control text-xs">
+        <summary className="inline-flex min-h-8 cursor-pointer select-none items-center gap-1.5 rounded-control px-1 font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" aria-hidden="true" />
+          {t("settings.runtimeTechnical")}
+        </summary>
+        <dl className="mt-2 grid grid-cols-[auto,minmax(0,1fr)] gap-x-3 gap-y-1.5">
+          <dt className="text-muted-foreground">{t("settings.runtimeVersion")}</dt>
+          <dd className="truncate font-mono">{backend.cli.version ?? t("settings.runtimeNotReported")}</dd>
+          <dt className="text-muted-foreground">{t("settings.runtimeTransport")}</dt>
+          <dd data-prompt-transport={backend.prompt_transport} className="font-mono">{t(backend.prompt_transport === "stdin" ? "settings.runtimeTransportStdin" : "settings.runtimeTransportFile")}</dd>
+          <dt className="text-muted-foreground">{t("settings.runtimeModels")}</dt>
+          <dd data-model-source={backend.model_catalog.source}>{modelFreshness(backend, t, localeTag(locale))}</dd>
+        </dl>
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {backend.capabilities.map((capability) => <Badge key={capability} data-capability={capability} variant="secondary">{t(CAPABILITY_KEYS[capability])}</Badge>)}
+        </div>
+      </details>
     </article>
   );
 }
@@ -155,7 +161,7 @@ function FailureRow({
     <article data-failure-stage={failure.stage} data-failure-code={failure.code} className="flex flex-col gap-3 rounded-xl border border-border p-4 sm:flex-row sm:items-center">
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium" title={failure.project_name}>{failure.project_name}</p>
-        <p className="mt-1 text-xs text-muted-foreground">{t(`settings.runtimeStage.${failure.stage}`)} · <code>{failure.code}</code></p>
+        <p className="mt-1 text-xs text-muted-foreground">{t(`settings.runtimeStage.${failure.stage}`)}</p>
       </div>
       {resumed
         ? <Button asChild type="button" size="sm" variant="outline"><a data-resume-project-id={failure.project_id} href={`/projects/${encodeURIComponent(failure.project_id)}`}>{t("settings.runtimeContinue")}<ArrowUpRight className="ml-1.5 h-3.5 w-3.5" aria-hidden="true" /></a></Button>
