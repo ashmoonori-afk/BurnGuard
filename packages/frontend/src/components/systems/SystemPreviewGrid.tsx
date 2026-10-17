@@ -110,10 +110,11 @@ export default function SystemPreviewGrid({
     <div className="px-4 py-6 space-y-8 sm:px-8">
       {groups.map((grp, index) => (
         <section key={grp.group} className="grid gap-4 border-t border-border pt-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,4fr)]">
-          <h2 className="flex flex-col items-start gap-2 text-sm font-semibold">
-            <span className="font-mono text-xs text-muted-foreground">{String(index + 1).padStart(2, "0")}</span>
-            {grp.group}<span className="text-xs font-medium text-muted-foreground">{grp.items.length}</span>
-          </h2>
+          <div className="space-y-1">
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{String(index + 1).padStart(2, "0")}</p>
+            <h2 className="text-base font-semibold">{grp.group}</h2>
+            <p className="text-sm text-muted-foreground">{t("system.preview.count", { count: grp.items.length })}</p>
+          </div>
           <div className={`grid min-w-0 grid-cols-1 gap-4 ${grp.items[0]?.path === WEBSITE_PREVIEW_PATH || grp.items[0]?.path === "preview/slides.html" ? "" : "lg:grid-cols-2"}`}>
             {grp.items.map((it) => (
               <article
@@ -131,13 +132,14 @@ export default function SystemPreviewGrid({
                 </div>
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <div className="text-sm font-medium">{it.title}</div>
+                    <div className="text-sm font-medium first-letter:uppercase">{it.title}</div>
                   </div>
                   {grp.group === t("system.colors") && onEditColors ? (
                     <Button
                       variant="ghost"
                       size="sm"
                       className="h-9 shrink-0 px-3 text-xs"
+                      aria-label={t("system.editColor", { name: it.title })}
                       onClick={onEditColors}
                     >
                       <Pencil className="h-3 w-3" />

@@ -6,6 +6,7 @@ import { useUIStore, type Toast } from "../src/state/uiStore";
 import { ApiError } from "../src/api/client";
 import { apiErrorCopy } from "../src/lib/error-copy";
 import { t } from "../src/i18n/t";
+import { toastToneStyle } from "../src/components/errors/toast-tone";
 
 // The server renderer reads the store's initial snapshot, so the seed goes there and is reset afterwards.
 function render(toasts: readonly Toast[]): string {
@@ -45,5 +46,19 @@ describe("toast container (UX-33, UX-23)", () => {
   test("Given a toast with an action When rendered Then the action label is a button", () => {
     const html = render([{ id: "1", title: "T", tone: "success", action: { label: "Open", onSelect() {} } }]);
     expect(html).toMatch(/<button[^>]*>Open<\/button>/);
+  });
+
+  test("Given each tone When rendered Then the card carries the tone and a hidden icon", () => {
+    for (const tone of ["info", "success", "warn", "error"] as const) {
+      const html = render([{ id: tone, title: "T", tone }]);
+      expect(html).toContain(`data-tone="${tone}"`);
+      expect(html).toContain('aria-hidden="true"');
+    }
+  });
+
+  test("Given the success and warning tones When styled Then the icon uses the text-safe tokens, not the fill tokens", () => {
+    expect(toastToneStyle("success").iconColor).toBe("text-success-text");
+    expect(toastToneStyle("warn").iconColor).toBe("text-warning-text");
+    expect(toastToneStyle(undefined)).toBe(toastToneStyle("info"));
   });
 });

@@ -76,6 +76,8 @@ jobs:
           packages/backend/tests/design-system-starter.test.ts
           packages/frontend/tests/canvas-edit-review.test.ts
           packages/frontend/tests/revision-thumbnails.test.ts
+          packages/frontend/tests/settings-sections.test.ts
+          packages/frontend/tests/layout-notes.test.ts
           packages/backend/tests/design-system-starter-entrypoint.test.ts
           packages/backend/tests/design-system-layout-reference.test.ts
           packages/backend/tests/design-system-conformance.test.ts
