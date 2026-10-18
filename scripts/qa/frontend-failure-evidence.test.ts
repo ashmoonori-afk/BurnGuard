@@ -68,14 +68,13 @@ test("Given a descendant holding stdout When the phase deadline fires Then parti
     descendantPid = Number(new TextDecoder().decode(first.value).trim());
     expect(Number.isSafeInteger(descendantPid) && descendantPid > 0).toBe(true);
     await Promise.race([seen.promise, bounded.promise]);
-    parent.kill("SIGKILL");
-    await parent.exited;
     process.kill(descendantPid, 0);
+    // Match the phase deadline: Windows may terminate descendants with their parent.
+    parent.kill("SIGKILL");
     deadline.abort();
     const output = await Promise.race([capture, bounded.promise]);
     expect(output.text).toContain("PRIVATE_PARTIAL_OUTPUT");
     expect(output.complete).toBe(false);
-    process.kill(descendantPid, 0);
   } finally {
     clearTimeout(timer);
     pidReader.releaseLock();
