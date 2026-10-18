@@ -94,6 +94,17 @@ async function fixture() {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   const page = await context.newPage();
   page.setDefaultTimeout(5000);
+  const network: { kind: string; at: number; resource: string; status?: number; code?: string }[] = [];
+  const record = (entry: Omit<(typeof network)[number], "at">) => {
+    if (network.length < 80) network.push({ ...entry, at: Date.now() });
+  };
+  const resource = (url: string) => new URL(url).pathname.split("/").at(-1) ?? "";
+  page.on("request", (request) => record({ kind: "request", resource: resource(request.url()) }));
+  page.on("response", (response) => record({ kind: "response", resource: resource(response.url()), status: response.status() }));
+  page.on("requestfailed", (request) => record({
+    kind: "request-failed", resource: resource(request.url()),
+    code: request.failure()?.errorText.match(/^net::[A-Z_]+$/)?.[0] ?? "other",
+  }));
   const entry = () => `${origin}/projects/${projectId}#bg-bootstrap:${secret}`;
   return {
     page, context, requests, projectId, sessionId, entry,
@@ -109,11 +120,21 @@ async function fixture() {
     async restart() {
       const oldPid = server.pid;
       await server.stop();
+      record({ kind: "server-exited", resource: "server" });
       generation += 1;
       capability = generateLaunchCapability();
       secret = generateLaunchCapability();
       server = await startServer(Number(new URL(origin).port), capability, secret, requests, generation);
+      record({ kind: "server-ready", resource: "server" });
       expect(server.pid).not.toBe(oldPid);
+    },
+    async diagnose() {
+      const state = await page.evaluate(() => globalThis.launchAuthorityTest.state());
+      console.error(JSON.stringify({
+        event: "authority_restart_failure", platform: process.platform, generation,
+        state: { ...state, draft: undefined }, network,
+        requests: requests.map(({ generation, method, path, status }) => ({ generation, method, resource: resource(`http://fixture${path}`), status })),
+      }));
     },
     async close() {
       server.releaseSnapshot();
@@ -187,6 +208,9 @@ describe("expired launch authority with real middleware and backend processes", 
       expect(await f.page.evaluate(() => location.pathname)).toBe(`/projects/${f.projectId}`);
       expect(f.requests.filter((request) => request.generation === 2 && request.path === `/api/projects/${f.projectId}` && request.status === 200)).toHaveLength(1);
       expect(f.requests.some((request) => request.generation === 2 && request.path === `/api/sessions/${f.sessionId}/events` && request.status === 200)).toBe(true);
+    } catch (error) {
+      try { await f.diagnose(); }
+      finally { throw error; }
     } finally { await f.close(); }
   });
 
@@ -239,6 +263,9 @@ describe("expired launch authority with real middleware and backend processes", 
       expect(f.requests.filter((request) => request.generation === 2 && request.path.endsWith("/stream")).map(({ status }) => status)).toEqual([403]);
       expect(f.requests.filter((request) => request.generation === 2 && request.path.endsWith("/snapshot")).map(({ status }) => status)).toEqual([403]);
       expect(state).toMatchObject({ expired: true, banner: true, reason: "authority", draft: "F08 unsent restart draft", sources: 1, snapshotNetworkFailures: 0 });
+    } catch (error) {
+      try { await f.diagnose(); }
+      finally { throw error; }
     } finally { await f.close(); }
   });
 });
