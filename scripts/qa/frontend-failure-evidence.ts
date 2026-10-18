@@ -50,6 +50,8 @@ export function testRecords(text: string): readonly { readonly file: string; rea
   let file = "";
   const records: { file: string; status: string; name: string }[] = [];
   for (const line of text.split("\n")) {
+    // Bun's final recap repeats records without their original file headers.
+    if (/^\d+ tests? (?:skipped|failed):$/.test(line)) file = "";
     const header = line.replaceAll("\\", "/").replace(/^\.\//, "");
     if (/^packages\/frontend\/tests\/.*\.test\.tsx?:$/.test(header)) file = header.slice(0, -1);
     const match = /^\((pass|fail|skip|todo)\) (.*?)(?: \[\d+(?:\.\d+)?m?s\])?$/.exec(line);

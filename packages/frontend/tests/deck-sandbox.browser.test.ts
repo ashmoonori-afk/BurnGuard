@@ -4,6 +4,7 @@ import { Hono } from "../../backend/node_modules/hono";
 import { createRequestAuthority } from "../../backend/src/security/request-authority";
 import { DECK_STAGE_JS } from "../../backend/src/runtime/deck-stage";
 import { launchChromiumViaNode } from "../../backend/src/services/chromium-node-launch";
+import { observeDeckEvents } from "./helpers/deck-event-trace";
 
 declare global { var deckTest: {
   bootstrapApiAuthority(): Promise<void>;
@@ -73,9 +74,11 @@ async function withBrowser(action: (page: Page, base: string, requests: { path: 
   });
   server.reload({ fetch: async request => { const response = await app.fetch(request); if (new URL(request.url).pathname !== "/api/bootstrap") requests.push({ path: new URL(request.url).pathname, capability: request.headers.get("x-burnguard-capability"), status: response.status }); return response; } });
   let context: BrowserContext | undefined;
+  let trace: readonly string[] = [];
   try {
     // Use the shipped Node browser path for iframe/fullscreen lifecycle coverage.
     context = await browser.newContext();
+    trace = await observeDeckEvents(context);
     const page = await context.newPage();
     page.setDefaultTimeout(5000);
     const browserErrors: string[] = [];
@@ -92,6 +95,9 @@ async function withBrowser(action: (page: Page, base: string, requests: { path: 
     });
     await action(page, base, requests, server);
     expect(browserErrors).toEqual([]);
+  } catch (error) {
+    console.error(JSON.stringify({ event: "deck_failure_trace", browser: browser.version(), trace }));
+    throw error;
   } finally {
     try { await context?.close(); }
     finally { await server.stop(true); }
