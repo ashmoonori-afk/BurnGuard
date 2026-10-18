@@ -62,6 +62,7 @@ test("Given repeated errors in one disconnect cycle When the authorized snapshot
     await subscribed.promise;
     const previous = stateRef.current;
     report({ kind: "connection", state: "connecting", message: "" });
+    expect(snapshots).toBe(1);
     report({ kind: "connection", state: "closed", message: "" });
     checking.resolve();
     await closed.promise;
@@ -70,13 +71,14 @@ test("Given repeated errors in one disconnect cycle When the authorized snapshot
     expect(flags.at(-1)).toBe("error:true");
     expect(flags.at(-2)).toBe("reconnecting:false");
   } finally {
+    checking.resolve();
     stop();
   }
 });
 
 test("Given bootstrap denies a reconnect When retrying Then no new stream is opened", async () => {
   let subscriptions = 0;
-  globalThis.fetch = mock(async () => Response.json({ error: { code: "forbidden", message: "private" } }, { status: 403 })) as typeof fetch;
+  globalThis.fetch = Object.assign(mock(async () => Response.json({ error: { code: "forbidden", message: "private" } }, { status: 403 })), { preconnect: originalFetch.preconnect });
   await expect(retrySessionStream(() => { subscriptions += 1; })).rejects.toMatchObject({ kind: "denied" });
   expect(subscriptions).toBe(0);
 });
@@ -119,7 +121,7 @@ test("Given an open stream whose resync snapshot fails When the stream opens The
 test("Given a launch capability the backend no longer accepts When the stream is retried Then the snapshot is requested again with a fresh capability and the error clears without a reload", async () => {
   let bootstraps = 0;
   const snapshotCapabilities: (string | null)[] = [];
-  globalThis.fetch = mock(async (input: RequestInfo | URL, init?: RequestInit) => {
+  globalThis.fetch = Object.assign(mock(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     if (url === "/api/bootstrap") {
       bootstraps += 1;
@@ -134,7 +136,7 @@ test("Given a launch capability the backend no longer accepts When the stream is
     }
     if (url.endsWith("/events")) return Response.json({ data: [] });
     return Response.json({ error: { code: "not_found", message: "missing" } }, { status: 404 });
-  }) as typeof fetch;
+  }), { preconnect: originalFetch.preconnect });
   class Source {
     static CLOSED = 2;
     readyState = 1;

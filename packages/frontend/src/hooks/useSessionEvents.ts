@@ -99,8 +99,12 @@ export function openSessionStream(sessionId: string, stateRef: StateRef, handler
       }, (report) => {
         if (!active) return;
         if (report.kind === "connection") {
-          checkDisconnect();
-          if (report.state === "closed") { handlers.setReconnecting(false); handlers.setError(true); } else handlers.setReconnecting(true);
+          if (report.state === "closed") {
+            // A temporary outage must not consume the one authority check before a restarted server can answer.
+            checkDisconnect();
+            handlers.setReconnecting(false);
+            handlers.setError(true);
+          } else handlers.setReconnecting(true);
           return;
         }
         // A bad payload leaves the EventSource healthy: flag the view stale and resync instead of failing closed.

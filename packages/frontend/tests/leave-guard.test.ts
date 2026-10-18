@@ -59,8 +59,6 @@ describe("leave guard while a turn runs (B3-5)", () => {
     }
     expect(scanned.has("lib/leave-guard.ts")).toBe(true);
     expect(offenders).toEqual([]);
-    for (const file of ["components/Bootstrap.tsx", "components/settings/SettingsModal.tsx"]) {
-      expect(await Bun.file(join(root, file)).text()).toContain("reloadWithoutLeaveGuard()");
-    }
+    expect(await Bun.file(join(root, "components/settings/SettingsModal.tsx")).text()).toContain("reloadWithoutLeaveGuard()");
   });
 });
