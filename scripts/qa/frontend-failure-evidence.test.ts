@@ -97,10 +97,19 @@ test("Given POSIX and Windows runner headers When reading results Then names ret
     ".\\packages\\frontend\\tests\\two.test.ts:",
     "(skip) group > two",
     "(fail) group > three [12.00ms]",
+    "packages/frontend/tests/theme-tokens.test.ts:",
+    "(pass) tokens [1.00ms]",
+    "",
+    "1 tests skipped:",
+    "(skip) group > two",
+    "",
+    "1 tests failed:",
+    "(fail) group > three [12.00ms]",
   ].join("\n"))).toEqual([
     { file: "packages/frontend/tests/one.test.ts", status: "pass", name: "group > one" },
     { file: "packages/frontend/tests/two.test.ts", status: "skip", name: "group > two" },
     { file: "packages/frontend/tests/two.test.ts", status: "fail", name: "group > three" },
+    { file: "packages/frontend/tests/theme-tokens.test.ts", status: "pass", name: "tokens" },
   ]);
 });
 
