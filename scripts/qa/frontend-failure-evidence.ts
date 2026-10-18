@@ -19,11 +19,18 @@ export async function captureOutput(stream: ReadableStream<Uint8Array>): Promise
   const chunks: Uint8Array[] = [];
   let bytes = 0;
   let retained = 0;
-  for await (const chunk of stream) {
-    bytes += chunk.length;
-    const kept = chunk.subarray(0, Math.max(0, OUTPUT_LIMIT - retained));
-    if (kept.length > 0) chunks.push(kept);
-    retained += kept.length;
+  const reader = stream.getReader();
+  try {
+    for (;;) {
+      const { done, value: chunk } = await reader.read();
+      if (done) break;
+      bytes += chunk.length;
+      const kept = chunk.subarray(0, Math.max(0, OUTPUT_LIMIT - retained));
+      if (kept.length > 0) chunks.push(kept);
+      retained += kept.length;
+    }
+  } finally {
+    reader.releaseLock();
   }
   return { text: Buffer.concat(chunks).toString("utf8"), bytes, truncated: retained < bytes };
 }

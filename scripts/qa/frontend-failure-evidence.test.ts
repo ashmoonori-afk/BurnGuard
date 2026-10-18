@@ -33,6 +33,18 @@ test("Given oversized output When capturing Then retained bytes are capped and t
   expect({ retained: output.text.length, bytes: output.bytes, truncated: output.truncated, drained }).toEqual({
     retained: 4 * 1024 * 1024, bytes: 4 * 1024 * 1024 + 8, truncated: true, drained: true,
   });
+  expect(stream.locked).toBe(false);
+});
+
+test("Given a failed output stream When capturing Then the original failure propagates and the reader is released", async () => {
+  const failure = new Error("output_failed");
+  const stream = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      controller.error(failure);
+    },
+  });
+  await expect(captureOutput(stream)).rejects.toBe(failure);
+  expect(stream.locked).toBe(false);
 });
 
 test("Given POSIX and Windows runner headers When reading results Then names retain their file and skip status", () => {
