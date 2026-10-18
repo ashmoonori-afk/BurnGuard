@@ -12,14 +12,23 @@ export interface CapturedOutput {
   readonly text: string;
   readonly bytes: number;
   readonly truncated: boolean;
+  readonly complete: boolean;
 }
 
 /** Drain even after the byte cap so evidence collection cannot deadlock the test process. */
-export async function captureOutput(stream: ReadableStream<Uint8Array>): Promise<CapturedOutput> {
+export async function captureOutput(stream: ReadableStream<Uint8Array>, signal?: AbortSignal): Promise<CapturedOutput> {
   const chunks: Uint8Array[] = [];
   let bytes = 0;
   let retained = 0;
   const reader = stream.getReader();
+  let complete = true;
+  const cancel = () => {
+    complete = false;
+    // Closing this reader releases a pending read even if a descendant still owns the pipe.
+    void reader.cancel().catch(() => console.error("frontend_evidence_output_cancel_failed"));
+  };
+  if (signal?.aborted) cancel();
+  else signal?.addEventListener("abort", cancel, { once: true });
   try {
     for (;;) {
       const { done, value: chunk } = await reader.read();
@@ -30,9 +39,10 @@ export async function captureOutput(stream: ReadableStream<Uint8Array>): Promise
       retained += kept.length;
     }
   } finally {
+    signal?.removeEventListener("abort", cancel);
     reader.releaseLock();
   }
-  return { text: Buffer.concat(chunks).toString("utf8"), bytes, truncated: retained < bytes };
+  return { text: Buffer.concat(chunks).toString("utf8"), bytes, truncated: retained < bytes, complete };
 }
 
 /** Identities come from executed runner records, never source-text test-name guesses. */
@@ -98,7 +108,7 @@ if (import.meta.main) {
       environment, bun: Bun.version, platform: process.platform, arch: process.arch,
       output_limit_per_stream: OUTPUT_LIMIT,
     };
-    const results: { phase: string; command: string[]; exit: number; signal: string | null; stdout: CapturedOutput; stderr: CapturedOutput }[] = [];
+    const results: { phase: string; command: string[]; exit: number; signal: string | null; timed_out: boolean; stdout: CapturedOutput; stderr: CapturedOutput }[] = [];
     for (const [phase, invocation] of [
       ["install", [process.execPath, "install", "--frozen-lockfile"]],
       ["fresh", command],
@@ -106,12 +116,22 @@ if (import.meta.main) {
     ] satisfies [string, string[]][]) {
       const child = Bun.spawn(invocation, {
         cwd: root, env: environment, stdout: "pipe", stderr: "pipe",
-        timeout: RUN_TIMEOUT, killSignal: "SIGKILL",
       });
-      const [stdout, stderr, exit] = await Promise.all([captureOutput(child.stdout), captureOutput(child.stderr), child.exited]);
-      results.push({ phase, command: invocation, exit, signal: child.signalCode, stdout, stderr });
-      console.log(`frontend evidence: ${phase} exit=${exit}`);
-      if (phase === "install" && exit !== 0) break;
+      const deadline = new AbortController();
+      const timer = setTimeout(() => {
+        if (child.exitCode === null) child.kill("SIGKILL");
+        deadline.abort();
+      }, RUN_TIMEOUT);
+      try {
+        const [stdout, stderr, exit] = await Promise.all([
+          captureOutput(child.stdout, deadline.signal), captureOutput(child.stderr, deadline.signal), child.exited,
+        ]);
+        results.push({ phase, command: invocation, exit, signal: child.signalCode, timed_out: deadline.signal.aborted, stdout, stderr });
+        console.log(`frontend evidence: ${phase} exit=${exit} timed_out=${deadline.signal.aborted}`);
+        if ((phase === "install" && exit !== 0) || deadline.signal.aborted) break;
+      } finally {
+        clearTimeout(timer);
+      }
       if (digest(await readFile(path.join(root, "bun.lock"))) !== receipt.lock_sha256) throw new Error("evidence_lock_changed");
     }
     const tests = results.filter(result => result.phase !== "install").map(result => ({
@@ -119,16 +139,25 @@ if (import.meta.main) {
     }));
     const names = tests.map(run => run.records.map(record => `${record.file}\t${record.name}`).sort());
     const sameNames = names.length === 2 && names.every(run => run.length > 0) && JSON.stringify(names[0]) === JSON.stringify(names[1]);
-    const incomplete = results.some(result => result.stdout.truncated || result.stderr.truncated);
-    const failed = results.some(result => result.exit !== 0) || !sameNames || incomplete;
+    const statuses = tests.map(run => run.records.map(record => `${record.file}\t${record.name}\t${record.status}`).sort());
+    const sameStatuses = statuses.length === 2 && JSON.stringify(statuses[0]) === JSON.stringify(statuses[1]);
+    const counts = tests.map(run => ({
+      phase: run.phase,
+      passed: run.records.filter(record => record.status === "pass").length,
+      failed: run.records.filter(record => record.status === "fail").length,
+      skipped: run.records.filter(record => record.status === "skip").length,
+      todo: run.records.filter(record => record.status === "todo").length,
+    }));
+    const incomplete = results.some(result => result.stdout.truncated || result.stderr.truncated || !result.stdout.complete || !result.stderr.complete);
+    const failed = results.some(result => result.exit !== 0) || !sameNames || !sameStatuses || incomplete;
     if (failed) {
       await writeFile(path.join(destination, "frontend-failure.encrypted.json"), sealEvidence(JSON.stringify({
-        receipt, results, tests, same_names: sameNames,
-        first_failure: results.find(result => result.exit !== 0)?.phase ?? null,
+        receipt, results, tests, counts, same_names: sameNames, same_statuses: sameStatuses,
+        first_failure: results.find(result => result.exit !== 0 || result.timed_out)?.phase ?? null,
         incomplete,
       }), recipient), { mode: 0o600, flag: "wx" });
     }
-    console.log(`frontend evidence: fresh=${tests[0]?.records.length ?? 0} warm=${tests[1]?.records.length ?? 0} same_names=${sameNames} retained=${failed}`);
+    console.log(JSON.stringify({ event: "frontend_evidence_summary", counts, same_names: sameNames, same_statuses: sameStatuses, retained: failed }));
     process.exitCode = failed ? 1 : 0;
   } catch {
     // A CLI boundary must not print diagnostics containing private paths, output or recipient data.
