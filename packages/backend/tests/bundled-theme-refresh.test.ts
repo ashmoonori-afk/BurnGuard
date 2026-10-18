@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -7,7 +7,7 @@ import { seedBundledDesignSystems } from "../src/bootstrap";
 import { bundledDesignSystemId, bundledDesignSystems } from "../src/data/bundled-design-systems";
 import { resolveRepoRoot } from "../src/lib/paths";
 import {
-  bundledThemeHistory, readThemeFiles, themeFileHash, themeTreeDigest, type BundledThemeHistory,
+  bundledThemeHistory, readThemeFiles, refreshBundledTheme, themeFileHash, themeTreeDigest, type BundledThemeHistory, type BundledThemeRefresh,
 } from "../src/services/bundled-theme-refresh";
 
 const roots: string[] = [];
@@ -42,6 +42,16 @@ const legacyHistory: BundledThemeHistory = {
 };
 
 const hidden = async (systems: string) => (await readdir(systems)).filter((name) => name.startsWith("."));
+
+/** A real refresh whose numbered directory renames fail, as a folder held open by another process does on Windows. */
+function lockedRefresh(...failing: number[]): BundledThemeRefresh {
+  let calls = 0;
+  return (id, source, destination, writeFonts) => refreshBundledTheme(id, source, destination, writeFonts, async (from, to) => {
+    calls += 1;
+    if (failing.includes(calls)) throw Object.assign(new Error("locked"), { code: "EPERM" });
+    await rename(from, to);
+  });
+}
 
 describe("bundled theme refresh on upgrade", () => {
   test("Given every bundled theme When hashing its shipped files Then the history records it so the next release can upgrade it", async () => {
@@ -89,6 +99,40 @@ describe("bundled theme refresh on upgrade", () => {
     await seedBundledDesignSystems(resolveRepoRoot(), systems, legacyHistory);
 
     expect(await readThemeFiles(installed)).toEqual(before);
+  });
+
+  test("Given a folder another process holds open When the upgrade swap fails Then startup continues with the old copy unchanged and no stage left", async () => {
+    const { systems, installed } = await upgradedProfile({ ...legacyTheme, "fonts/Brand.woff2": "brand font bytes" });
+    const before = await readThemeFiles(installed);
+
+    await seedBundledDesignSystems(resolveRepoRoot(), systems, legacyHistory, lockedRefresh(2));
+
+    expect(await readThemeFiles(installed)).toEqual(before);
+    expect(await hidden(systems)).toEqual([]);
+  });
+
+  test("Given the old folder cannot be put back either When the upgrade swap fails Then startup continues and the only copy is kept for recovery", async () => {
+    const { systems, installed } = await upgradedProfile(legacyTheme);
+    const before = await readThemeFiles(installed);
+
+    await seedBundledDesignSystems(resolveRepoRoot(), systems, legacyHistory, lockedRefresh(2, 3));
+    const kept = await hidden(systems);
+
+    expect(existsSync(installed)).toBe(false);
+    expect(kept).toHaveLength(1);
+    expect(await readThemeFiles(path.join(systems, kept[0]!))).toEqual(before);
+  });
+
+  test("Given a theme already upgraded When startup seeds themes again Then nothing is rewritten", async () => {
+    const { systems, installed } = await upgradedProfile(legacyTheme);
+    await seedBundledDesignSystems(resolveRepoRoot(), systems, legacyHistory);
+    const upgraded = await readThemeFiles(installed);
+    let refreshes = 0;
+
+    await seedBundledDesignSystems(resolveRepoRoot(), systems, { ...legacyHistory, themes: { [SLUG]: [...legacyHistory.themes[SLUG]!, themeTreeDigest(upgraded!)] } }, async () => { refreshes += 1; });
+
+    expect(refreshes).toBe(0);
+    expect(await readThemeFiles(installed)).toEqual(upgraded);
   });
 
   test("Given a copy saved with Windows line endings When startup seeds themes Then it is still recognised as untouched", async () => {

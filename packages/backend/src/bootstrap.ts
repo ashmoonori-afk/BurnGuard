@@ -36,7 +36,7 @@ import { reconcileExportState } from "./services/export-recovery";
 import { createProductionResearchRecoveryDependencies } from "./routes/research";
 import { reconcileResearchState, type ResearchRecoveryDependencies } from "./services/research-recovery";
 import { recoverVisualAlternatives } from "./services/visual-alternative-recovery";
-import { bundledThemeHistory, installedThemeState, refreshBundledTheme, type BundledThemeHistory } from "./services/bundled-theme-refresh";
+import { bundledThemeHistory, installedThemeState, refreshBundledTheme, type BundledThemeHistory, type BundledThemeRefresh } from "./services/bundled-theme-refresh";
 import { reapPersistedSessionProcesses } from "./services/session-process-recovery";
 
 async function exists(target: string): Promise<boolean> {
@@ -73,6 +73,7 @@ export async function seedBundledDesignSystems(
   repoRoot = resolveRepoRoot(),
   destinationRoot = systemsDir,
   themeHistory: BundledThemeHistory = bundledThemeHistory,
+  refresh: BundledThemeRefresh = refreshBundledTheme,
 ): Promise<void> {
   const themesSource = path.join(repoRoot, "design system themes");
   await Promise.all(
@@ -83,9 +84,14 @@ export async function seedBundledDesignSystems(
       );
       if (await exists(destination)) {
         // An untouched copy from an older release takes the installed bundle; edited copies stay as they are.
+        // The upgrade is optional: a locked or unreadable folder keeps its copy and startup continues.
         const source = path.join(themesSource, slug);
-        if (await installedThemeState(destination, source, slug, themeHistory) === "outdated") {
-          await refreshBundledTheme(bundledDesignSystemId(slug), source, destination, (stage) => copyBundledFonts(stage, repoRoot));
+        try {
+          if (await installedThemeState(destination, source, slug, themeHistory) === "outdated") {
+            await refresh(bundledDesignSystemId(slug), source, destination, (stage) => copyBundledFonts(stage, repoRoot));
+          }
+        } catch (error) {
+          console.warn("[seed] bundled theme upgrade skipped", slug, error instanceof Error && "code" in error ? String(error.code) : "unknown");
         }
         return;
       }
