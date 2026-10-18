@@ -2,7 +2,7 @@
 
 ## 1. Filesystem Layout
 
-Reviewed for v0.5.31 on 2026-10-17; `packages/backend/src/lib/app-paths.ts` and the SQL migrations in `packages/backend/src/db/migrations/` are authoritative.
+Reviewed for v0.5.32 on 2026-10-18; `packages/backend/src/lib/app-paths.ts` and the SQL migrations in `packages/backend/src/db/migrations/` are authoritative.
 
 The root directory is `BG_APP_ROOT` when set (must be an absolute path), and otherwise `~/.burnguard/` (`%USERPROFILE%\.burnguard\` on Windows), which resolves to `os.homedir() + "/.burnguard"`.
 

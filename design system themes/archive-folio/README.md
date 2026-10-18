@@ -51,6 +51,8 @@ Navigation profile-popover → hero portfolio-peek (44% copy zone, below media, 
 
 Keep dense serif entries, dates and notes alongside their records, hairline dividers and tight rhythm. Hierarchy comes from position and weight, with no radius or elevation. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
+For design-engineer and archival portfolio pages, organize work as a numbered edition ledger where each row pairs a concise project outcome paragraph with stack metadata, year, and an inline specimen plate.
+
 ## Image direction
 
 Every artifact on this system needs imagery of a specific kind; the palette alone will not

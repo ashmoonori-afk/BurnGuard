@@ -24,7 +24,7 @@ Create websites, slide decks, graphics, and logos with AI, edit them on a live c
 
 Pick a project format, write your idea, and optionally select a registered design system. BurnGuard suggests an editable project name from your idea, makes the audience field optional, shows up to four design-system suggestions inline, and keeps detailed brief controls under **Advanced**. Selecting **Create and generate** creates the project and sends your idea as the first request in one step. On a fresh install, a dismissible first-run card on Home checks your Claude Code and Codex connections and lets you create and generate your first website project directly from that card. Create a project without a design system if you prefer.
 
-The built-in catalogue includes **41 themes**, including **31 original themes**. Each theme pairs typography and color tokens with navigation, hero, and footer layout rules. The original sample systems and prompt presets also include layout rules. You can import your own design systems from supported documents, websites, Git repositories, Figma files, or a single `DESIGN.md` Markdown file, then review and publish them for project use. Any registered system or built-in theme can also be downloaded as one `DESIGN.md` file, and each system stores up to 60 explicit **Do** and **Don't** rules that are included in every generation that uses it. [Explore the 41 built-in layouts](<design system themes/>)
+The built-in catalogue includes **43 themes**, including **33 original themes**. Each theme pairs typography and color tokens with navigation, hero, and footer layout rules. The original sample systems and prompt presets also include layout rules. You can import your own design systems from supported documents, websites, Git repositories, Figma files, or a single `DESIGN.md` Markdown file, then review and publish them for project use. Any registered system or built-in theme can also be downloaded as one `DESIGN.md` file, and each system stores up to 60 explicit **Do** and **Don't** rules that are included in every generation that uses it. [Explore the 43 built-in layouts](<design system themes/>)
 
 ![Create a new project dialog with format chips, design-system search, Refresh button, and system selection](doc/images/readme-design-system-picker.png)
 
@@ -40,7 +40,7 @@ Open any system overview to read its navigation, hero, and footer rules. **Direc
 
 *A project's Choose a direction tab showing the same Cobalt Atelier layout rules, with Model set to Sonnet and Reasoning effort set to Low. This screenshot shows the configured guidance rather than a model benchmark.*
 
-Desktop packages ship with **41 website examples**, **41 generated WebP illustrations**, and **41 website thumbnails captured in a headless browser**. The design-system library and project creation picker display those thumbnails, and each theme overview includes a scrollable website preview. Browse the [website preview gallery](design%20system%20themes/previews/index.html) and the [theme token catalogue](design%20system%20themes/catalogue.html).
+Desktop packages ship with **43 website examples**, **43 generated WebP illustrations**, and **43 website thumbnails captured in a headless browser**. The design-system library and project creation picker display those thumbnails, and each theme overview includes a scrollable website preview. Browse the [website preview gallery](design%20system%20themes/previews/index.html) and the [theme token catalogue](design%20system%20themes/catalogue.html).
 
 ![Design-system library showing actual website thumbnails in BurnGuard](doc/images/readme-design-system-library.png)
 
@@ -90,7 +90,7 @@ Assign each image a clear role, such as product hero, campaign scene, explanator
 
 Open the **Chart** panel to add area, line, bar, composed, radar, pie, radial, or Sankey charts. Paste tab-separated rows from a spreadsheet, adjust colors, and save portable SVG charts that keep their source data inside the HTML. The **3D** panel edits built-in 3D objects and sends scene modification requests to the AI. [Chart guide](doc/charts.md)
 
-Explore the five original sample collections: **SONNEL**, **FOLIOVER**, **ODDWARD**, **VELUNE**, and **HALIDE**. Each collection includes a website, a six-slide deck, a graphic, and a design system. On the Examples view, select **See the brief** on any of the 15 sample cards to read its audience and objective in Korean, English, or Simplified Chinese, and select **Start from this** to open the creation dialog prefilled in your active interface language. [Sample collections](samples/original/README.md) · [Image recipe gallery](doc/images/image-recipes/README.md)
+Explore the four original sample collections: **SONNEL**, **FOLIOVER**, **ODDWARD**, and **VELUNE**. Each collection includes a website, a six-slide deck, a graphic, and a design system. On the Examples view, select **See the brief** on any of the 12 sample cards to read its audience and objective in Korean, English, or Simplified Chinese, and select **Start from this** to open the creation dialog prefilled in your active interface language. [Sample collections](samples/original/README.md) · [Image recipe gallery](doc/images/image-recipes/README.md)
 
 ## Get started
 
@@ -154,7 +154,7 @@ Run tests from the repository root so the test preload creates an isolated tempo
 <details>
 <summary>About the screenshots</summary>
 
-All README screenshots and the demo GIF were captured on 2026-10-17 from the v0.5.31 release candidate, in Chrome on macOS, with a fresh isolated profile containing only the bundled samples and test input. They are not retouched or resized to a different aspect ratio.
+All README screenshots and the demo GIF were captured on 2026-10-17 from the v0.5.31 release candidate, except `doc/images/readme-design-system-library.png` (the design-system library screenshot), which was recaptured on 2026-10-18 from the v0.5.32 release candidate after the built-in theme colors changed. Every capture was taken in Chrome on macOS with a fresh isolated profile containing only the bundled samples and test input, and none are retouched or resized to a different aspect ratio.
 
 </details>
 
@@ -171,6 +171,13 @@ bun scripts/burnguard-read.ts project <id> --json
 The command opens the profile database at `BG_APP_ROOT` (default `~/.burnguard`) in read-only mode, writes nothing to disk, and opens no network port, so it is safe to run while BurnGuard is open.
 
 ## Changelog
+
+### 0.5.32
+
+- On fresh installs, the ten classic built-in themes (**Light**, **Dark**, **Cupcake**, **Retro**, **Cyberpunk**, **Synthwave**, **Luxury**, **Dracula**, **Nord**, and **Business**) now ship with 73-token color palettes made for BurnGuard instead of palettes converted from an open-source UI library, with regenerated website and slide thumbnails and no third-party palette notices (upgraded installs keep any theme files already copied into your local profile). All 43 built-in themes are checked against WCAG 2.2 AA contrast thresholds (at least 4.5:1 for text pairs down to 9.5–12px captions and labels, and at least 3:1 for borders, focus rings, and primary controls), with small palette adjustments across the 31 existing original themes.
+- The built-in catalogue grows from 41 to 43 themes (31 to 33 original themes) with **Modular Configurator Theme** (`modular-configurator`, for modular shelving and ergonomic furniture configurators) and **Exploded Field Module Theme** (`exploded-field-module`, for rugged field hardware and repairable electronics), alongside 43 website examples, 43 WebP illustrations, and 43 website thumbnails; 30 existing themes also add layout rules for product detail pages and showcase pages.
+- The **HALIDE** sample collection and the bundled liquid-glass refraction effect are removed, leaving four original sample collections (**SONNEL**, **FOLIOVER**, **ODDWARD**, and **VELUNE**, 12 sample cards on the Examples view) while keeping any projects or files already created in an existing workspace. Theme READMEs, skills, slide composition profiles, the logo guide, and documentation illustrations no longer cite or link to outside gallery sites, decks, books, agencies, or brand names, while keeping required open-source font, icon, CC BY 4.0, research, and dependency notices.
+- When Codex creates a new conversation thread and saves generated images into it, BurnGuard watches that thread folder directly from the start of the run and closes the watcher when the run finishes, so images created in a brand-new thread are picked up reliably.
 
 ### 0.5.31
 

@@ -53,6 +53,8 @@ Navigation segmented-pill → hero centered-form (62% copy zone, background medi
 
 Keep the dark workspace legible: metrics, contextual controls and activity form a compact operational body on the shared outer grid. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
+For developer-tool and product detail pages, pair a declarative one-line headline with a cropped live-interface telemetry panel, quantified scale proof counters, and hairline capability bento cells.
+
 ## Responsive
 
 Below the theme's existing compact breakpoint: Keep a single central axis; stack paired actions when needed and reduce purely decorative accents before reducing text size. Keep navigation bounded to the viewport and use semantic native disclosures for groups. Mobile gives the scene its own tall area above a dark information region. Navigation becomes a two-column grid; a row of three small marks and the tagline follow. Keep meaningful reading order, remove desktop offsets and let labels and actions wrap. Body tables retain their own horizontal scroll region. At 200% zoom no meaningful text or control may clip. Fixed slide and graphic artboards keep their dimensions and adapt content inside the canvas.

@@ -65,6 +65,8 @@ Navigation mega-feature → hero portfolio-peek (38% copy zone, background media
 
 Keep the bright ground, soft large shapes, square product plates and prices as headlines. Orange carries action, blue links and focus, and yellow badge fills only. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
+For product detail pages, pair the stacked gallery with a sticky buying column carrying drop-release eyebrows, colour and size option chips, model-fit lines, a cm-tolerance measurement table, and native disclosure rows for size guide, shipping, and returns.
+
 ## Image direction
 
 Every artifact on this system needs imagery of a specific kind; the palette alone will not

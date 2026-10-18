@@ -18,6 +18,8 @@ Navigation profile-popover → hero split-left (42% copy zone, right media, 4 / 
 
 Cobalt is the ground, not an accent. Keep the light serif voice, mono labels, near-square unraised controls and visible cobalt around inset imagery. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
+For chaptered craft and material-story pages, pin a five-chapter index beside isolated cobalt specimen plates, pairing one sensory claim per chapter with mono process facts.
+
 ## Layout
 
 Use the `--layout-*` tokens; do not invent a grid per artifact. Content sits inside `--layout-max` with `--layout-margin` at the sides, body copy holds to `--layout-measure`, sections are separated by `--layout-section-y`, and dividers use `--layout-rule`. The base grid is `--layout-columns` columns with `--layout-gutter` between them, collapsing at `--layout-bp-md`. Secondary media defaults to `--layout-hero`; website opening media uses `--layout-hero-media-ratio` and the Hero section.

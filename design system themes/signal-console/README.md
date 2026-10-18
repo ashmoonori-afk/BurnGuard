@@ -65,6 +65,8 @@ Navigation icon-taxonomy → hero product-panel (50% copy zone, below media, 16 
 
 Keep near-black with phosphor reserved for live states. Mono labels and numbered annotations support a real product surface; use hairline regions, no shadows and radii at or below 3px. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
+For dark-ground hardware and instrument detail pages, pair edge-lit matte chassis macro renders with edition status strips, interactive mode or port callouts, and compact tabular specifications.
+
 ## Image direction
 
 Every artifact on this system needs imagery of a specific kind; the palette alone will not

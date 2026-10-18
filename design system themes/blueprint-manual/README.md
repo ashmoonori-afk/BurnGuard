@@ -51,6 +51,8 @@ Navigation enterprise-columns → hero specimen-poster (92% copy zone, backgroun
 
 Keep the paper ground, blueprint annotations, numbered figures, serif reading body and mono headings. Line work explains content; use near-square corners and no elevation. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
+For precision-engineering and horological inspection pages, sequence numbered research chapters around orthographic exploded diagrams, tolerance callouts, and justified serif explanations.
+
 ## Image direction
 
 Every artifact on this system needs imagery of a specific kind; the palette alone will not

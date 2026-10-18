@@ -66,6 +66,8 @@ Navigation segmented-pill → hero split-reverse (32% copy zone, left media, 16 
 
 Keep right-aligned tabular numbers, tight hairline rows and compact labelled figures. Health colours mark values, never filled rows; use mechanical corners and no elevation. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
+For infrastructure and financial-operations product pages, pair real-time status matrices and code-to-output split blocks with right-aligned tabular proof metrics (uptime, latency, throughput).
+
 ## Image direction
 
 Every artifact on this system needs imagery of a specific kind; the palette alone will not

@@ -47,7 +47,7 @@ describe("design system card display", () => {
   test.each([
     ["Taskly liquid glass Design system", "Taskly liquid glass"],
     ["Northvale Capital design system", "Northvale Capital"],
-    ["Halide - Design System", "Halide"],
+    ["Sonnel - Design System", "Sonnel"],
     ["Design system", "Design system"],
     ["Wide gutter review", "Wide gutter review"],
     ["오로라 디자인 시스템", "오로라"],
@@ -64,7 +64,7 @@ describe("design system card display", () => {
   test("Given bundled ids and a user id When grouped Then only the shipped systems are built in", () => {
     const base = { is_template: false };
     expect(isBuiltInSystem({ ...base, id: "builtin-theme-wide-gutter-review" })).toBe(true);
-    expect(isBuiltInSystem({ ...base, id: "sample-system-original-halide" })).toBe(true);
+    expect(isBuiltInSystem({ ...base, id: "sample-system-original-sonnel" })).toBe(true);
     expect(isBuiltInSystem({ is_template: true, id: "template-1" })).toBe(true);
     expect(isBuiltInSystem({ ...base, id: "northvale-capital" })).toBe(true);
     expect(isBuiltInSystem({ ...base, id: "01M53XVPYF8DR9A183F08WWBEN" })).toBe(false);

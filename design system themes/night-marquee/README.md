@@ -65,6 +65,8 @@ Navigation side-rail → hero type-marquee (100% copy zone, below media, 21 / 9,
 
 Keep the cinematic still, achromatic chrome and small letterspaced credits. Dark space and scale carry the atmosphere, with no raised surfaces. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
+For portfolio and case-study detail pages, frame full-bleed stills with a numbered chapter index (01–04), structured case metadata columns (role, services, credits, year, live link), and a next-case closing strip.
+
 ## Image direction
 
 Every artifact on this system needs imagery of a specific kind; the palette alone will not
