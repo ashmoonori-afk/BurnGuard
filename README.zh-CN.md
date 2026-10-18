@@ -154,7 +154,7 @@ bun test
 <details>
 <summary>关于截图</summary>
 
-所有 README 截图和演示 GIF 均于 2026-10-17 在 macOS 的 Chrome 浏览器中截取自 v0.5.31 候选发布版，使用的是仅包含内置示例和测试输入的全新隔离配置目录。图片未经修饰，也未缩放为其他宽高比。
+除设计系统库截图（`doc/images/readme-design-system-library.png`）因内置主题配色更新而于 2026-10-18 重新截取自 v0.5.32 候选发布版外，其余 README 截图和演示 GIF 均于 2026-10-17 截取自 v0.5.31 候选发布版。所有画面均在 macOS 的 Chrome 浏览器中使用仅包含内置示例和测试输入的全新隔离配置目录截取，未经修饰，也未缩放为其他宽高比。
 
 </details>
 
@@ -171,6 +171,13 @@ bun scripts/burnguard-read.ts project <id> --json
 该命令以只读模式打开 `BG_APP_ROOT`（默认 `~/.burnguard`）中的配置数据库，不向磁盘写入任何内容，也不打开网络端口，因此在 BurnGuard 运行期间也可安全调用。
 
 ## 更新日志
+
+### 0.5.32
+
+- 全新安装时，10 个经典内置主题（**Light**、**Dark**、**Cupcake**、**Retro**、**Cyberpunk**、**Synthwave**、**Luxury**、**Dracula**、**Nord** 和 **Business**）现在随附专为 BurnGuard 制作的 73 个颜色令牌调色板，不再使用从开源 UI 库转换的调色板，并重新生成了网站与幻灯片预览缩略图、移除了相关的第三方调色板许可证说明（从旧版本升级的安装会保留已复制到本地配置目录中的主题文件，不会覆盖）。全部 43 个内置主题均已通过 WCAG 2.2 AA 对比度测试（包括 9.5–12px 图注与标签在内的所有文字颜色组合至少达到 4.5:1，边框、焦点环和主要控件至少达到 3:1），原有的 31 个原创主题也为此微调了图注文字明度与边框对比度。
+- 新增 **Modular Configurator Theme**（`modular-configurator`，适用于模块化置物架与人体工学家具配置器）和 **Exploded Field Module Theme**（`exploded-field-module`，适用于户外三防硬件与可维修电子设备）两个内置主题，内置目录从 41 个扩展到 43 个主题（原创主题从 31 个增至 33 个），桌面安装包随附 43 个网站示例、43 张 WebP 插画和 43 张网站缩略图；另有 30 个现有主题新增了商品详情页与展示页布局规则。
+- 移除了 **HALIDE** 示例合集、内置液态玻璃折射效果脚本及相关生成提示词引用，原创示例现为 4 个合集（**SONNEL**、**FOLIOVER**、**ODDWARD** 和 **VELUNE**，“示例”视图共 12 张示例卡片），现有安装中已创建或复制的项目与文件均会保留。主题 README 与技能、幻灯片版式档案、标志指南和文档插图不再包含外部图库网站链接或外部演示文稿、书籍、机构与品牌名称，同时保留必需的开源字体、图标、CC BY 4.0、研究引用与依赖项许可证说明。
+- 当 Codex 新建对话线程并将生成的图片保存在该线程文件夹中时，BurnGuard 会在运行开始时直接监听该新建线程文件夹，并在运行结束时关闭监视器，使全新线程中生成的图片能够稳定识别。
 
 ### 0.5.31
 
@@ -302,4 +309,4 @@ bun scripts/burnguard-read.ts project <id> --json
 
 BurnGuard 采用 **Apache-2.0** 许可证。详见 [LICENSE](LICENSE)、[NOTICE](NOTICE) 和[图片来源说明](doc/images/README.md)。
 
-*Synced with README.md at v0.5.31.*
+*Synced with README.md at v0.5.32.*
