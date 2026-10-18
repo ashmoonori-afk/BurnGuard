@@ -20,15 +20,16 @@ const cards: readonly CardViewModel[] = [
   },
 ];
 
-test("Given format previews When selecting a system Then only the requested format is shown", () => {
+test("Given format previews When selecting a system Then the requested format is shown and a missing format falls back to the system preview", () => {
   const system: DesignSystemSummary = {
     id: "system", name: "System", status: "published", is_template: true, updated_at: 0,
     thumbnail_path: "/brand.png", thumbnail_paths: { prototype: "/web.png", slide_deck: "/deck.png" },
   };
   expect(systemToCard(system, 0, "prototype").thumbnail).toBe("/web.png");
   expect(systemToCard(system, 0, "slide_deck").thumbnail).toBe("/deck.png");
-  expect(systemToCard(system, 0, "graphic").thumbnail).toBeNull();
-  expect(systemToCard({ ...system, thumbnail_paths: undefined }, 0, "slide_deck").thumbnail).toBeNull();
+  expect(systemToCard(system, 0, "graphic").thumbnail).toBe("/brand.png");
+  expect(systemToCard({ ...system, thumbnail_paths: undefined }, 0, "slide_deck").thumbnail).toBe("/brand.png");
+  expect(systemToCard({ ...system, thumbnail_path: null }, 0, "logo").thumbnail).toBeNull();
   expect(systemToCard(system).thumbnail).toBe("/brand.png");
 });
 

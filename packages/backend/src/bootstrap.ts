@@ -36,6 +36,7 @@ import { reconcileExportState } from "./services/export-recovery";
 import { createProductionResearchRecoveryDependencies } from "./routes/research";
 import { reconcileResearchState, type ResearchRecoveryDependencies } from "./services/research-recovery";
 import { recoverVisualAlternatives } from "./services/visual-alternative-recovery";
+import { bundledThemeHistory, installedThemeState, recoverBundledTheme, refreshBundledTheme, type BundledThemeHistory, type BundledThemeRefresh } from "./services/bundled-theme-refresh";
 import { reapPersistedSessionProcesses } from "./services/session-process-recovery";
 
 async function exists(target: string): Promise<boolean> {
@@ -71,6 +72,8 @@ export function isSampleSourcePathAllowed(relPath: string): boolean {
 export async function seedBundledDesignSystems(
   repoRoot = resolveRepoRoot(),
   destinationRoot = systemsDir,
+  themeHistory: BundledThemeHistory = bundledThemeHistory,
+  refresh: BundledThemeRefresh = refreshBundledTheme,
 ): Promise<void> {
   const themesSource = path.join(repoRoot, "design system themes");
   await Promise.all(
@@ -79,7 +82,21 @@ export async function seedBundledDesignSystems(
         destinationRoot,
         bundledDesignSystemId(slug),
       );
-      if (await exists(destination)) return;
+      try {
+        await recoverBundledTheme(destination);
+        if (await exists(destination)) {
+          // An untouched copy from an older release takes the installed bundle; edited copies stay as they are.
+          const source = path.join(themesSource, slug);
+          if (await installedThemeState(destination, source, slug, themeHistory) === "outdated") {
+            await refresh(bundledDesignSystemId(slug), source, destination, (stage) => copyBundledFonts(stage, repoRoot));
+          }
+          return;
+        }
+      } catch (error) {
+        // Recovery and upgrade are optional; retain the previous copy and retry on the next launch.
+        console.warn("[seed] bundled theme upgrade skipped", slug, error instanceof Error && "code" in error ? String(error.code) : "unknown");
+        return;
+      }
       // Publish only a complete theme; startup extraction recovery removes a stage left by a killed first launch.
       const stage = path.join(destinationRoot, `.${bundledDesignSystemId(slug)}.staging-${randomUUID()}`);
       try {

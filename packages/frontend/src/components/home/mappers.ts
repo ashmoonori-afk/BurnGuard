@@ -107,7 +107,7 @@ export function systemToCard(s: DesignSystemSummary, _index = 0, type?: ProjectT
     tintClass: "bg-muted",
     thumbnail: type === undefined || type === "other" || type === "from_template"
       ? s.thumbnail_path
-      : s.thumbnail_paths?.[type] ?? null,
+      : s.thumbnail_paths?.[type] ?? s.thumbnail_path,
     kind: "system",
     isTemplate: s.is_template,
   };

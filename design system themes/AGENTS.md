@@ -39,11 +39,12 @@ catalogue.html                   # every registered theme rendered on one page; 
 | Task | Location | Notes |
 |------|----------|-------|
 | Slug registry | `packages/backend/src/data/bundled-design-systems.ts` | `bundledDesignSystems`, `bundledDesignSystemId` → `builtin-theme-<slug>` |
-| Seeding | `packages/backend/src/bootstrap.ts` `seedBundledDesignSystems` | Copies `<slug>/` into `~/.burnguard/data/systems/builtin-theme-<slug>`, then bundled fonts; skips if the destination exists |
+| Seeding | `packages/backend/src/bootstrap.ts` `seedBundledDesignSystems` | Copies `<slug>/` into `~/.burnguard/data/systems/builtin-theme-<slug>`, then bundled fonts; an existing copy is replaced only when it is byte-identical to an older shipped tree (see Upgrade history), otherwise kept |
 | Packaging | `scripts/package-runtime.ts` | Ships everything under the `design system themes/` prefix - the path contains spaces, so quote it everywhere |
 | Verification | `packages/backend/tests/bundled-seed-themes.test.ts` | Checks theme shape, token parity, provenance, classic-palette WCAG AA contrast, layout and family tokens, and the reproduction sections |
 | Surfaces | `scripts/build-theme-surfaces.ts` | `bun run surfaces` regenerates `surfaces/*.css` and the three README sections for every registered theme, the four original samples and the Northvale sample; never hand-edit them |
 | Catalogue | `scripts/build-theme-catalogue.ts` | `bun run catalogue` regenerates `catalogue.html` from the registry; never hand-edit it |
+| Upgrade history | `scripts/build-bundled-theme-history.ts` | Rerun after any change under `<slug>/` (needs full git history); records every shipped theme tree in `packages/backend/src/data/bundled-theme-history.json` so startup replaces untouched older copies in existing profiles and never edited ones; `bundled-theme-refresh.test.ts` fails until it is rerun |
 
 ## CONVENTIONS
 
