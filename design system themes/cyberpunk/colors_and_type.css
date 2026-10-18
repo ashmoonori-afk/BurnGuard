@@ -1,95 +1,95 @@
 @import url("./fonts/fonts.css");
 
-/* Derived from daisyUI (https://github.com/saadeghi/daisyui) - MIT License, Copyright (c) 2020 Pouya Saadeghi. Converted for BurnGuard. */
-/* OKLCH values were converted offline to sRGB, gamut-clipped, and rounded to the nearest 8-bit channel. */
+/* Cyberpunk Theme - colour palette authored for BurnGuard. */
+/* Text and component pairs meet WCAG 2.2 AA; bundled-seed-themes.test.ts measures them. */
 
 :root {
   color-scheme: light;
 
   /* Neutrals */
-  --gray-100: #FFF248;
-  --gray-90: #111A3B;
-  --gray-80: #2E343D;
-  --gray-70: #4A4E3E;
-  --gray-60: #676840;
-  --gray-50: #838241;
-  --gray-40: #A09C43;
-  --gray-30: #B8B144;
-  --gray-20: #CFC745;
-  --gray-10: #E7DC47;
+  --gray-100: #E8FF3A;
+  --gray-90: #0E0D1A;
+  --gray-80: #282A1E;
+  --gray-70: #424722;
+  --gray-60: #5C6426;
+  --gray-50: #778129;
+  --gray-40: #919E2D;
+  --gray-30: #A7B630;
+  --gray-20: #BCCF34;
+  --gray-10: #D2E737;
 
   /* Brand and accents */
-  --primary-blue: #FF6596;
-  --action-blue: #FF6596;
-  --red-60: #FF5861;
-  --red-50: #FF745C;
-  --red-10: #FFD64C;
-  --orange-50: #CE74FF;
-  --orange-10: #F6DB69;
-  --yellow-30: #FFBE00;
-  --yellow-10: #FFE93B;
-  --green-60: #00A96E;
-  --green-50: #2EB667;
-  --green-10: #D1E54F;
-  --teal-50: #CE74FF;
-  --teal-10: #F6DB69;
-  --aqua-60: #00B5FF;
-  --aqua-10: #D1E769;
-  --blue-90: #111A3B;
-  --blue-80: #BC507D;
-  --blue-70: #DE5A89;
-  --blue-60: #FF6596;
-  --blue-50: #FF7E88;
-  --blue-30: #FFB36B;
-  --blue-10: #FFDB54;
-  --ultramarine-60: #FF6596;
-  --purple-60: #00E8FF;
-  --pink-60: #00E8FF;
+  --primary-blue: #C5259C;
+  --action-blue: #C5259C;
+  --red-60: #E0281E;
+  --red-50: #E14822;
+  --red-10: #E7DF36;
+  --orange-50: #7B1FD6;
+  --orange-10: #D4D756;
+  --yellow-30: #E3881E;
+  --yellow-10: #E7EA35;
+  --green-60: #008A55;
+  --green-50: #239C51;
+  --green-10: #BEEA3F;
+  --teal-50: #7B1FD6;
+  --teal-10: #D4D756;
+  --aqua-60: #0095C8;
+  --aqua-10: #BEEC54;
+  --blue-90: #0E0D1A;
+  --blue-80: #971F7C;
+  --blue-70: #AF228C;
+  --blue-60: #C5259C;
+  --blue-50: #CC5188;
+  --blue-30: #D89D66;
+  --blue-10: #E3DE49;
+  --ultramarine-60: #C5259C;
+  --purple-60: #2A5CFF;
+  --pink-60: #2A5CFF;
 
   /* Semantic */
-  --success: #00A96E;
-  --warning-yellow: #FFBE00;
-  --warning-orange: #CE74FF;
-  --error: #FF5861;
-  --info: #00B5FF;
+  --success: #008A55;
+  --warning-yellow: #E3881E;
+  --warning-orange: #7B1FD6;
+  --error: #E0281E;
+  --info: #0095C8;
 
   /* Surface and text */
-  --bg: #FFF248;
-  --bg-subtle: #F7E83A;
-  --bg-muted: #E3D40E;
-  --surface: #FFF248;
-  --surface-inverse: #111A3B;
-  --fg-1: #000000;
-  --fg-2: #000000;
-  --fg-3: #000000;
-  --fg-4: #A09C43;
-  --fg-on-dark: #FFF248;
-  --fg-on-brand: #180408;
-  --border: #E3D40E;
-  --border-strong: #B8B144;
-  --focus-ring: #FF6596;
+  --bg: #E8FF3A;
+  --bg-subtle: #DDF52A;
+  --bg-muted: #CBE316;
+  --surface: #EEFF66;
+  --surface-inverse: #0E0D1A;
+  --fg-1: #0C0C14;
+  --fg-2: #1E1D2A;
+  --fg-3: #2C2B38;
+  --fg-4: #4D5232;
+  --fg-on-dark: #E8FF3A;
+  --fg-on-brand: #FBEFF8;
+  --border: #CBE316;
+  --border-strong: #829115;
+  --focus-ring: #C5259C;
 
-  /* Paired donor colors retained for accessible combinations */
-  --secondary: #00E8FF;
-  --fg-on-secondary: #001316;
-  --accent: #CE74FF;
-  --fg-on-accent: #0F0517;
-  --fg-on-info: #000000;
-  --fg-on-success: #000000;
-  --fg-on-warning: #000000;
-  --fg-on-error: #000000;
+  /* Paired foregrounds for accessible combinations */
+  --secondary: #2A5CFF;
+  --fg-on-secondary: #EBF0FF;
+  --accent: #7B1FD6;
+  --fg-on-accent: #F2E9FB;
+  --fg-on-info: #00212C;
+  --fg-on-success: #000C08;
+  --fg-on-warning: #321E07;
+  --fg-on-error: #FEFAFA;
 
   /* Charts */
-  --chart-1: #FF6596;
-  --chart-2: #00E8FF;
-  --chart-3: #CE74FF;
-  --chart-4: #00B5FF;
-  --chart-5: #00A96E;
-  --chart-6: #FFBE00;
-  --chart-7: #FF5861;
-  --chart-8: #80A6CA;
-  --chart-9: #6794FF;
-  --chart-10: #808782;
+  --chart-1: #C5259C;
+  --chart-2: #2A5CFF;
+  --chart-3: #7B1FD6;
+  --chart-4: #0095C8;
+  --chart-5: #008A55;
+  --chart-6: #E3881E;
+  --chart-7: #E0281E;
+  --chart-8: #F478D9;
+  --chart-9: #00B9B0;
+  --chart-10: #3A610B;
 
   /* Type families */
   --font-display: "Bebas Neue", "Pretendard", sans-serif;

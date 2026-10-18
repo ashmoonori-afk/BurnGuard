@@ -1,6 +1,6 @@
 # Retro Built-in Theme
 
-A warm paper-like system with muted coral, mint, amber, and sturdy geometry.
+A warm kraft-paper system with dusty rose, sage, ochre, and sturdy geometry.
 
 ## Files
 
@@ -9,13 +9,11 @@ A warm paper-like system with muted coral, mint, amber, and sturdy geometry.
 
 ## Design token contract
 
-The donor palette is expressed through BurnGuard's canonical neutral, brand, semantic, surface, chart, type, spacing, radius, elevation, and motion tokens. Use the complete `--gray-*` and `--chart-*` ramps for hierarchy and data visualization, and use `--r-*`, `--shadow-*`, and `--dur-*` tokens rather than introducing component-local scales.
+The palette is expressed through BurnGuard's canonical neutral, brand, semantic, surface, chart, type, spacing, radius, elevation, and motion tokens. Use the complete `--gray-*` and `--chart-*` ramps for hierarchy and data visualization, and use `--r-*`, `--shadow-*`, and `--dur-*` tokens rather than introducing component-local scales.
 
 ## Provenance
 
-Derived from the daisyUI `retro` theme: https://github.com/saadeghi/daisyui/blob/master/packages/daisyui/src/themes/retro.css
-
-Licensed under the MIT License, Copyright (c) 2020 Pouya Saadeghi. Source OKLCH values were converted offline to sRGB, gamut-clipped, and rounded to the nearest 8-bit channel. See the repository `NOTICE` file.
+Palette authored for BurnGuard. The colour values were chosen for this theme and every text and component pair is checked for WCAG 2.2 AA contrast; no third-party theme, stylesheet or palette is included, and it carries no external licence obligation. The `retro` slug is kept from earlier releases because seeded workspaces key off `builtin-theme-retro`.
 
 ## Local typography
 
@@ -65,23 +63,17 @@ Use `editorial-overlay` at `top`, with `84px` minimum height and `1240px` width 
 
 Mobile: below --layout-bp-md, bound navigation to the viewport and put links in semantic native disclosures where needed. Side, overlay or bottom navigation returns to a compact header in normal flow; preserve focus and reading order.
 
-Structural reference: [editorial-overlay](https://www.navbar.gallery/navbar/clonix). This is an original BurnGuard arrangement informed by the gallery screenshot; donor code, imagery, fonts and brand marks are not included.
-
 ## Hero
 
 Use `specimen-poster`: copy share `78%`, media at `background` in a `4 / 3` frame, minimum height `700px`, title measure `12ch`, alignment `center` and desktop offset `48px`. Place the beverage or original object in front of an enormous wordmark, then close with an intentionally playful three-cell window stage. Retain the theme's existing image-fit, palette, font family and locally generated art unless a written theme invariant requires a more protective framing.
 
 Mobile: Below the theme's existing compact breakpoint: Put useful labels in a normal-flow caption block below the complete specimen; decorative title size must not cause horizontal scroll.
 
-Structural reference: [specimen-poster](https://supahero.io/hero/royal-beverage). Reuse this theme's original imagery and typography; the reference supplies hierarchy and arrangement only.
-
 ## Footer
 
 Use `window-stage` with `3` desktop groups and `620px` minimum height. Reserve 620px as the desktop minimum closing height with 3 information columns or groups. Build the footer as title stage, compact link panels, then a three-cell brand band. Keep panels in normal document flow on narrow screens; animation is optional.
 
 Mobile centers the title and one visible link window in a vertical stack, retaining the ticker and three equal bottom glyph cells. Allow links to wrap and let the closing region grow with content.
-
-Structural reference: [window-stage](https://www.footer.design/sites/the-design-society). Adapt the structural idea with this theme's own tokens and content; do not copy donor assets or brand marks.
 
 ## Surfaces
 
@@ -97,7 +89,7 @@ Content values are authored for a `--content-base` shorter side. Per artboard se
 
 ## Slide deck
 
-Reference adaptation: 068 - Burger King Brand Guidelines (pp. 1, 3, 4, 33, 65, 97). Layout only; retain this system's own colours, fonts and image direction.
+Slide composition: layout only; retain this system's own colours, fonts and image direction.
 
 1920 x 1080; use --slide-* geometry and type. Keep required content inside --slide-pad-edge; captions at least 24px. No website navigation, hover or scrolling inside a slide.
 
@@ -107,7 +99,7 @@ Reference adaptation: 068 - Burger King Brand Guidelines (pp. 1, 3, 4, 33, 65, 9
 
 - Evidence: A clearly labelled correct/incorrect pair or a sparse application sheet at consistent scale; keep examples large enough for projection.
 
-- Closing: One warm colour field and a short bold action. Borrow hierarchy and composition, never the source brand's logo, font or illustrations.
+- Closing: One warm colour field and a short bold action. Never add a logo, font or illustration that does not belong to this system.
 
 Sequence: cover > claim > evidence > implication > closing; repeat claim/evidence for longer decks, with a chapter after each topic. Do not repeat one body layout throughout. Use real supplied data and appropriate authored/generated images; capture actual app UI when demonstrating software. Split overflowing content instead of shrinking type.
 

@@ -28,19 +28,13 @@ Read Navigation, Hero, Footer, Layout and Responsive in README.md before arrangi
 
 Follow README.md's Navigation section and the corresponding --layout-* tokens. Use top navigation with a 1360px maximum width and 112px header height. At compact widths, use category rows with chevrons under a compact brand/close bar. Collapse taxonomy columns into grouped disclosures.
 
-Reference: https://www.navbar.gallery/navbar/cloudflare
-
 ## Hero
 
 Follow README.md's Hero section and the corresponding --layout-* tokens. Set the main statement across the top, then split the review evidence left from a narrow action stack right before the media baseline. Retain the theme's existing image-fit, palette, font family and locally generated art unless a written theme invariant requires a more protective framing.
 
-Reference: https://supahero.io/hero/fourseven
-
 ## Footer
 
 Follow README.md's Footer section and the corresponding --layout-* tokens. Reserve 500px as the desktop minimum closing height with 4 information columns or groups. Use native details/summary for the narrow-screen navigation groups if disclosure is needed. The desktop gallery screenshot does not establish a working subscription form, so provide one only when backed by a real flow.
-
-Reference: https://www.footer.design/sites/outway
 
 ## Surfaces
 

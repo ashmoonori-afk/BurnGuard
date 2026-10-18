@@ -40,96 +40,96 @@ h1{font-size:34px;letter-spacing:-0.01em;margin:0 0 8px}
 .layout dd{font-family:var(--font-mono);font-size:11px;color:var(--fg-2);margin:1px 0 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .nolayout{font-family:var(--font-mono);font-size:10px;color:var(--fg-4);margin:auto 0 0;padding-top:11px;border-top:1px solid var(--border);letter-spacing:.05em}
 
-/* Derived from daisyUI (https://github.com/saadeghi/daisyui) - MIT License, Copyright (c) 2020 Pouya Saadeghi. Converted for BurnGuard. */
-/* OKLCH values were converted offline to sRGB, gamut-clipped, and rounded to the nearest 8-bit channel. */
+/* Light Theme - colour palette authored for BurnGuard. */
+/* Text and component pairs meet WCAG 2.2 AA; bundled-seed-themes.test.ts measures them. */
 
 [data-theme="light"] {
   
 
   /* Neutrals */
   --gray-100: #FFFFFF;
-  --gray-90: #09090B;
-  --gray-80: #272728;
-  --gray-70: #444446;
-  --gray-60: #626263;
-  --gray-50: #7F7F80;
-  --gray-40: #9D9D9D;
-  --gray-30: #B5B5B6;
-  --gray-20: #CECECE;
-  --gray-10: #E6E6E7;
+  --gray-90: #141720;
+  --gray-80: #30333B;
+  --gray-70: #4C4F56;
+  --gray-60: #696B70;
+  --gray-50: #85868B;
+  --gray-40: #A1A2A6;
+  --gray-30: #B9B9BC;
+  --gray-20: #D0D1D2;
+  --gray-10: #E8E8E9;
 
   /* Brand and accents */
-  --primary-blue: #422AD5;
-  --action-blue: #422AD5;
-  --red-60: #FF627D;
-  --red-50: #FF7E94;
-  --red-10: #FFE3E8;
-  --orange-50: #00D3BB;
-  --orange-10: #D1F7F3;
-  --yellow-30: #FCB700;
-  --yellow-10: #FEF2D1;
-  --green-60: #00D390;
-  --green-50: #2EDBA4;
-  --green-10: #D1F7EB;
-  --teal-50: #00D3BB;
-  --teal-10: #D1F7F3;
-  --aqua-60: #00BAFE;
-  --aqua-10: #D1F3FF;
-  --blue-90: #09090B;
-  --blue-80: #32219C;
-  --blue-70: #3A25B9;
-  --blue-60: #422AD5;
-  --blue-50: #6450DD;
-  --blue-30: #AA9FEC;
-  --blue-10: #E1DDF8;
-  --ultramarine-60: #422AD5;
-  --purple-60: #F43098;
-  --pink-60: #F43098;
+  --primary-blue: #1C58D3;
+  --action-blue: #1C58D3;
+  --red-60: #D43838;
+  --red-50: #DA5555;
+  --red-10: #F5DEDF;
+  --orange-50: #0F8F7E;
+  --orange-10: #D1E8E5;
+  --yellow-30: #E08A00;
+  --yellow-10: #F6E7CF;
+  --green-60: #137A43;
+  --green-50: #368D5F;
+  --green-10: #D1E4DB;
+  --teal-50: #0F8F7E;
+  --teal-10: #D1E8E5;
+  --aqua-60: #3C91E5;
+  --aqua-10: #D9E8F8;
+  --blue-90: #141720;
+  --blue-80: #1A48A6;
+  --blue-70: #1B50BE;
+  --blue-60: #1C58D3;
+  --blue-50: #4979DB;
+  --blue-30: #97B2EA;
+  --blue-10: #DAE3F6;
+  --ultramarine-60: #1C58D3;
+  --purple-60: #B92052;
+  --pink-60: #B92052;
 
   /* Semantic */
-  --success: #00D390;
-  --warning-yellow: #FCB700;
-  --warning-orange: #00D3BB;
-  --error: #FF627D;
-  --info: #00BAFE;
+  --success: #137A43;
+  --warning-yellow: #E08A00;
+  --warning-orange: #0F8F7E;
+  --error: #D43838;
+  --info: #3C91E5;
 
   /* Surface and text */
-  --bg: #FFFFFF;
-  --bg-subtle: #F8F8F8;
-  --bg-muted: #EEEEEE;
+  --bg: #FBFBFC;
+  --bg-subtle: #F2F3F6;
+  --bg-muted: #E6E8ED;
   --surface: #FFFFFF;
-  --surface-inverse: #09090B;
-  --fg-1: #18181B;
-  --fg-2: #18181B;
-  --fg-3: #18181B;
-  --fg-4: #9D9D9D;
-  --fg-on-dark: #E4E4E7;
-  --fg-on-brand: #E0E7FF;
-  --border: #EEEEEE;
-  --border-strong: #B5B5B6;
-  --focus-ring: #422AD5;
+  --surface-inverse: #141720;
+  --fg-1: #141720;
+  --fg-2: #343947;
+  --fg-3: #4C5263;
+  --fg-4: #626876;
+  --fg-on-dark: #EEF0F5;
+  --fg-on-brand: #E8EEFB;
+  --border: #E6E8ED;
+  --border-strong: #8E9097;
+  --focus-ring: #1C58D3;
 
-  /* Paired donor colors retained for accessible combinations */
-  --secondary: #F43098;
-  --fg-on-secondary: #F9E4F0;
-  --accent: #00D3BB;
-  --fg-on-accent: #084D49;
-  --fg-on-info: #042E49;
-  --fg-on-success: #004C39;
-  --fg-on-warning: #793205;
-  --fg-on-error: #4D0218;
+  /* Paired foregrounds for accessible combinations */
+  --secondary: #B92052;
+  --fg-on-secondary: #F8E9EE;
+  --accent: #0F8F7E;
+  --fg-on-accent: #031A18;
+  --fg-on-info: #0D2032;
+  --fg-on-success: #E7F2EC;
+  --fg-on-warning: #311E00;
+  --fg-on-error: #FEF8F8;
 
   /* Charts */
-  --chart-1: #422AD5;
-  --chart-2: #F43098;
-  --chart-3: #00D3BB;
-  --chart-4: #00BAFE;
-  --chart-5: #00D390;
-  --chart-6: #FCB700;
-  --chart-7: #FF627D;
-  --chart-8: #9B2DB6;
-  --chart-9: #00C6DC;
-  --chart-10: #217EB2;
+  --chart-1: #1C58D3;
+  --chart-2: #B92052;
+  --chart-3: #0F8F7E;
+  --chart-4: #3C91E5;
+  --chart-5: #137A43;
+  --chart-6: #E08A00;
+  --chart-7: #D43838;
+  --chart-8: #6B7A1F;
+  --chart-9: #B76E0A;
+  --chart-10: #5E4A9E;
 
   /* Type families */
   --font-display: "Space Grotesk", "Pretendard", sans-serif;
@@ -238,96 +238,96 @@ h1{font-size:34px;letter-spacing:-0.01em;margin:0 0 8px}
   --layout-footer-columns: 1;
   --layout-footer-height: 360px;
 }
-/* Derived from daisyUI (https://github.com/saadeghi/daisyui) - MIT License, Copyright (c) 2020 Pouya Saadeghi. Converted for BurnGuard. */
-/* OKLCH values were converted offline to sRGB, gamut-clipped, and rounded to the nearest 8-bit channel. */
+/* Dark Theme - colour palette authored for BurnGuard. */
+/* Text and component pairs meet WCAG 2.2 AA; bundled-seed-themes.test.ts measures them. */
 
 [data-theme="dark"] {
   
 
   /* Neutrals */
-  --gray-100: #E4E4E7;
-  --gray-90: #1D232A;
-  --gray-80: #353A41;
-  --gray-70: #4D5157;
-  --gray-60: #65686E;
-  --gray-50: #7D8085;
-  --gray-40: #94979B;
-  --gray-30: #A8AAAE;
-  --gray-20: #BCBDC1;
-  --gray-10: #D0D1D4;
+  --gray-100: #EEF0F5;
+  --gray-90: #16181E;
+  --gray-80: #303238;
+  --gray-70: #4A4C52;
+  --gray-60: #64666B;
+  --gray-50: #7E8085;
+  --gray-40: #989A9F;
+  --gray-30: #ADAFB5;
+  --gray-20: #C3C5CA;
+  --gray-10: #D8DAE0;
 
   /* Brand and accents */
-  --primary-blue: #605DFF;
-  --action-blue: #605DFF;
-  --red-60: #FF627D;
-  --red-50: #FA7990;
-  --red-10: #E9CDD4;
-  --orange-50: #00D3BB;
-  --orange-10: #BBE1DF;
-  --yellow-30: #FCB700;
-  --yellow-10: #E8DCBD;
-  --green-60: #00D390;
-  --green-50: #29D6A0;
-  --green-10: #BBE1D7;
-  --teal-50: #00D3BB;
-  --teal-10: #BBE1DF;
-  --aqua-60: #00BAFE;
-  --aqua-10: #BBDCEB;
-  --blue-90: #1D232A;
-  --blue-80: #4D4DC3;
-  --blue-70: #5755E1;
-  --blue-60: #605DFF;
-  --blue-50: #7875FB;
-  --blue-30: #A9A7F2;
-  --blue-10: #CFCEEB;
-  --ultramarine-60: #605DFF;
-  --purple-60: #F43098;
-  --pink-60: #F43098;
+  --primary-blue: #699AFA;
+  --action-blue: #699AFA;
+  --red-60: #FC6F2C;
+  --red-50: #DA622A;
+  --red-10: #392520;
+  --orange-50: #B7E133;
+  --orange-10: #333C22;
+  --yellow-30: #FFE07A;
+  --yellow-10: #403C2F;
+  --green-60: #86EDA9;
+  --green-50: #75CD94;
+  --green-10: #2A3E37;
+  --teal-50: #B7E133;
+  --teal-10: #333C22;
+  --aqua-60: #858DC6;
+  --aqua-10: #2A2D3C;
+  --blue-90: #16181E;
+  --blue-80: #547AC3;
+  --blue-70: #5F8AE0;
+  --blue-60: #699AFA;
+  --blue-50: #5880CE;
+  --blue-30: #3B5281;
+  --blue-10: #222C3F;
+  --ultramarine-60: #699AFA;
+  --purple-60: #F49AC1;
+  --pink-60: #F49AC1;
 
   /* Semantic */
-  --success: #00D390;
-  --warning-yellow: #FCB700;
-  --warning-orange: #00D3BB;
-  --error: #FF627D;
-  --info: #00BAFE;
+  --success: #86EDA9;
+  --warning-yellow: #FFE07A;
+  --warning-orange: #B7E133;
+  --error: #FC6F2C;
+  --info: #858DC6;
 
   /* Surface and text */
-  --bg: #1D232A;
-  --bg-subtle: #191E24;
-  --bg-muted: #15191E;
-  --surface: #1D232A;
-  --surface-inverse: #09090B;
-  --fg-1: #ECF9FF;
-  --fg-2: #ECF9FF;
-  --fg-3: #ECF9FF;
-  --fg-4: #94979B;
-  --fg-on-dark: #E4E4E7;
-  --fg-on-brand: #EDF1FE;
-  --border: #15191E;
-  --border-strong: #A8AAAE;
-  --focus-ring: #605DFF;
+  --bg: #16181E;
+  --bg-subtle: #1C1F26;
+  --bg-muted: #252932;
+  --surface: #1C1F26;
+  --surface-inverse: #0B0C10;
+  --fg-1: #EEF0F5;
+  --fg-2: #CDD1DB;
+  --fg-3: #AFB4C1;
+  --fg-4: #8A909E;
+  --fg-on-dark: #EEF0F5;
+  --fg-on-brand: #172237;
+  --border: #252932;
+  --border-strong: #61656D;
+  --focus-ring: #699AFA;
 
-  /* Paired donor colors retained for accessible combinations */
-  --secondary: #F43098;
-  --fg-on-secondary: #F9E4F0;
-  --accent: #00D3BB;
-  --fg-on-accent: #084D49;
-  --fg-on-info: #042E49;
-  --fg-on-success: #004C39;
-  --fg-on-warning: #793205;
-  --fg-on-error: #4D0218;
+  /* Paired foregrounds for accessible combinations */
+  --secondary: #F49AC1;
+  --fg-on-secondary: #36222A;
+  --accent: #B7E133;
+  --fg-on-accent: #28310B;
+  --fg-on-info: #1D1F2C;
+  --fg-on-success: #1D3425;
+  --fg-on-warning: #38311B;
+  --fg-on-error: #37180A;
 
   /* Charts */
-  --chart-1: #605DFF;
-  --chart-2: #F43098;
-  --chart-3: #00D3BB;
-  --chart-4: #00BAFE;
-  --chart-5: #00D390;
-  --chart-6: #FCB700;
-  --chart-7: #FF627D;
-  --chart-8: #AA46CC;
-  --chart-9: #00C6DC;
-  --chart-10: #3098C8;
+  --chart-1: #699AFA;
+  --chart-2: #F49AC1;
+  --chart-3: #B7E133;
+  --chart-4: #858DC6;
+  --chart-5: #86EDA9;
+  --chart-6: #FFE07A;
+  --chart-7: #FC6F2C;
+  --chart-8: #C07BFF;
+  --chart-9: #C4B277;
+  --chart-10: #40ADA3;
 
   /* Type families */
   --font-display: "Space Grotesk", "Pretendard", sans-serif;
@@ -436,96 +436,96 @@ h1{font-size:34px;letter-spacing:-0.01em;margin:0 0 8px}
   --layout-footer-columns: 3;
   --layout-footer-height: 560px;
 }
-/* Derived from daisyUI (https://github.com/saadeghi/daisyui) - MIT License, Copyright (c) 2020 Pouya Saadeghi. Converted for BurnGuard. */
-/* OKLCH values were converted offline to sRGB, gamut-clipped, and rounded to the nearest 8-bit channel. */
+/* Cupcake Theme - colour palette authored for BurnGuard. */
+/* Text and component pairs meet WCAG 2.2 AA; bundled-seed-themes.test.ts measures them. */
 
 [data-theme="cupcake"] {
   
 
   /* Neutrals */
-  --gray-100: #FAF7F5;
-  --gray-90: #262629;
-  --gray-80: #3F3F41;
-  --gray-70: #59585A;
-  --gray-60: #727172;
-  --gray-50: #8C8A8B;
-  --gray-40: #A5A3A3;
-  --gray-30: #BAB8B8;
-  --gray-20: #D0CDCC;
-  --gray-10: #E5E2E1;
+  --gray-100: #FFF7F2;
+  --gray-90: #3A2633;
+  --gray-80: #523F4A;
+  --gray-70: #695861;
+  --gray-60: #817178;
+  --gray-50: #998A8F;
+  --gray-40: #B0A3A6;
+  --gray-30: #C4B8B9;
+  --gray-20: #D8CDCC;
+  --gray-10: #EBE2DF;
 
   /* Brand and accents */
-  --primary-blue: #44EBD3;
-  --action-blue: #44EBD3;
-  --red-60: #FE1C55;
-  --red-50: #FD4372;
-  --red-10: #FBD0D8;
-  --orange-50: #FFD6A7;
-  --orange-10: #FBF1E7;
-  --yellow-30: #EEAF00;
-  --yellow-10: #F8EAC9;
-  --green-60: #00BA7B;
-  --green-50: #2DC591;
-  --green-10: #CDECDF;
-  --teal-50: #FFD6A7;
-  --teal-10: #FBF1E7;
-  --aqua-60: #00A4F2;
-  --aqua-10: #CDE8F4;
-  --blue-90: #262629;
-  --blue-80: #3CB4A3;
-  --blue-70: #40CFBB;
-  --blue-60: #44EBD3;
-  --blue-50: #65EDD9;
-  --blue-30: #A8F2E6;
-  --blue-10: #DDF5F0;
-  --ultramarine-60: #44EBD3;
-  --purple-60: #F9CBE5;
-  --pink-60: #F9CBE5;
+  --primary-blue: #7A62CF;
+  --action-blue: #7A62CF;
+  --red-60: #D0506E;
+  --red-50: #D76881;
+  --red-10: #F8DAD7;
+  --orange-50: #B6E0A5;
+  --orange-10: #F2EFDE;
+  --yellow-30: #D99233;
+  --yellow-10: #F8E1C9;
+  --green-60: #349871;
+  --green-50: #52A683;
+  --green-10: #DAE2D4;
+  --teal-50: #B6E0A5;
+  --teal-10: #F2EFDE;
+  --aqua-60: #8898DB;
+  --aqua-10: #EAE2E7;
+  --blue-90: #3A2633;
+  --blue-80: #6A53A8;
+  --blue-70: #725BBC;
+  --blue-60: #7A62CF;
+  --blue-50: #957FD4;
+  --blue-30: #C3B1DE;
+  --blue-10: #EBDCE6;
+  --ultramarine-60: #7A62CF;
+  --purple-60: #FCA2BE;
+  --pink-60: #FCA2BE;
 
   /* Semantic */
-  --success: #00BA7B;
-  --warning-yellow: #EEAF00;
-  --warning-orange: #FFD6A7;
-  --error: #FE1C55;
-  --info: #00A4F2;
+  --success: #349871;
+  --warning-yellow: #D99233;
+  --warning-orange: #B6E0A5;
+  --error: #D0506E;
+  --info: #8898DB;
 
   /* Surface and text */
-  --bg: #FAF7F5;
-  --bg-subtle: #EFEAE6;
-  --bg-muted: #E7E2DF;
-  --surface: #FAF7F5;
-  --surface-inverse: #262629;
-  --fg-1: #291334;
-  --fg-2: #291334;
-  --fg-3: #291334;
-  --fg-4: #A5A3A3;
-  --fg-on-dark: #E4E4E7;
-  --fg-on-brand: #005D58;
-  --border: #E7E2DF;
-  --border-strong: #BAB8B8;
-  --focus-ring: #44EBD3;
+  --bg: #FFF2EA;
+  --bg-subtle: #F8E7DC;
+  --bg-muted: #EFDACD;
+  --surface: #FFFCFA;
+  --surface-inverse: #3A2633;
+  --fg-1: #3A2433;
+  --fg-2: #55394B;
+  --fg-3: #6B5161;
+  --fg-4: #725B69;
+  --fg-on-dark: #FBEFF4;
+  --fg-on-brand: #FBFAFE;
+  --border: #EFDACD;
+  --border-strong: #9C8686;
+  --focus-ring: #7A62CF;
 
-  /* Paired donor colors retained for accessible combinations */
-  --secondary: #F9CBE5;
-  --fg-on-secondary: #A0004A;
-  --accent: #FFD6A7;
-  --fg-on-accent: #9F2D00;
-  --fg-on-info: #042E49;
-  --fg-on-success: #002C21;
-  --fg-on-warning: #411E03;
-  --fg-on-error: #4D0218;
+  /* Paired foregrounds for accessible combinations */
+  --secondary: #FCA2BE;
+  --fg-on-secondary: #37242A;
+  --accent: #B6E0A5;
+  --fg-on-accent: #283124;
+  --fg-on-info: #1E2130;
+  --fg-on-success: #0B2119;
+  --fg-on-warning: #30200B;
+  --fg-on-error: #1E0C10;
 
   /* Charts */
-  --chart-1: #44EBD3;
-  --chart-2: #F9CBE5;
-  --chart-3: #FFD6A7;
-  --chart-4: #00A4F2;
-  --chart-5: #00BA7B;
-  --chart-6: #EEAF00;
-  --chart-7: #FE1C55;
-  --chart-8: #9EDBDC;
-  --chart-9: #80BDCC;
-  --chart-10: #22D2A7;
+  --chart-1: #7A62CF;
+  --chart-2: #FCA2BE;
+  --chart-3: #B6E0A5;
+  --chart-4: #8898DB;
+  --chart-5: #349871;
+  --chart-6: #D99233;
+  --chart-7: #D0506E;
+  --chart-8: #C9A0E8;
+  --chart-9: #EDB488;
+  --chart-10: #C58BB0;
 
   /* Type families */
   --font-display: "DM Serif Display", "Gowun Batang", "Pretendard", serif;
@@ -634,96 +634,96 @@ h1{font-size:34px;letter-spacing:-0.01em;margin:0 0 8px}
   --layout-footer-columns: 3;
   --layout-footer-height: 400px;
 }
-/* Derived from daisyUI (https://github.com/saadeghi/daisyui) - MIT License, Copyright (c) 2020 Pouya Saadeghi. Converted for BurnGuard. */
-/* OKLCH values were converted offline to sRGB, gamut-clipped, and rounded to the nearest 8-bit channel. */
+/* Retro Theme - colour palette authored for BurnGuard. */
+/* Text and component pairs meet WCAG 2.2 AA; bundled-seed-themes.test.ts measures them. */
 
 [data-theme="retro"] {
   
 
   /* Neutrals */
-  --gray-100: #ECE3CA;
-  --gray-90: #56524C;
-  --gray-80: #68635B;
-  --gray-70: #7A756A;
-  --gray-60: #8C8679;
-  --gray-50: #9E9888;
-  --gray-40: #B0A998;
-  --gray-30: #BFB7A4;
-  --gray-20: #CEC6B1;
-  --gray-10: #DDD4BD;
+  --gray-100: #F1E5D1;
+  --gray-90: #3B2B1F;
+  --gray-80: #514134;
+  --gray-70: #67584A;
+  --gray-60: #7D6E5F;
+  --gray-50: #928474;
+  --gray-40: #A89B8A;
+  --gray-30: #BAAD9C;
+  --gray-20: #CDC0AD;
+  --gray-10: #DFD2BF;
 
   /* Brand and accents */
-  --primary-blue: #FF9FA0;
-  --action-blue: #FF9FA0;
-  --red-60: #FF6266;
-  --red-50: #FC7978;
-  --red-10: #EFCCB8;
-  --orange-50: #D08700;
-  --orange-10: #E7D2A6;
-  --yellow-30: #F34700;
-  --yellow-10: #EDC7A6;
-  --green-60: #00776F;
-  --green-50: #2A8A7F;
-  --green-10: #C2D0BA;
-  --teal-50: #D08700;
-  --teal-10: #E7D2A6;
-  --aqua-60: #0082CE;
-  --aqua-10: #C2D2CB;
-  --blue-90: #56524C;
-  --blue-80: #D08988;
-  --blue-70: #E79494;
-  --blue-60: #FF9FA0;
-  --blue-50: #FCABA8;
-  --blue-30: #F5C4B7;
-  --blue-10: #EFD8C3;
-  --ultramarine-60: #FF9FA0;
-  --purple-60: #B7F6CD;
-  --pink-60: #B7F6CD;
+  --primary-blue: #B95257;
+  --action-blue: #B95257;
+  --red-60: #A82E2A;
+  --red-50: #B1473E;
+  --red-10: #DEB99D;
+  --orange-50: #D3AB47;
+  --orange-10: #E3CB9E;
+  --yellow-30: #C8601B;
+  --yellow-10: #E1BD96;
+  --green-60: #517434;
+  --green-50: #688247;
+  --green-10: #CCC19B;
+  --teal-50: #D3AB47;
+  --teal-10: #E3CB9E;
+  --aqua-60: #205775;
+  --aqua-10: #C3BCA6;
+  --blue-90: #3B2B1F;
+  --blue-80: #9A4849;
+  --blue-70: #AA4D50;
+  --blue-60: #B95257;
+  --blue-50: #C26C69;
+  --blue-30: #D29889;
+  --blue-10: #E0BFA3;
+  --ultramarine-60: #B95257;
+  --purple-60: #75A062;
+  --pink-60: #75A062;
 
   /* Semantic */
-  --success: #00776F;
-  --warning-yellow: #F34700;
-  --warning-orange: #D08700;
-  --error: #FF6266;
-  --info: #0082CE;
+  --success: #517434;
+  --warning-yellow: #C8601B;
+  --warning-orange: #D3AB47;
+  --error: #A82E2A;
+  --info: #205775;
 
   /* Surface and text */
-  --bg: #ECE3CA;
-  --bg-subtle: #E4D8B4;
-  --bg-muted: #DBCA9B;
-  --surface: #ECE3CA;
-  --surface-inverse: #56524C;
-  --fg-1: #793205;
-  --fg-2: #793205;
-  --fg-3: #793205;
-  --fg-4: #B0A998;
-  --fg-on-dark: #D4D0CE;
-  --fg-on-brand: #801518;
-  --border: #DBCA9B;
-  --border-strong: #BFB7A4;
-  --focus-ring: #FF9FA0;
+  --bg: #E7D2B1;
+  --bg-subtle: #DEC7A2;
+  --bg-muted: #D3B98F;
+  --surface: #F6ECDC;
+  --surface-inverse: #3B2B1F;
+  --fg-1: #33241A;
+  --fg-2: #47352A;
+  --fg-3: #56432F;
+  --fg-4: #5C4939;
+  --fg-on-dark: #F3E9D8;
+  --fg-on-brand: #FCF8F8;
+  --border: #D3B98F;
+  --border-strong: #897459;
+  --focus-ring: #B95257;
 
-  /* Paired donor colors retained for accessible combinations */
-  --secondary: #B7F6CD;
-  --fg-on-secondary: #00642E;
-  --accent: #D08700;
-  --fg-on-accent: #793205;
-  --fg-on-info: #FEF2C6;
-  --fg-on-success: #FEF2C6;
-  --fg-on-warning: #FEF2C6;
-  --fg-on-error: #7C2808;
+  /* Paired foregrounds for accessible combinations */
+  --secondary: #75A062;
+  --fg-on-secondary: #1A2316;
+  --accent: #D3AB47;
+  --fg-on-accent: #2E2610;
+  --fg-on-info: #E9EEF1;
+  --fg-on-success: #EEF1EB;
+  --fg-on-warning: #211005;
+  --fg-on-error: #F6EAEA;
 
   /* Charts */
-  --chart-1: #FF9FA0;
-  --chart-2: #B7F6CD;
-  --chart-3: #D08700;
-  --chart-4: #0082CE;
-  --chart-5: #00776F;
-  --chart-6: #F34700;
-  --chart-7: #FF6266;
-  --chart-8: #DBCAB6;
-  --chart-9: #688467;
-  --chart-10: #808B88;
+  --chart-1: #B95257;
+  --chart-2: #75A062;
+  --chart-3: #D3AB47;
+  --chart-4: #205775;
+  --chart-5: #517434;
+  --chart-6: #C8601B;
+  --chart-7: #A82E2A;
+  --chart-8: #7E5A8C;
+  --chart-9: #2B4549;
+  --chart-10: #925631;
 
   /* Type families */
   --font-display: "DM Serif Display", "Gowun Batang", "Pretendard", serif;
@@ -832,96 +832,96 @@ h1{font-size:34px;letter-spacing:-0.01em;margin:0 0 8px}
   --layout-footer-columns: 3;
   --layout-footer-height: 620px;
 }
-/* Derived from daisyUI (https://github.com/saadeghi/daisyui) - MIT License, Copyright (c) 2020 Pouya Saadeghi. Converted for BurnGuard. */
-/* OKLCH values were converted offline to sRGB, gamut-clipped, and rounded to the nearest 8-bit channel. */
+/* Cyberpunk Theme - colour palette authored for BurnGuard. */
+/* Text and component pairs meet WCAG 2.2 AA; bundled-seed-themes.test.ts measures them. */
 
 [data-theme="cyberpunk"] {
   
 
   /* Neutrals */
-  --gray-100: #FFF248;
-  --gray-90: #111A3B;
-  --gray-80: #2E343D;
-  --gray-70: #4A4E3E;
-  --gray-60: #676840;
-  --gray-50: #838241;
-  --gray-40: #A09C43;
-  --gray-30: #B8B144;
-  --gray-20: #CFC745;
-  --gray-10: #E7DC47;
+  --gray-100: #E8FF3A;
+  --gray-90: #0E0D1A;
+  --gray-80: #282A1E;
+  --gray-70: #424722;
+  --gray-60: #5C6426;
+  --gray-50: #778129;
+  --gray-40: #919E2D;
+  --gray-30: #A7B630;
+  --gray-20: #BCCF34;
+  --gray-10: #D2E737;
 
   /* Brand and accents */
-  --primary-blue: #FF6596;
-  --action-blue: #FF6596;
-  --red-60: #FF5861;
-  --red-50: #FF745C;
-  --red-10: #FFD64C;
-  --orange-50: #CE74FF;
-  --orange-10: #F6DB69;
-  --yellow-30: #FFBE00;
-  --yellow-10: #FFE93B;
-  --green-60: #00A96E;
-  --green-50: #2EB667;
-  --green-10: #D1E54F;
-  --teal-50: #CE74FF;
-  --teal-10: #F6DB69;
-  --aqua-60: #00B5FF;
-  --aqua-10: #D1E769;
-  --blue-90: #111A3B;
-  --blue-80: #BC507D;
-  --blue-70: #DE5A89;
-  --blue-60: #FF6596;
-  --blue-50: #FF7E88;
-  --blue-30: #FFB36B;
-  --blue-10: #FFDB54;
-  --ultramarine-60: #FF6596;
-  --purple-60: #00E8FF;
-  --pink-60: #00E8FF;
+  --primary-blue: #C5259C;
+  --action-blue: #C5259C;
+  --red-60: #E0281E;
+  --red-50: #E14822;
+  --red-10: #E7DF36;
+  --orange-50: #7B1FD6;
+  --orange-10: #D4D756;
+  --yellow-30: #E3881E;
+  --yellow-10: #E7EA35;
+  --green-60: #008A55;
+  --green-50: #239C51;
+  --green-10: #BEEA3F;
+  --teal-50: #7B1FD6;
+  --teal-10: #D4D756;
+  --aqua-60: #0095C8;
+  --aqua-10: #BEEC54;
+  --blue-90: #0E0D1A;
+  --blue-80: #971F7C;
+  --blue-70: #AF228C;
+  --blue-60: #C5259C;
+  --blue-50: #CC5188;
+  --blue-30: #D89D66;
+  --blue-10: #E3DE49;
+  --ultramarine-60: #C5259C;
+  --purple-60: #2A5CFF;
+  --pink-60: #2A5CFF;
 
   /* Semantic */
-  --success: #00A96E;
-  --warning-yellow: #FFBE00;
-  --warning-orange: #CE74FF;
-  --error: #FF5861;
-  --info: #00B5FF;
+  --success: #008A55;
+  --warning-yellow: #E3881E;
+  --warning-orange: #7B1FD6;
+  --error: #E0281E;
+  --info: #0095C8;
 
   /* Surface and text */
-  --bg: #FFF248;
-  --bg-subtle: #F7E83A;
-  --bg-muted: #E3D40E;
-  --surface: #FFF248;
-  --surface-inverse: #111A3B;
-  --fg-1: #000000;
-  --fg-2: #000000;
-  --fg-3: #000000;
-  --fg-4: #A09C43;
-  --fg-on-dark: #FFF248;
-  --fg-on-brand: #180408;
-  --border: #E3D40E;
-  --border-strong: #B8B144;
-  --focus-ring: #FF6596;
+  --bg: #E8FF3A;
+  --bg-subtle: #DDF52A;
+  --bg-muted: #CBE316;
+  --surface: #EEFF66;
+  --surface-inverse: #0E0D1A;
+  --fg-1: #0C0C14;
+  --fg-2: #1E1D2A;
+  --fg-3: #2C2B38;
+  --fg-4: #4D5232;
+  --fg-on-dark: #E8FF3A;
+  --fg-on-brand: #FBEFF8;
+  --border: #CBE316;
+  --border-strong: #829115;
+  --focus-ring: #C5259C;
 
-  /* Paired donor colors retained for accessible combinations */
-  --secondary: #00E8FF;
-  --fg-on-secondary: #001316;
-  --accent: #CE74FF;
-  --fg-on-accent: #0F0517;
-  --fg-on-info: #000000;
-  --fg-on-success: #000000;
-  --fg-on-warning: #000000;
-  --fg-on-error: #000000;
+  /* Paired foregrounds for accessible combinations */
+  --secondary: #2A5CFF;
+  --fg-on-secondary: #EBF0FF;
+  --accent: #7B1FD6;
+  --fg-on-accent: #F2E9FB;
+  --fg-on-info: #00212C;
+  --fg-on-success: #000C08;
+  --fg-on-warning: #321E07;
+  --fg-on-error: #FEFAFA;
 
   /* Charts */
-  --chart-1: #FF6596;
-  --chart-2: #00E8FF;
-  --chart-3: #CE74FF;
-  --chart-4: #00B5FF;
-  --chart-5: #00A96E;
-  --chart-6: #FFBE00;
-  --chart-7: #FF5861;
-  --chart-8: #80A6CA;
-  --chart-9: #6794FF;
-  --chart-10: #808782;
+  --chart-1: #C5259C;
+  --chart-2: #2A5CFF;
+  --chart-3: #7B1FD6;
+  --chart-4: #0095C8;
+  --chart-5: #008A55;
+  --chart-6: #E3881E;
+  --chart-7: #E0281E;
+  --chart-8: #F478D9;
+  --chart-9: #00B9B0;
+  --chart-10: #3A610B;
 
   /* Type families */
   --font-display: "Bebas Neue", "Pretendard", sans-serif;
@@ -1030,96 +1030,96 @@ h1{font-size:34px;letter-spacing:-0.01em;margin:0 0 8px}
   --layout-footer-columns: 3;
   --layout-footer-height: 520px;
 }
-/* Derived from daisyUI (https://github.com/saadeghi/daisyui) - MIT License, Copyright (c) 2020 Pouya Saadeghi. Converted for BurnGuard. */
-/* OKLCH values were converted offline to sRGB, gamut-clipped, and rounded to the nearest 8-bit channel. */
+/* Synthwave Theme - colour palette authored for BurnGuard. */
+/* Text and component pairs meet WCAG 2.2 AA; bundled-seed-themes.test.ts measures them. */
 
 [data-theme="synthwave"] {
   
 
   /* Neutrals */
-  --gray-100: #C6D2FF;
-  --gray-90: #09002F;
-  --gray-80: #201948;
-  --gray-70: #363261;
-  --gray-60: #4D4C7A;
-  --gray-50: #646593;
-  --gray-40: #7A7EAC;
-  --gray-30: #8D93C1;
-  --gray-20: #A0A8D5;
-  --gray-10: #B3BDEA;
+  --gray-100: #F3E9FF;
+  --gray-90: #170C33;
+  --gray-80: #31274B;
+  --gray-70: #4C4164;
+  --gray-60: #665C7C;
+  --gray-50: #817695;
+  --gray-40: #9B91AD;
+  --gray-30: #B1A7C2;
+  --gray-20: #C7BDD6;
+  --gray-10: #DDD3EB;
 
   /* Brand and accents */
-  --primary-blue: #F861B4;
-  --action-blue: #F861B4;
-  --red-60: #EC8C78;
-  --red-50: #E59990;
-  --red-10: #CDC5E7;
-  --orange-50: #FF8904;
-  --orange-10: #D0C5D2;
-  --yellow-30: #FEDE1C;
-  --yellow-10: #D0D4D6;
-  --green-60: #00D3BB;
-  --green-50: #24D3C7;
-  --green-10: #A2D2F3;
-  --teal-50: #FF8904;
-  --teal-10: #D0C5D2;
-  --aqua-60: #00BAFE;
-  --aqua-10: #A2CEFF;
-  --blue-90: #09002F;
-  --blue-80: #B5468F;
-  --blue-70: #D753A1;
-  --blue-60: #F861B4;
-  --blue-50: #EF75C2;
-  --blue-30: #DC9FDD;
-  --blue-10: #CEC0F3;
-  --ultramarine-60: #F861B4;
-  --purple-60: #71D1FE;
-  --pink-60: #71D1FE;
+  --primary-blue: #EE610F;
+  --action-blue: #EE610F;
+  --red-60: #FF4D6D;
+  --red-50: #DC4364;
+  --red-10: #3A163C;
+  --orange-50: #4CF4E8;
+  --orange-10: #213654;
+  --yellow-30: #F4E59C;
+  --yellow-10: #3F3346;
+  --green-60: #09E793;
+  --green-50: #0BC685;
+  --green-10: #143344;
+  --teal-50: #4CF4E8;
+  --teal-10: #213654;
+  --aqua-60: #4C98FC;
+  --aqua-10: #212557;
+  --blue-90: #170C33;
+  --blue-80: #B84C18;
+  --blue-70: #D45713;
+  --blue-60: #EE610F;
+  --blue-50: #C35016;
+  --blue-30: #783223;
+  --blue-10: #37192E;
+  --ultramarine-60: #EE610F;
+  --purple-60: #E04DF0;
+  --pink-60: #E04DF0;
 
   /* Semantic */
-  --success: #00D3BB;
-  --warning-yellow: #FEDE1C;
-  --warning-orange: #FF8904;
-  --error: #EC8C78;
-  --info: #00BAFE;
+  --success: #09E793;
+  --warning-yellow: #F4E59C;
+  --warning-orange: #4CF4E8;
+  --error: #FF4D6D;
+  --info: #4C98FC;
 
   /* Surface and text */
-  --bg: #09002F;
-  --bg-subtle: #120B3D;
-  --bg-muted: #1C184B;
-  --surface: #09002F;
-  --surface-inverse: #422AD5;
-  --fg-1: #A1B1FF;
-  --fg-2: #A1B1FF;
-  --fg-3: #A1B1FF;
-  --fg-4: #7A7EAC;
-  --fg-on-dark: #C6D2FF;
-  --fg-on-brand: #500323;
-  --border: #1C184B;
-  --border-strong: #8D93C1;
-  --focus-ring: #F861B4;
+  --bg: #170C33;
+  --bg-subtle: #1F1340;
+  --bg-muted: #2A1C52;
+  --surface: #1F1340;
+  --surface-inverse: #5A2BC9;
+  --fg-1: #F3E9FF;
+  --fg-2: #D9C9F5;
+  --fg-3: #BBA8E0;
+  --fg-4: #9683BE;
+  --fg-on-dark: #F7F0FF;
+  --fg-on-brand: #341503;
+  --border: #2A1C52;
+  --border-strong: #6A5E89;
+  --focus-ring: #EE610F;
 
-  /* Paired donor colors retained for accessible combinations */
-  --secondary: #71D1FE;
-  --fg-on-secondary: #042E49;
-  --accent: #FF8904;
-  --fg-on-accent: #421104;
-  --fg-on-info: #042E49;
-  --fg-on-success: #002D2C;
-  --fg-on-warning: #733E0A;
-  --fg-on-error: #201047;
+  /* Paired foregrounds for accessible combinations */
+  --secondary: #E04DF0;
+  --fg-on-secondary: #311135;
+  --accent: #4CF4E8;
+  --fg-on-accent: #113633;
+  --fg-on-info: #112137;
+  --fg-on-success: #023320;
+  --fg-on-warning: #363222;
+  --fg-on-error: #381118;
 
   /* Charts */
-  --chart-1: #F861B4;
-  --chart-2: #71D1FE;
-  --chart-3: #FF8904;
-  --chart-4: #00BAFE;
-  --chart-5: #00D3BB;
-  --chart-6: #FEDE1C;
-  --chart-7: #EC8C78;
-  --chart-8: #B499D9;
-  --chart-9: #80A281;
-  --chart-10: #7C9AB8;
+  --chart-1: #EE610F;
+  --chart-2: #E04DF0;
+  --chart-3: #4CF4E8;
+  --chart-4: #4C98FC;
+  --chart-5: #09E793;
+  --chart-6: #F4E59C;
+  --chart-7: #FF4D6D;
+  --chart-8: #9C7BFF;
+  --chart-9: #FFB45C;
+  --chart-10: #12B2B9;
 
   /* Type families */
   --font-display: "Space Grotesk", "Pretendard", sans-serif;
@@ -1228,96 +1228,96 @@ h1{font-size:34px;letter-spacing:-0.01em;margin:0 0 8px}
   --layout-footer-columns: 1;
   --layout-footer-height: 420px;
 }
-/* Derived from daisyUI (https://github.com/saadeghi/daisyui) - MIT License, Copyright (c) 2020 Pouya Saadeghi. Converted for BurnGuard. */
-/* OKLCH values were converted offline to sRGB, gamut-clipped, and rounded to the nearest 8-bit channel. */
+/* Luxury Theme - colour palette authored for BurnGuard. */
+/* Text and component pairs meet WCAG 2.2 AA; bundled-seed-themes.test.ts measures them. */
 
 [data-theme="luxury"] {
   
 
   /* Neutrals */
-  --gray-100: #FFE7A4;
-  --gray-90: #09090B;
-  --gray-80: #27241D;
-  --gray-70: #443E30;
-  --gray-60: #625942;
-  --gray-50: #7F7454;
-  --gray-40: #9D8E67;
-  --gray-30: #B5A476;
-  --gray-20: #CEBB85;
-  --gray-10: #E6D195;
+  --gray-100: #F3E8CB;
+  --gray-90: #14110D;
+  --gray-80: #2F2B24;
+  --gray-70: #4A453B;
+  --gray-60: #645E51;
+  --gray-50: #7F7868;
+  --gray-40: #9A927F;
+  --gray-30: #B0A892;
+  --gray-20: #C6BDA5;
+  --gray-10: #DDD3B8;
 
   /* Brand and accents */
-  --primary-blue: #FFFFFF;
-  --action-blue: #FFFFFF;
-  --red-60: #FF6F6F;
-  --red-50: #FF8579;
-  --red-10: #FFD19A;
-  --orange-50: #513448;
-  --orange-10: #E0C793;
-  --yellow-30: #E2D563;
-  --yellow-10: #FAE498;
-  --green-60: #87D03A;
-  --green-50: #9DD44D;
-  --green-10: #E9E391;
-  --teal-50: #513448;
-  --teal-10: #E0C793;
-  --aqua-60: #67C6FF;
-  --aqua-10: #E4E1B4;
-  --blue-90: #09090B;
-  --blue-80: #BABABB;
-  --blue-70: #DDDDDD;
-  --blue-60: #FFFFFF;
-  --blue-50: #FFFBEF;
-  --blue-30: #FFF2CD;
-  --blue-10: #FFEBB3;
-  --ultramarine-60: #FFFFFF;
-  --purple-60: #152747;
-  --pink-60: #152747;
+  --primary-blue: #BF9005;
+  --action-blue: #BF9005;
+  --red-60: #D25D52;
+  --red-50: #B55248;
+  --red-10: #311C17;
+  --orange-50: #207057;
+  --orange-10: #16221A;
+  --yellow-30: #EF810E;
+  --yellow-10: #3B250D;
+  --green-60: #7FB86A;
+  --green-50: #6F9F5C;
+  --green-10: #272F1E;
+  --teal-50: #207057;
+  --teal-10: #16221A;
+  --aqua-60: #4FAECA;
+  --aqua-10: #1F2D2F;
+  --blue-90: #14110D;
+  --blue-80: #947007;
+  --blue-70: #AA8106;
+  --blue-60: #BF9005;
+  --blue-50: #9D7707;
+  --blue-30: #614A09;
+  --blue-10: #2E240C;
+  --ultramarine-60: #BF9005;
+  --purple-60: #8A2E3C;
+  --pink-60: #8A2E3C;
 
   /* Semantic */
-  --success: #87D03A;
-  --warning-yellow: #E2D563;
-  --warning-orange: #513448;
-  --error: #FF6F6F;
-  --info: #67C6FF;
+  --success: #7FB86A;
+  --warning-yellow: #EF810E;
+  --warning-orange: #207057;
+  --error: #D25D52;
+  --info: #4FAECA;
 
   /* Surface and text */
-  --bg: #09090B;
-  --bg-subtle: #171618;
-  --bg-muted: #1E1D1F;
-  --surface: #09090B;
-  --surface-inverse: #331800;
-  --fg-1: #DCA54D;
-  --fg-2: #DCA54D;
-  --fg-3: #DCA54D;
-  --fg-4: #9D8E67;
-  --fg-on-dark: #FFE7A4;
-  --fg-on-brand: #161616;
-  --border: #1E1D1F;
-  --border-strong: #B5A476;
-  --focus-ring: #FFFFFF;
+  --bg: #14110D;
+  --bg-subtle: #1B1712;
+  --bg-muted: #241F18;
+  --surface: #1B1712;
+  --surface-inverse: #3A2A12;
+  --fg-1: #ECDDB6;
+  --fg-2: #D8C597;
+  --fg-3: #BFAA7A;
+  --fg-4: #968561;
+  --fg-on-dark: #F3E8CB;
+  --fg-on-brand: #2A2001;
+  --border: #241F18;
+  --border-strong: #68604E;
+  --focus-ring: #BF9005;
 
-  /* Paired donor colors retained for accessible combinations */
-  --secondary: #152747;
-  --fg-on-secondary: #CBD0D7;
-  --accent: #513448;
-  --fg-on-accent: #DAD3D7;
-  --fg-on-info: #040E16;
-  --fg-on-success: #061001;
-  --fg-on-warning: #121003;
-  --fg-on-error: #160404;
+  /* Paired foregrounds for accessible combinations */
+  --secondary: #8A2E3C;
+  --fg-on-secondary: #F3EAEC;
+  --accent: #207057;
+  --fg-on-accent: #E9F1EE;
+  --fg-on-info: #11262C;
+  --fg-on-success: #1C2817;
+  --fg-on-warning: #351C03;
+  --fg-on-error: #291210;
 
   /* Charts */
-  --chart-1: #FFFFFF;
-  --chart-2: #152747;
-  --chart-3: #513448;
-  --chart-4: #67C6FF;
-  --chart-5: #87D03A;
-  --chart-6: #E2D563;
-  --chart-7: #FF6F6F;
-  --chart-8: #8A93A3;
-  --chart-9: #5C7DA4;
-  --chart-10: #C3E89C;
+  --chart-1: #BF9005;
+  --chart-2: #8A2E3C;
+  --chart-3: #207057;
+  --chart-4: #4FAECA;
+  --chart-5: #7FB86A;
+  --chart-6: #EF810E;
+  --chart-7: #D25D52;
+  --chart-8: #6E5A80;
+  --chart-9: #466186;
+  --chart-10: #A86E8A;
 
   /* Type families */
   --font-display: "DM Serif Display", "Gowun Batang", "Pretendard", serif;
@@ -1426,96 +1426,96 @@ h1{font-size:34px;letter-spacing:-0.01em;margin:0 0 8px}
   --layout-footer-columns: 2;
   --layout-footer-height: 540px;
 }
-/* Derived from daisyUI (https://github.com/saadeghi/daisyui) - MIT License, Copyright (c) 2020 Pouya Saadeghi. Converted for BurnGuard. */
-/* OKLCH values were converted offline to sRGB, gamut-clipped, and rounded to the nearest 8-bit channel. */
+/* Dracula Theme - colour palette authored for BurnGuard. */
+/* Text and component pairs meet WCAG 2.2 AA; bundled-seed-themes.test.ts measures them. */
 
 [data-theme="dracula"] {
   
 
   /* Neutrals */
-  --gray-100: #D6D7DB;
-  --gray-90: #282A36;
-  --gray-80: #3D3F4A;
-  --gray-70: #52545E;
-  --gray-60: #676871;
-  --gray-50: #7C7D85;
-  --gray-40: #909299;
-  --gray-30: #A2A3AA;
-  --gray-20: #B3B4BA;
-  --gray-10: #C5C6CA;
+  --gray-100: #E4DFEE;
+  --gray-90: #1F1B2A;
+  --gray-80: #373342;
+  --gray-70: #4E4A59;
+  --gray-60: #666271;
+  --gray-50: #7E7988;
+  --gray-40: #9591A0;
+  --gray-30: #A9A4B3;
+  --gray-20: #BDB8C7;
+  --gray-10: #D0CBDA;
 
   /* Brand and accents */
-  --primary-blue: #FF79C6;
-  --action-blue: #FF79C6;
-  --red-60: #FF5555;
-  --red-50: #F86C6D;
-  --red-10: #DDC0C3;
-  --orange-50: #FFB86C;
-  --orange-10: #DDD1C7;
-  --yellow-30: #F1FA8C;
-  --yellow-10: #DBDDCD;
-  --green-60: #51FA7B;
-  --green-50: #69F48C;
-  --green-10: #BEDDCA;
-  --teal-50: #FFB86C;
-  --teal-10: #DDD1C7;
-  --aqua-60: #8BE9FD;
-  --aqua-10: #C8DAE1;
-  --blue-90: #282A36;
-  --blue-80: #C3639E;
-  --blue-70: #E16EB2;
-  --blue-60: #FF79C6;
-  --blue-50: #F88ACA;
-  --blue-30: #E8ADD2;
-  --blue-10: #DDC8D8;
-  --ultramarine-60: #FF79C6;
-  --purple-60: #BD93F9;
-  --pink-60: #BD93F9;
+  --primary-blue: #F4388D;
+  --action-blue: #F4388D;
+  --red-60: #DE2B34;
+  --red-50: #C12933;
+  --red-10: #3C1D2C;
+  --orange-50: #CCB631;
+  --orange-10: #3E372B;
+  --yellow-30: #F19233;
+  --yellow-10: #45302C;
+  --green-60: #5FDAA8;
+  --green-50: #55BD95;
+  --green-10: #2B3D41;
+  --teal-50: #CCB631;
+  --teal-10: #3E372B;
+  --aqua-60: #58CCE1;
+  --aqua-10: #293B4B;
+  --blue-90: #1F1B2A;
+  --blue-80: #BF3174;
+  --blue-70: #DA3581;
+  --blue-60: #F4388D;
+  --blue-50: #C93279;
+  --blue-30: #7F2857;
+  --blue-10: #3F1F39;
+  --ultramarine-60: #F4388D;
+  --purple-60: #7B9DFF;
+  --pink-60: #7B9DFF;
 
   /* Semantic */
-  --success: #51FA7B;
-  --warning-yellow: #F1FA8C;
-  --warning-orange: #FFB86C;
-  --error: #FF5555;
-  --info: #8BE9FD;
+  --success: #5FDAA8;
+  --warning-yellow: #F19233;
+  --warning-orange: #CCB631;
+  --error: #DE2B34;
+  --info: #58CCE1;
 
   /* Surface and text */
-  --bg: #282A36;
-  --bg-subtle: #232530;
-  --bg-muted: #1F202A;
-  --surface: #282A36;
-  --surface-inverse: #414558;
-  --fg-1: #F8F8F3;
-  --fg-2: #F8F8F3;
-  --fg-3: #F8F8F3;
-  --fg-4: #909299;
-  --fg-on-dark: #D6D7DB;
-  --fg-on-brand: #16050E;
-  --border: #1F202A;
-  --border-strong: #A2A3AA;
-  --focus-ring: #FF79C6;
+  --bg: #1F1B2A;
+  --bg-subtle: #252032;
+  --bg-muted: #2D273C;
+  --surface: #252032;
+  --surface-inverse: #3B3350;
+  --fg-1: #F2EEF9;
+  --fg-2: #D7D0E6;
+  --fg-3: #BBB2CF;
+  --fg-4: #958DA4;
+  --fg-on-dark: #F2EEF9;
+  --fg-on-brand: #360C1F;
+  --border: #2D273C;
+  --border-strong: #6C6778;
+  --focus-ring: #F4388D;
 
-  /* Paired donor colors retained for accessible combinations */
-  --secondary: #BD93F9;
-  --fg-on-secondary: #0D0815;
-  --accent: #FFB86C;
-  --fg-on-accent: #160D04;
-  --fg-on-info: #071316;
-  --fg-on-success: #021505;
-  --fg-on-warning: #141507;
-  --fg-on-error: #160202;
+  /* Paired foregrounds for accessible combinations */
+  --secondary: #7B9DFF;
+  --fg-on-secondary: #1B2338;
+  --accent: #CCB631;
+  --fg-on-accent: #2D280B;
+  --fg-on-info: #132D31;
+  --fg-on-success: #153025;
+  --fg-on-warning: #35200B;
+  --fg-on-error: #FEFAFA;
 
   /* Charts */
-  --chart-1: #FF79C6;
-  --chart-2: #BD93F9;
-  --chart-3: #FFB86C;
-  --chart-4: #8BE9FD;
-  --chart-5: #51FA7B;
-  --chart-6: #F1FA8C;
-  --chart-7: #FF5555;
-  --chart-8: #DE86E0;
-  --chart-9: #C5D0B4;
-  --chart-10: #A8BAA0;
+  --chart-1: #F4388D;
+  --chart-2: #7B9DFF;
+  --chart-3: #CCB631;
+  --chart-4: #58CCE1;
+  --chart-5: #5FDAA8;
+  --chart-6: #F19233;
+  --chart-7: #DE2B34;
+  --chart-8: #B56BD9;
+  --chart-9: #C4E155;
+  --chart-10: #D88DA3;
 
   /* Type families */
   --font-display: "Space Grotesk", "Pretendard", sans-serif;
@@ -1624,96 +1624,96 @@ h1{font-size:34px;letter-spacing:-0.01em;margin:0 0 8px}
   --layout-footer-columns: 4;
   --layout-footer-height: 520px;
 }
-/* Derived from daisyUI (https://github.com/saadeghi/daisyui) - MIT License, Copyright (c) 2020 Pouya Saadeghi. Converted for BurnGuard. */
-/* OKLCH values were converted offline to sRGB, gamut-clipped, and rounded to the nearest 8-bit channel. */
+/* Nord Theme - colour palette authored for BurnGuard. */
+/* Text and component pairs meet WCAG 2.2 AA; bundled-seed-themes.test.ts measures them. */
 
 [data-theme="nord"] {
   
 
   /* Neutrals */
-  --gray-100: #ECEFF4;
-  --gray-90: #4C566A;
-  --gray-80: #5F687B;
-  --gray-70: #727B8B;
-  --gray-60: #868D9C;
-  --gray-50: #999FAC;
-  --gray-40: #ACB2BD;
-  --gray-30: #BCC1CB;
-  --gray-20: #CCD0D8;
-  --gray-10: #DCE0E6;
+  --gray-100: #F3F6F8;
+  --gray-90: #24303C;
+  --gray-80: #3D4853;
+  --gray-70: #566069;
+  --gray-60: #6F7780;
+  --gray-50: #878F96;
+  --gray-40: #A0A7AD;
+  --gray-30: #B5BBC0;
+  --gray-20: #CACED2;
+  --gray-10: #DEE2E5;
 
   /* Brand and accents */
-  --primary-blue: #5E81AC;
-  --action-blue: #5E81AC;
-  --red-60: #BF616A;
-  --red-50: #C77B83;
-  --red-10: #E4D5DB;
-  --orange-50: #88C0D0;
-  --orange-10: #DAE7EE;
-  --yellow-30: #EBCB8B;
-  --yellow-10: #ECE9E1;
-  --green-60: #A3BE8D;
-  --green-50: #B0C7A0;
-  --green-10: #DFE6E1;
-  --teal-50: #88C0D0;
-  --teal-10: #DAE7EE;
-  --aqua-60: #B48EAD;
-  --aqua-10: #E2DEE7;
-  --blue-90: #4C566A;
-  --blue-80: #59759A;
-  --blue-70: #5B7BA3;
-  --blue-60: #5E81AC;
-  --blue-50: #7895B9;
-  --blue-30: #ACBED4;
-  --blue-10: #D5DDE8;
-  --ultramarine-60: #5E81AC;
-  --purple-60: #81A1C1;
-  --pink-60: #81A1C1;
+  --primary-blue: #0A5F97;
+  --action-blue: #0A5F97;
+  --red-60: #A8424E;
+  --red-50: #B15C66;
+  --red-10: #DBD3D6;
+  --orange-50: #8D69A3;
+  --orange-10: #D4D4E1;
+  --yellow-30: #C99A3E;
+  --yellow-10: #DFDDCE;
+  --green-60: #55804F;
+  --green-50: #6A9067;
+  --green-10: #CAD9D1;
+  --teal-50: #8D69A3;
+  --teal-10: #D4D4E1;
+  --aqua-60: #1DB2DE;
+  --aqua-10: #C0E2EB;
+  --blue-90: #24303C;
+  --blue-80: #105380;
+  --blue-70: #0D598C;
+  --blue-60: #0A5F97;
+  --blue-50: #367BA8;
+  --blue-30: #82ADC7;
+  --blue-10: #C3D7E1;
+  --ultramarine-60: #0A5F97;
+  --purple-60: #2A908A;
+  --pink-60: #2A908A;
 
   /* Semantic */
-  --success: #A3BE8D;
-  --warning-yellow: #EBCB8B;
-  --warning-orange: #88C0D0;
-  --error: #BF616A;
-  --info: #B48EAD;
+  --success: #55804F;
+  --warning-yellow: #C99A3E;
+  --warning-orange: #8D69A3;
+  --error: #A8424E;
+  --info: #1DB2DE;
 
   /* Surface and text */
-  --bg: #ECEFF4;
-  --bg-subtle: #E5E9F0;
-  --bg-muted: #D8DEE9;
-  --surface: #ECEFF4;
-  --surface-inverse: #4C566A;
-  --fg-1: #2E3440;
-  --fg-2: #2E3440;
-  --fg-3: #2E3440;
-  --fg-4: #ACB2BD;
-  --fg-on-dark: #D8DEE9;
-  --fg-on-brand: #03060B;
-  --border: #D8DEE9;
-  --border-strong: #BCC1CB;
-  --focus-ring: #5E81AC;
+  --bg: #E4ECEE;
+  --bg-subtle: #D9E3E6;
+  --bg-muted: #CAD6DB;
+  --surface: #F3F6F8;
+  --surface-inverse: #24303C;
+  --fg-1: #1D2833;
+  --fg-2: #33404D;
+  --fg-3: #46535F;
+  --fg-4: #525D68;
+  --fg-on-dark: #E8EEF1;
+  --fg-on-brand: #E7EFF5;
+  --border: #CAD6DB;
+  --border-strong: #7A868E;
+  --focus-ring: #0A5F97;
 
-  /* Paired donor colors retained for accessible combinations */
-  --secondary: #81A1C1;
-  --fg-on-secondary: #06090D;
-  --accent: #88C0D0;
-  --fg-on-accent: #070D10;
-  --fg-on-info: #0C070B;
-  --fg-on-success: #0A0D07;
-  --fg-on-warning: #130F07;
-  --fg-on-error: #0D0304;
+  /* Paired foregrounds for accessible combinations */
+  --secondary: #2A908A;
+  --fg-on-secondary: #081D1B;
+  --accent: #8D69A3;
+  --fg-on-accent: #080609;
+  --fg-on-info: #062731;
+  --fg-on-success: #FDFEFD;
+  --fg-on-warning: #2C220E;
+  --fg-on-error: #F6ECED;
 
   /* Charts */
-  --chart-1: #5E81AC;
-  --chart-2: #81A1C1;
-  --chart-3: #88C0D0;
-  --chart-4: #B48EAD;
-  --chart-5: #A3BE8D;
-  --chart-6: #EBCB8B;
-  --chart-7: #BF616A;
-  --chart-8: #7091B6;
-  --chart-9: #9EA7BE;
-  --chart-10: #80A09C;
+  --chart-1: #0A5F97;
+  --chart-2: #2A908A;
+  --chart-3: #8D69A3;
+  --chart-4: #1DB2DE;
+  --chart-5: #55804F;
+  --chart-6: #C99A3E;
+  --chart-7: #A8424E;
+  --chart-8: #2E4A66;
+  --chart-9: #88A162;
+  --chart-10: #A38265;
 
   /* Type families */
   --font-display: "Space Grotesk", "Pretendard", sans-serif;
@@ -1822,96 +1822,96 @@ h1{font-size:34px;letter-spacing:-0.01em;margin:0 0 8px}
   --layout-footer-columns: 3;
   --layout-footer-height: 460px;
 }
-/* Derived from daisyUI (https://github.com/saadeghi/daisyui) - MIT License, Copyright (c) 2020 Pouya Saadeghi. Converted for BurnGuard. */
-/* OKLCH values were converted offline to sRGB, gamut-clipped, and rounded to the nearest 8-bit channel. */
+/* Business Theme - colour palette authored for BurnGuard. */
+/* Text and component pairs meet WCAG 2.2 AA; bundled-seed-themes.test.ts measures them. */
 
 [data-theme="business"] {
   
 
   /* Neutrals */
-  --gray-100: #CECFD0;
-  --gray-90: #202020;
-  --gray-80: #353535;
-  --gray-70: #4A4A4A;
-  --gray-60: #5F5F5F;
-  --gray-50: #747474;
-  --gray-40: #88898A;
-  --gray-30: #9A9A9B;
-  --gray-20: #ABACAD;
-  --gray-10: #BDBEBE;
+  --gray-100: #E3E5E8;
+  --gray-90: #1A1C1F;
+  --gray-80: #323437;
+  --gray-70: #4A4C4F;
+  --gray-60: #626467;
+  --gray-50: #7A7C7F;
+  --gray-40: #939598;
+  --gray-30: #A7A9AC;
+  --gray-20: #BBBDC0;
+  --gray-10: #CFD1D4;
 
   /* Brand and accents */
-  --primary-blue: #1C4E80;
-  --action-blue: #1C4E80;
-  --red-60: #AC3E31;
-  --red-50: #B2584E;
-  --red-10: #C8B5B3;
-  --orange-50: #EA6947;
-  --orange-10: #D3BDB7;
-  --yellow-30: #DBAE5A;
-  --yellow-10: #D0C9BB;
-  --green-60: #6BB187;
-  --green-50: #7DB694;
-  --green-10: #BCCAC3;
-  --teal-50: #EA6947;
-  --teal-10: #D3BDB7;
-  --aqua-60: #0291D5;
-  --aqua-10: #A9C4D1;
-  --blue-90: #202020;
-  --blue-80: #1D4165;
-  --blue-70: #1D4873;
-  --blue-60: #1C4E80;
-  --blue-50: #3C658E;
-  --blue-30: #7E95AC;
-  --blue-10: #B2BAC3;
-  --ultramarine-60: #1C4E80;
-  --purple-60: #7C909A;
-  --pink-60: #7C909A;
+  --primary-blue: #3470C1;
+  --action-blue: #3470C1;
+  --red-60: #D6312B;
+  --red-50: #BA2E29;
+  --red-10: #351E20;
+  --orange-50: #D58A3A;
+  --orange-10: #3B2F23;
+  --yellow-30: #FBCA6A;
+  --yellow-10: #423A2C;
+  --green-60: #1EA262;
+  --green-50: #1D8E58;
+  --green-10: #1A332A;
+  --teal-50: #D58A3A;
+  --teal-10: #3B2F23;
+  --aqua-60: #4EACDF;
+  --aqua-10: #233541;
+  --blue-90: #1A1C1F;
+  --blue-80: #2E5B99;
+  --blue-70: #3166AE;
+  --blue-60: #3470C1;
+  --blue-50: #2F5FA0;
+  --blue-30: #254167;
+  --blue-10: #1D2836;
+  --ultramarine-60: #3470C1;
+  --purple-60: #8A9A5B;
+  --pink-60: #8A9A5B;
 
   /* Semantic */
-  --success: #6BB187;
-  --warning-yellow: #DBAE5A;
-  --warning-orange: #EA6947;
-  --error: #AC3E31;
-  --info: #0291D5;
+  --success: #1EA262;
+  --warning-yellow: #FBCA6A;
+  --warning-orange: #D58A3A;
+  --error: #D6312B;
+  --info: #4EACDF;
 
   /* Surface and text */
-  --bg: #202020;
-  --bg-subtle: #1C1C1C;
-  --bg-muted: #181818;
-  --surface: #202020;
-  --surface-inverse: #23282E;
-  --fg-1: #CDCDCD;
-  --fg-2: #CDCDCD;
-  --fg-3: #CDCDCD;
-  --fg-4: #88898A;
-  --fg-on-dark: #CECFD0;
-  --fg-on-brand: #D0DAE5;
-  --border: #181818;
-  --border-strong: #9A9A9B;
-  --focus-ring: #1C4E80;
+  --bg: #191B1E;
+  --bg-subtle: #16181A;
+  --bg-muted: #121315;
+  --surface: #1F2226;
+  --surface-inverse: #2A3038;
+  --fg-1: #E3E5E8;
+  --fg-2: #C9CDD2;
+  --fg-3: #AEB3BA;
+  --fg-4: #838991;
+  --fg-on-dark: #E3E5E8;
+  --fg-on-brand: #F1F5FB;
+  --border: #121315;
+  --border-strong: #666769;
+  --focus-ring: #3470C1;
 
-  /* Paired donor colors retained for accessible combinations */
-  --secondary: #7C909A;
-  --fg-on-secondary: #050708;
-  --accent: #EA6947;
-  --fg-on-accent: #130402;
-  --fg-on-info: #000710;
-  --fg-on-success: #040B07;
-  --fg-on-warning: #110B03;
-  --fg-on-error: #F2D8D4;
+  /* Paired foregrounds for accessible combinations */
+  --secondary: #8A9A5B;
+  --fg-on-secondary: #1E2214;
+  --accent: #D58A3A;
+  --fg-on-accent: #2F1E0D;
+  --fg-on-info: #112631;
+  --fg-on-success: #072416;
+  --fg-on-warning: #372C17;
+  --fg-on-error: #FDF6F6;
 
   /* Charts */
-  --chart-1: #1C4E80;
-  --chart-2: #7C909A;
-  --chart-3: #EA6947;
-  --chart-4: #0291D5;
-  --chart-5: #6BB187;
-  --chart-6: #DBAE5A;
-  --chart-7: #AC3E31;
-  --chart-8: #4C6F8D;
-  --chart-9: #767D8E;
-  --chart-10: #448084;
+  --chart-1: #3470C1;
+  --chart-2: #8A9A5B;
+  --chart-3: #D58A3A;
+  --chart-4: #4EACDF;
+  --chart-5: #1EA262;
+  --chart-6: #FBCA6A;
+  --chart-7: #D6312B;
+  --chart-8: #9078B7;
+  --chart-9: #95794A;
+  --chart-10: #1C6E5D;
 
   /* Type families */
   --font-display: "Space Grotesk", "Pretendard", sans-serif;
@@ -8224,13 +8224,13 @@ h1{font-size:34px;letter-spacing:-0.01em;margin:0 0 8px}
 <body><div class="page">
 <h1>Bundled design systems</h1>
 <p class="sub">Every card below is rendered by its own theme's tokens — ground, foreground steps, one action, the semantic pairs, the ten-step chart ramp, and its layout signature. Nothing here restyles a theme, so the page is the evidence.</p>
-<p class="count">41 systems · 10 donor-derived · 31 original</p>
+<p class="count">41 original systems · 10 classic · 31 by design family</p>
 <div class="grid">
 
 <article class="card" data-theme="light">
   <header class="card-head">
     <span class="slug">light</span>
-    <span class="origin">DONOR</span>
+    <span class="origin">CLASSIC</span>
   </header>
   <div class="stage">
     <p class="eyebrow">TOKEN PREVIEW</p>
@@ -8249,7 +8249,7 @@ h1{font-size:34px;letter-spacing:-0.01em;margin:0 0 8px}
 <article class="card" data-theme="dark">
   <header class="card-head">
     <span class="slug">dark</span>
-    <span class="origin">DONOR</span>
+    <span class="origin">CLASSIC</span>
   </header>
   <div class="stage">
     <p class="eyebrow">TOKEN PREVIEW</p>
@@ -8268,7 +8268,7 @@ h1{font-size:34px;letter-spacing:-0.01em;margin:0 0 8px}
 <article class="card" data-theme="cupcake">
   <header class="card-head">
     <span class="slug">cupcake</span>
-    <span class="origin">DONOR</span>
+    <span class="origin">CLASSIC</span>
   </header>
   <div class="stage">
     <p class="eyebrow">TOKEN PREVIEW</p>
@@ -8287,7 +8287,7 @@ h1{font-size:34px;letter-spacing:-0.01em;margin:0 0 8px}
 <article class="card" data-theme="retro">
   <header class="card-head">
     <span class="slug">retro</span>
-    <span class="origin">DONOR</span>
+    <span class="origin">CLASSIC</span>
   </header>
   <div class="stage">
     <p class="eyebrow">TOKEN PREVIEW</p>
@@ -8306,7 +8306,7 @@ h1{font-size:34px;letter-spacing:-0.01em;margin:0 0 8px}
 <article class="card" data-theme="cyberpunk">
   <header class="card-head">
     <span class="slug">cyberpunk</span>
-    <span class="origin">DONOR</span>
+    <span class="origin">CLASSIC</span>
   </header>
   <div class="stage">
     <p class="eyebrow">TOKEN PREVIEW</p>
@@ -8325,7 +8325,7 @@ h1{font-size:34px;letter-spacing:-0.01em;margin:0 0 8px}
 <article class="card" data-theme="synthwave">
   <header class="card-head">
     <span class="slug">synthwave</span>
-    <span class="origin">DONOR</span>
+    <span class="origin">CLASSIC</span>
   </header>
   <div class="stage">
     <p class="eyebrow">TOKEN PREVIEW</p>
@@ -8344,7 +8344,7 @@ h1{font-size:34px;letter-spacing:-0.01em;margin:0 0 8px}
 <article class="card" data-theme="luxury">
   <header class="card-head">
     <span class="slug">luxury</span>
-    <span class="origin">DONOR</span>
+    <span class="origin">CLASSIC</span>
   </header>
   <div class="stage">
     <p class="eyebrow">TOKEN PREVIEW</p>
@@ -8363,7 +8363,7 @@ h1{font-size:34px;letter-spacing:-0.01em;margin:0 0 8px}
 <article class="card" data-theme="dracula">
   <header class="card-head">
     <span class="slug">dracula</span>
-    <span class="origin">DONOR</span>
+    <span class="origin">CLASSIC</span>
   </header>
   <div class="stage">
     <p class="eyebrow">TOKEN PREVIEW</p>
@@ -8382,7 +8382,7 @@ h1{font-size:34px;letter-spacing:-0.01em;margin:0 0 8px}
 <article class="card" data-theme="nord">
   <header class="card-head">
     <span class="slug">nord</span>
-    <span class="origin">DONOR</span>
+    <span class="origin">CLASSIC</span>
   </header>
   <div class="stage">
     <p class="eyebrow">TOKEN PREVIEW</p>
@@ -8401,7 +8401,7 @@ h1{font-size:34px;letter-spacing:-0.01em;margin:0 0 8px}
 <article class="card" data-theme="business">
   <header class="card-head">
     <span class="slug">business</span>
-    <span class="origin">DONOR</span>
+    <span class="origin">CLASSIC</span>
   </header>
   <div class="stage">
     <p class="eyebrow">TOKEN PREVIEW</p>

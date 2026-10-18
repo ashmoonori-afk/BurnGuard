@@ -30,8 +30,8 @@ import { logoSvgContract } from "../services/logo-svg-validation";
 import { LOGO_IDEA_SKETCH_MAX_BYTES } from "../services/logo-pipeline-state";
 
 /**
- * Guideline pages the finalize turn must author, in order. Modelled on the hcma and Asana brand
- * guidelines: numbered sections, one rule per page, every rule shown on the mark itself.
+ * Guideline pages the finalize turn must author, in order: numbered sections, one rule per page,
+ * every rule shown on the mark itself.
  */
 export const LOGO_REQUIRED_PAGES = [
   "cover",
