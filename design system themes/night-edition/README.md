@@ -65,6 +65,8 @@ Navigation segmented-pill → hero type-marquee (90% copy zone, background media
 
 Keep the ink ground, readable serif body and loose leading. Warm signal marks the active article or reading progress; images provide the large bright areas without extra accents. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
+For nocturnal craft and object-storytelling pages, stage a single illuminated material specimen per chapter on an ink ground, pairing tight display titles with concise maker captions.
+
 ## Image direction
 
 Every artifact on this system needs imagery of a specific kind; the palette alone will not

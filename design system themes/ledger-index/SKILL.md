@@ -18,6 +18,8 @@ Navigation side-rail → hero product-panel (64% copy zone, below media, 16 / 10
 
 Keep the ruled index body: shared-edge cells, mono labels, monochrome imagery and emphasis by cell size and rule weight. No radius or shadow. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
+For indexed case-study directories, use shared-edge ruled cells to align project numbers, client categories, technology tags, and monochrome specimen frames without card elevation.
+
 ## Layout
 
 Use the `--layout-*` tokens; do not invent a grid per artifact. Content sits inside `--layout-max` with `--layout-margin` at the sides, body copy holds to `--layout-measure`, sections are separated by `--layout-section-y`, and dividers use `--layout-rule`. The base grid is `--layout-columns` columns with `--layout-gutter` between them, collapsing at `--layout-bp-md`. Secondary media defaults to `--layout-hero`; website opening media uses `--layout-hero-media-ratio` and the Hero section.

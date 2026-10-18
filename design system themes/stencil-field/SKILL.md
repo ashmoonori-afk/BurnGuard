@@ -18,6 +18,8 @@ Navigation segmented-pill → hero masthead-crop (90% copy zone, background medi
 
 Keep the spacious field, saturated media and wide display face. Green marks links or live states only; thin rules and a single deliberate image/type seam carry the structure. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
+For spatial and interactive portfolio stages, pair oversized display lockups across pale fields with numbered scene hotspots, material close-ups, and restrained technical credits.
+
 ## Layout
 
 Use the `--layout-*` tokens; do not invent a grid per artifact. Content sits inside `--layout-max`

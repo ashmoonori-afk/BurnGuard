@@ -14,7 +14,7 @@ describe("Reference-driven slide systems", () => {
   test("Given all bundled themes When resolving deck references Then every theme has one complete untruncated recipe and four renderable specimens", async () => {
     const assigned = Object.values(DECK_REFERENCES).flatMap(reference => [...reference.themes]);
     expect([...assigned].sort()).toEqual(bundledDesignSystems.map(theme => theme.slug).sort());
-    expect(new Set(assigned).size).toBe(41);
+    expect(new Set(assigned).size).toBe(bundledDesignSystems.length);
     for (const { slug } of bundledDesignSystems) {
       const reference = deckReferenceFor(slug)!;
       const root = path.join(resolveRepoRoot(), "design system themes", slug);

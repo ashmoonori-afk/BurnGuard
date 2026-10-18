@@ -18,6 +18,8 @@ Navigation mega-feature → hero filmstrip (68% copy zone, below media, 4 / 5, 6
 
 Keep letterspaced eyebrows, didone openings and warm serif body text with indents. Deep green stays sparse; wide margins and hairline rules make the folio feel bound. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
+For edition-launch and multi-chapter release pages, open with an edition counter badge and classical serif masthead, then alternate painterly chapter plates with numbered feature groups.
+
 ## Layout
 
 Use the `--layout-*` tokens; do not invent a grid per artifact. Content sits inside `--layout-max`

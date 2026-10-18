@@ -65,6 +65,8 @@ Navigation mega-feature → hero framed-cover (80% copy zone, right media, 3 / 2
 
 Keep bright paper, generous emptiness and ink-blue actions. Scale, position and full-width hairline rules provide hierarchy; no filled panels or elevation. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
+For consumer hardware detail pages, pair shadowless device renders on paper-white grounds with colour and capacity chip selectors, concise acoustic or optical claims, and full-width hairline specification rows.
+
 ## Image direction
 
 Every artifact on this system needs imagery of a specific kind; the palette alone will not

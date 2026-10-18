@@ -18,6 +18,8 @@ Navigation editorial-overlay → hero fullbleed-top (28% copy zone, background m
 
 Keep cool limestone, a didone statement voice and whole architectural plates with ground visible around them. Mono captions identify place, year and material; slate marks action. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
+For architectural and interior studio pages, pair contained masonry and room plates with place-and-coordinate mono captions, material provenance notes, and a quiet studio ledger.
+
 ## Layout
 
 Use the `--layout-*` tokens; do not invent a grid per artifact. Content sits inside `--layout-max`

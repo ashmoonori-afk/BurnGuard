@@ -1,0 +1,202 @@
+@import url("./fonts/fonts.css");
+
+/* Modular Configurator Theme - an original BurnGuard design system. */
+/* Palette, type pairing, scale, layout and composition rules composed for this theme. */
+
+:root {
+
+  /* Neutrals */
+  --gray-100: #F6F6F4;
+  --gray-90: #EAEAE7;
+  --gray-80: #D8D8D4;
+  --gray-70: #C0C1BD;
+  --gray-60: #A5A6A2;
+  --gray-50: #8A8B87;
+  --gray-40: #6E706C;
+  --gray-30: #545653;
+  --gray-20: #3A3C3A;
+  --gray-10: #16181B;
+
+  /* Brand and accents */
+  --primary-blue: #1B4FD8;
+  --action-blue: #1B4FD8;
+  --red-60: #B42318;
+  --red-50: #D92D20;
+  --red-10: #FEE4E2;
+  --orange-50: #B54708;
+  --orange-10: #FEF0C7;
+  --yellow-30: #8F6400;
+  --yellow-10: #FEF7C3;
+  --green-60: #166534;
+  --green-50: #15803D;
+  --green-10: #DCFCE7;
+  --teal-50: #0F6E66;
+  --teal-10: #CCFBF1;
+  --aqua-60: #155E75;
+  --aqua-10: #CFFAFE;
+  --blue-90: #102A6B;
+  --blue-80: #15388F;
+  --blue-70: #1843B0;
+  --blue-60: #1B4FD8;
+  --blue-50: #3B6EE8;
+  --blue-30: #84A6F4;
+  --blue-10: #DCE6FD;
+  --ultramarine-60: #233876;
+  --purple-60: #4A5568;
+  --pink-60: #7A3E48;
+
+  /* Semantic */
+  --success: #166534;
+  --warning-yellow: #8F6400;
+  --warning-orange: #B54708;
+  --error: #B42318;
+  --info: #155E75;
+
+  /* Surface and text */
+  --bg: #F6F6F4;
+  --bg-subtle: #EEEEEC;
+  --bg-muted: #E5E5E2;
+  --surface: #F1F1EF;
+  --surface-inverse: #16181B;
+  --fg-1: #16181B;
+  --fg-2: #34373B;
+  --fg-3: #505358;
+  --fg-4: #63666B;
+  --fg-on-dark: #F6F6F4;
+  --fg-on-brand: #FFFFFF;
+  --border: #D4D5D2;
+  --border-strong: #828480;
+  --focus-ring: #1B4FD8;
+
+  /* Paired donor colors retained for accessible combinations */
+  --secondary: #4A5568;
+  --fg-on-secondary: #FFFFFF;
+  --accent: #CBD2D9;
+  --fg-on-accent: #16181B;
+  --fg-on-info: #FFFFFF;
+  --fg-on-success: #FFFFFF;
+  --fg-on-warning: #FFFFFF;
+  --fg-on-error: #FFFFFF;
+
+  /* Charts */
+  --chart-1: #1B4FD8;
+  --chart-2: #4A5568;
+  --chart-3: #0F6E66;
+  --chart-4: #155E75;
+  --chart-5: #166534;
+  --chart-6: #8F6400;
+  --chart-7: #B42318;
+  --chart-8: #233876;
+  --chart-9: #545653;
+  --chart-10: #7A3E48;
+
+  /* Type families */
+  --font-display: "Space Grotesk", "Pretendard", sans-serif;
+  --font-serif: "Newsreader", "Nanum Myeongjo", serif;
+  --font-body: "Public Sans", "Pretendard", sans-serif;
+  --font-sans: "Public Sans", "Pretendard", sans-serif;
+  --font-mono: "IBM Plex Mono", "Pretendard", monospace;
+
+  /* Type scale */
+  --fs-12: 0.75rem;
+  --fs-13: 0.8125rem;
+  --fs-14: 0.875rem;
+  --fs-16: 1rem;
+  --fs-18: 1.125rem;
+  --fs-20: 1.25rem;
+  --fs-24: 1.5rem;
+  --fs-28: 1.75rem;
+  --fs-32: 2rem;
+  --fs-40: 2.5rem;
+  --fs-48: 3rem;
+  --fs-64: 4rem;
+  --fs-80: 5rem;
+
+  /* Weight, leading, and tracking */
+  --fw-light: 300;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --fw-black: 900;
+  --lh-tight: 1.1;
+  --lh-snug: 1.25;
+  --lh-normal: 1.45;
+  --lh-relaxed: 1.6;
+  --ls-tight: -0.02em;
+  --ls-normal: 0em;
+  --ls-wide: 0.02em;
+  --ls-eyebrow: 0.14em;
+
+  /* Spacing: 4px grid */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+  --sp-20: 80px;
+
+  /* Radii */
+  --r-0: 0px;
+  --r-2: 2px;
+  --r-4: 4px;
+  --r-8: 6px;
+  --r-pill: 0px;
+
+  /* Elevation */
+  --shadow-1: none;
+  --shadow-2: none;
+  --shadow-3: none;
+  --shadow-4: none;
+
+  /* Motion */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasis: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 180ms;
+  --dur-base: 300ms;
+  --dur-slow: 480ms;
+
+  /* Layout */
+  --layout-max: 1440px;
+  --layout-measure: 58ch;
+  --layout-columns: 12;
+  --layout-gutter: 16px;
+  --layout-margin: clamp(20px, 3vw, 48px);
+  --layout-section-y: clamp(48px, 6vw, 96px);
+  --layout-rule: 1px;
+  --layout-bp-md: 820px;
+  --layout-bp-lg: 1180px;
+  --layout-hero: 16 / 10;
+  --layout-nav-h: 64px;
+
+  /* Family extensions */
+  --family-media-fit: contain;
+  --family-commerce-gallery-layout: lead-and-pairs;
+  --family-commerce-purchase-position: sticky;
+}
+
+:root { --layout-structure: split; }
+
+/* Website regions; legacy layout and family tokens continue to govern body content. */
+:root {
+  --layout-nav-pattern: enterprise-columns;
+  --layout-nav-position: top;
+  --layout-nav-height: 84px;
+  --layout-nav-width: 1360px;
+  --layout-hero-pattern: product-panel;
+  --layout-hero-copy-ratio: 46%;
+  --layout-hero-media-ratio: 16 / 10;
+  --layout-hero-media-position: below;
+  --layout-hero-min-height: 640px;
+  --layout-hero-title-measure: 16ch;
+  --layout-hero-align: start;
+  --layout-hero-offset: 24px;
+  --layout-footer-pattern: contact-ledger;
+  --layout-footer-columns: 3;
+  --layout-footer-height: 480px;
+}

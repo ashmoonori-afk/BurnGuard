@@ -78,5 +78,5 @@ test("Given original samples, when seeded and copied, then all formats have dura
   await seedOriginalSamplesOnce();
   expect(db.prepare("SELECT 1 FROM projects WHERE name=?").get(deleted.name)).toBeNull();
   expect(await readFile(path.join(edited.dir_path, edited.entrypoint), "utf8")).toBe("user edited sample");
-// Every collection and clone keeps shared font references, glass-ring and image bytes.
+// Every collection and clone keeps shared font references and image bytes.
 }, 120_000);

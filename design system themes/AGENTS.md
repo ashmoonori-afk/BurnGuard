@@ -2,7 +2,7 @@
 
 ## OVERVIEW
 
-Forty-one bundled design systems copied into every workspace on first run - ten classic slugs and thirty-one family and earlier originals, every palette authored for BurnGuard; earned this guide at score 8 for subdirectory count plus a slug/token contract that backend seeding reads by path.
+Forty-three bundled design systems copied into every workspace on first run - ten classic slugs and thirty-three family and earlier originals, every palette authored for BurnGuard; earned this guide at score 8 for subdirectory count plus a slug/token contract that backend seeding reads by path.
 
 ## STRUCTURE
 
@@ -11,13 +11,13 @@ design system themes/<slug>/     # classic: light, dark, cupcake, retro, cyberpu
 ├── colors_and_type.css          #   synthwave, luxury, dracula, nord, business
 │                                # original: cobalt-atelier, signal-reel, daylight-press,
 │                                #   blueprint-manual, ledger-index, dune-editorial, archive-folio
-│                                # family originals, four per design family:
+│                                # family originals, by design family:
 │                                #   minimal-tech: signal-console, paper-instrument,
-│                                #     quiet-runtime, graphite-spec
+│                                #     quiet-runtime, graphite-spec, exploded-field-module
 │                                #   editorial: long-form-press, wide-gutter-review,
 │                                #     quarterly-folio, night-edition
 │                                #   commerce: studio-counter, atelier-counter,
-│                                #     market-stack, vitrine-mono
+│                                #     market-stack, vitrine-mono, modular-configurator
 │                                #   culture: night-marquee, stencil-field,
 │                                #     press-riso, exhibit-wall
 │                                #   data-work: index-table, facet-archive,
@@ -42,7 +42,7 @@ catalogue.html                   # every registered theme rendered on one page; 
 | Seeding | `packages/backend/src/bootstrap.ts` `seedBundledDesignSystems` | Copies `<slug>/` into `~/.burnguard/data/systems/builtin-theme-<slug>`, then bundled fonts; skips if the destination exists |
 | Packaging | `scripts/package-runtime.ts` | Ships everything under the `design system themes/` prefix - the path contains spaces, so quote it everywhere |
 | Verification | `packages/backend/tests/bundled-seed-themes.test.ts` | Checks theme shape, token parity, provenance, classic-palette WCAG AA contrast, layout and family tokens, and the reproduction sections |
-| Surfaces | `scripts/build-theme-surfaces.ts` | `bun run surfaces` regenerates `surfaces/*.css` and the three README sections for every registered theme, the five original samples and the Northvale sample; never hand-edit them |
+| Surfaces | `scripts/build-theme-surfaces.ts` | `bun run surfaces` regenerates `surfaces/*.css` and the three README sections for every registered theme, the four original samples and the Northvale sample; never hand-edit them |
 | Catalogue | `scripts/build-theme-catalogue.ts` | `bun run catalogue` regenerates `catalogue.html` from the registry; never hand-edit it |
 
 ## CONVENTIONS
@@ -50,7 +50,7 @@ catalogue.html                   # every registered theme rendered on one page; 
 - A theme directory is three files plus a generated `surfaces/` directory; the slug must be registered in `bundledDesignSystems` or it is never seeded.
 - Colour, type families, spacing, radius, elevation, motion, the website grid (`--layout-*`) and the structural `--family-*` choices stay in `colors_and_type.css`. A surface file is tokens only - one `:root` block, no colour, no `@import` - and owns only its own geometry; `packages/shared/src/design-surface.ts` is the contract and `doc/22-design-system-surfaces-2026-09-15.md` the record (local-only, see doc/README.md).
 - `colors_and_type.css` is the single source of truth and uses BurnGuard's canonical token families: `--gray-*`, `--chart-*`, semantic pairs, `--r-*`, `--shadow-*`, `--dur-*`.
-- Classic palettes are authored for BurnGuard; each `README.md` says so under `## Provenance`. Their text pairs (`--fg-1..4` on every ground, each `--fg-on-*` on its fill) meet 4.5:1 and `--border-strong`, `--focus-ring` and `--primary-blue` meet 3:1 against `--bg`; the seed test measures every pair.
+- Every bundled palette is authored for BurnGuard; each `README.md` says so under `## Provenance`. Their text pairs (`--fg-1..4` on every ground, each `--fg-on-*` on its fill) meet 4.5:1 and `--border-strong`, `--focus-ring` and `--primary-blue` meet 3:1 against `--bg`; the seed test measures every pair.
 - No bundled system carries a third-party attribution or may claim one. Original systems state in `README.md` that they are authored for BurnGuard and additionally ship `--layout-*` tokens (max width, measure, columns, gutter, margin, section rhythm, rule weight, breakpoints, hero ratio) and document that grid under a `## Layout` heading, because layout is part of the system rather than a per-artifact decision.
 - An original system must be rebuildable from its own three files plus an image generator, so every `README.md` carries `## Composition` (the arrangement rules tokens cannot express), `## Image direction` (subject, treatment, light, framing, palette, a never-list and a prompt skeleton) and `## Reproducing this system` (a self-check list).
 - Family systems additionally ship `--family-*` tokens for the one structural decision their design family turns on - navigation placement, media fit, gallery pattern, table layout, image bleed - and document them under `## Family tokens`. Keep them after the colour section so the hex-only rule on colours still holds.
