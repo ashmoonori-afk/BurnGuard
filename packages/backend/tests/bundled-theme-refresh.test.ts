@@ -1,13 +1,14 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { seedBundledDesignSystems } from "../src/bootstrap";
 import { bundledDesignSystemId, bundledDesignSystems } from "../src/data/bundled-design-systems";
 import { resolveRepoRoot } from "../src/lib/paths";
+import { reconcileExtractionPublications } from "../src/services/extraction-publication";
 import {
-  bundledThemeHistory, readThemeFiles, refreshBundledTheme, themeFileHash, themeTreeDigest, type BundledThemeHistory, type BundledThemeRefresh,
+  bundledThemeHistory, readThemeFiles, recoverBundledTheme, refreshBundledTheme, themeFileHash, themeTreeDigest, type BundledThemeHistory, type BundledThemeRefresh,
 } from "../src/services/bundled-theme-refresh";
 
 const roots: string[] = [];
@@ -133,6 +134,63 @@ describe("bundled theme refresh on upgrade", () => {
 
     expect(refreshes).toBe(0);
     expect(await readThemeFiles(installed)).toEqual(upgraded);
+  });
+
+  test("Given publication and rollback were interrupted When cleanup and the next startup run Then user fonts survive", async () => {
+    const { systems, installed } = await upgradedProfile({ ...legacyTheme, "fonts/Brand.woff2": "brand font bytes" });
+    await seedBundledDesignSystems(resolveRepoRoot(), systems, legacyHistory, lockedRefresh(2, 3));
+    expect(existsSync(installed)).toBe(false);
+
+    await reconcileExtractionPublications(systems);
+    await seedBundledDesignSystems(resolveRepoRoot(), systems, legacyHistory);
+
+    expect(await readFile(path.join(installed, "fonts", "Brand.woff2"), "utf8")).toBe("brand font bytes");
+    expect(await hidden(systems)).toEqual([]);
+  });
+
+  test.each(["prepared", "backed-up", "published"])("Given an upgrade interrupted at %s When startup runs Then user fonts survive and leftover copies are removed", async (boundary) => {
+    const { systems, installed } = await upgradedProfile({ ...legacyTheme, "fonts/Brand.woff2": "brand font bytes" });
+    const previous = path.join(systems, `.${bundledDesignSystemId(SLUG)}.previous`);
+    const stage = path.join(systems, `.${bundledDesignSystemId(SLUG)}.staging-${crypto.randomUUID()}`);
+    await cp(source, stage, { recursive: true });
+    await cp(path.join(installed, "fonts"), path.join(stage, "fonts"), { recursive: true });
+    if (boundary !== "prepared") await rename(installed, previous);
+    if (boundary === "published") await rename(stage, installed);
+
+    await seedBundledDesignSystems(resolveRepoRoot(), systems, legacyHistory);
+    await reconcileExtractionPublications(systems);
+
+    expect(await readFile(path.join(installed, "fonts", "Brand.woff2"), "utf8")).toBe("brand font bytes");
+    expect(await readFile(path.join(installed, "colors_and_type.css"), "utf8")).toBe(await readFile(path.join(source, "colors_and_type.css"), "utf8"));
+    expect(await hidden(systems)).toEqual([]);
+  });
+
+  test("Given recovery is blocked by a locked directory When cleanup runs Then the previous copy survives for a later startup", async () => {
+    const { systems, installed } = await upgradedProfile({ ...legacyTheme, "fonts/Brand.woff2": "brand font bytes" });
+    const previous = path.join(systems, `.${bundledDesignSystemId(SLUG)}.previous`);
+    await rename(installed, previous);
+    const before = await readThemeFiles(previous);
+    const locked = Object.assign(new Error("locked"), { code: "EPERM" });
+
+    await expect(recoverBundledTheme(installed, async () => { throw locked; })).rejects.toBe(locked);
+    await reconcileExtractionPublications(systems);
+
+    expect(existsSync(installed)).toBe(false);
+    expect(await readThemeFiles(previous)).toEqual(before);
+    await seedBundledDesignSystems(resolveRepoRoot(), systems, legacyHistory);
+    expect(await readFile(path.join(installed, "fonts", "Brand.woff2"), "utf8")).toBe("brand font bytes");
+    expect(await hidden(systems)).toEqual([]);
+  });
+
+  test("Given a recovered theme was edited When startup runs Then its bytes are preserved instead of replaced", async () => {
+    const { systems, installed } = await upgradedProfile({ ...legacyTheme, "colors_and_type.css": ":root { --gray-90: #123456; }\n", "fonts/Brand.woff2": "brand font bytes" });
+    const before = await readThemeFiles(installed);
+    await rename(installed, path.join(systems, `.${bundledDesignSystemId(SLUG)}.previous`));
+
+    await seedBundledDesignSystems(resolveRepoRoot(), systems, legacyHistory);
+
+    expect(await readThemeFiles(installed)).toEqual(before);
+    expect(await hidden(systems)).toEqual([]);
   });
 
   test("Given a copy saved with Windows line endings When startup seeds themes Then it is still recognised as untouched", async () => {

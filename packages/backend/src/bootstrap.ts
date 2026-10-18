@@ -36,7 +36,7 @@ import { reconcileExportState } from "./services/export-recovery";
 import { createProductionResearchRecoveryDependencies } from "./routes/research";
 import { reconcileResearchState, type ResearchRecoveryDependencies } from "./services/research-recovery";
 import { recoverVisualAlternatives } from "./services/visual-alternative-recovery";
-import { bundledThemeHistory, installedThemeState, refreshBundledTheme, type BundledThemeHistory, type BundledThemeRefresh } from "./services/bundled-theme-refresh";
+import { bundledThemeHistory, installedThemeState, recoverBundledTheme, refreshBundledTheme, type BundledThemeHistory, type BundledThemeRefresh } from "./services/bundled-theme-refresh";
 import { reapPersistedSessionProcesses } from "./services/session-process-recovery";
 
 async function exists(target: string): Promise<boolean> {
@@ -82,17 +82,19 @@ export async function seedBundledDesignSystems(
         destinationRoot,
         bundledDesignSystemId(slug),
       );
-      if (await exists(destination)) {
-        // An untouched copy from an older release takes the installed bundle; edited copies stay as they are.
-        // The upgrade is optional: a locked or unreadable folder keeps its copy and startup continues.
-        const source = path.join(themesSource, slug);
-        try {
+      try {
+        await recoverBundledTheme(destination);
+        if (await exists(destination)) {
+          // An untouched copy from an older release takes the installed bundle; edited copies stay as they are.
+          const source = path.join(themesSource, slug);
           if (await installedThemeState(destination, source, slug, themeHistory) === "outdated") {
             await refresh(bundledDesignSystemId(slug), source, destination, (stage) => copyBundledFonts(stage, repoRoot));
           }
-        } catch (error) {
-          console.warn("[seed] bundled theme upgrade skipped", slug, error instanceof Error && "code" in error ? String(error.code) : "unknown");
+          return;
         }
+      } catch (error) {
+        // Recovery and upgrade are optional; retain the previous copy and retry on the next launch.
+        console.warn("[seed] bundled theme upgrade skipped", slug, error instanceof Error && "code" in error ? String(error.code) : "unknown");
         return;
       }
       // Publish only a complete theme; startup extraction recovery removes a stage left by a killed first launch.
