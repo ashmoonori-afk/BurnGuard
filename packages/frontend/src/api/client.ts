@@ -54,6 +54,40 @@ export class ApiError extends Error {
   }
 }
 
+export class BootstrapError extends Error {
+  constructor(readonly kind: "denied" | "network" | "other", readonly status = 0) {
+    super("BurnGuard API authority bootstrap failed.");
+    this.name = "BootstrapError";
+  }
+}
+
+let authorityExpired = false;
+const authorityStateListeners = new Set<() => void>();
+
+export function isAuthorityExpired(): boolean { return authorityExpired; }
+
+export function subscribeAuthorityState(listener: () => void): () => void {
+  authorityStateListeners.add(listener);
+  return () => { authorityStateListeners.delete(listener); };
+}
+
+function setAuthorityExpired(expired: boolean): void {
+  if (authorityExpired === expired) return;
+  authorityExpired = expired;
+  for (const listener of authorityStateListeners) listener();
+}
+
+export function isAuthorityDenied(error: unknown): boolean {
+  return (error instanceof ApiError && error.status === 403 && error.code === "forbidden") ||
+    (error instanceof BootstrapError && error.kind === "denied");
+}
+
+export function rejectLaunchAuthority(): void {
+  if (authorityExpired) return;
+  setAuthorityExpired(true);
+  for (const listener of authorityRejectedListeners) listener();
+}
+
 /** A backend that accepts the connection but never answers must not wedge every later Reconnect on one request. */
 const BOOTSTRAP_TIMEOUT_MS = 15_000;
 
@@ -85,6 +119,13 @@ async function requestBootstrap(): Promise<void> {
   );
   try {
     await runBootstrap(timeout.signal);
+  } catch (error) {
+    if (error instanceof BootstrapError) throw error;
+    // Fetch failures and the bounded request deadline are connectivity failures, not proof of rejection.
+    if (timeout.signal.aborted || error instanceof TypeError || error instanceof DOMException) {
+      throw new BootstrapError("network");
+    }
+    throw new BootstrapError("other");
   } finally {
     clearTimeout(timer);
   }
@@ -97,22 +138,26 @@ async function runBootstrap(signal: AbortSignal): Promise<void> {
   let res = await fetchBootstrap(pendingBootstrapSecret, signal);
   const devSecret = pendingBootstrapSecret === null ? devSessionStorage()?.getItem(DEV_BOOTSTRAP_SECRET_KEY) : null;
   if (res.status === 403 && devSecret) res = await fetchBootstrap(devSecret, signal);
-  const body = (await res.json().catch(() => null)) as
-    | ApiSuccess<{ capability: string }>
-    | ApiErrorBody
-    | null;
+  if (res.status === 403) {
+    pendingBootstrapSecret = null;
+    rejectLaunchAuthority();
+    throw new BootstrapError("denied", res.status);
+  }
+  if (!res.ok) throw new BootstrapError("other", res.status);
+  const body: unknown = await res.json().catch(() => null);
   if (
-    !res.ok ||
-    !body ||
+    typeof body !== "object" || body === null ||
     "error" in body ||
-    !("data" in body) || !body.data ||
+    !("data" in body) || typeof body.data !== "object" || body.data === null ||
+    !("capability" in body.data) ||
     typeof body.data.capability !== "string" ||
     body.data.capability.length === 0
   ) {
-    throw new Error("BurnGuard API authority bootstrap failed.");
+    throw new BootstrapError("other", res.status);
   }
   launchCapability = body.data.capability;
   pendingBootstrapSecret = null;
+  setAuthorityExpired(false);
 }
 
 /**
@@ -124,9 +169,11 @@ export async function authorizedFetch(
   path: string,
   init?: RequestInit,
 ): Promise<Response> {
+  if (authorityExpired) throw new ApiError("forbidden", "Request authority rejected.", 403);
   if (!launchCapability) {
     throw new Error("BurnGuard API authority is not initialized.");
   }
+  const requestCapability = launchCapability;
   let target: URL;
   const appLocation =
     typeof location === "undefined"
@@ -141,9 +188,9 @@ export async function authorizedFetch(
     throw new Error("BurnGuard API requests must stay on the app origin.");
   }
   const headers = new Headers(init?.headers ?? {});
-  headers.set(BURNGUARD_CAPABILITY_HEADER, launchCapability);
+  headers.set(BURNGUARD_CAPABILITY_HEADER, requestCapability);
   const res = await fetch(path, { ...init, credentials: "same-origin", headers });
-  if (res.status === 403) await reportAuthorityRejection(res);
+  if (res.status === 403) await reportAuthorityRejection(res, requestCapability);
   return res;
 }
 
@@ -151,18 +198,18 @@ const authorityRejectedListeners = new Set<() => void>();
 
 /**
  * The request-authority gate answers a stale launch capability with 403 `forbidden`: the backend
- * restarted and minted a new one. Listeners ask the user to reload; nothing re-bootstraps here.
+ * restarted and minted a new one. Listeners preserve the workspace and offer normal-launch guidance.
  */
 export function onAuthorityRejected(listener: () => void): () => void {
   authorityRejectedListeners.add(listener);
   return () => { authorityRejectedListeners.delete(listener); };
 }
 
-async function reportAuthorityRejection(res: Response): Promise<void> {
+async function reportAuthorityRejection(res: Response, requestCapability: string): Promise<void> {
   const body: unknown = await res.clone().json().catch(() => null);
   const code = typeof body === "object" && body !== null && "error" in body && typeof body.error === "object" && body.error !== null && "code" in body.error ? body.error.code : null;
-  if (code !== "forbidden") return;
-  for (const listener of authorityRejectedListeners) listener();
+  if (code !== "forbidden" || requestCapability !== launchCapability) return;
+  rejectLaunchAuthority();
 }
 
 /**

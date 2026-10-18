@@ -51,6 +51,8 @@ Navigation side-rail → hero filmstrip (86% copy zone, below media, 3 / 4, 700p
 
 Use near-black with signal red reserved for live state and the primary action. Large display type supplies scale; keep every meaningful label readable, with zero radius and no elevation. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
+For motion-studio and showreel case studies, pair edge-to-edge kinetic display headers with full-bleed reel stages, compact studio manifesto disclosures, and sequenced project outcome plates.
+
 ## Image direction
 
 Every artifact on this system needs imagery of a specific kind; the palette alone will not

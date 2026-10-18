@@ -18,6 +18,8 @@ Navigation profile-popover → hero portfolio-peek (46% copy zone, below media, 
 
 Keep warm plaster visible around complete works. Serif wall text and mono labels provide title, year, medium and dimensions; clay marks action, with zero radius and elevation. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
+For monograph and visual-arts portfolios, pair uncropped documentation plates on warm plaster with a list-to-grid view switch and mono wall captions recording title, year, medium, and dimensions.
+
 ## Layout
 
 Use the `--layout-*` tokens; do not invent a grid per artifact. Content sits inside `--layout-max`

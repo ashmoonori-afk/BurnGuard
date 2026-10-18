@@ -1,7 +1,7 @@
 import { afterEach, expect, mock, test } from "bun:test";
 import type { SequencedEventEnvelope, SessionInfo, SessionSnapshot } from "@bg/shared";
-import { bootstrapApiAuthority } from "../src/api/client";
-import type { SessionStreamReport } from "../src/api/session";
+import { authorizedFetch, bootstrapApiAuthority, isAuthorityExpired } from "../src/api/client";
+import { getSessionSnapshot, type SessionStreamReport } from "../src/api/session";
 import { openSessionStream, retrySessionStream, type SessionStreamHandlers } from "../src/hooks/useSessionEvents";
 
 const SESSION: SessionInfo = {
@@ -26,6 +26,121 @@ const originalEventSource = globalThis.EventSource;
 afterEach(() => {
   globalThis.fetch = originalFetch;
   globalThis.EventSource = originalEventSource;
+});
+
+for (const phase of ["initial", "resync"] as const) {
+  test(`Given an old ${phase} stream snapshot When its denial arrives after a fresh bootstrap Then the newer authority stays usable`, async () => {
+    const started = deferred();
+    const release = deferred();
+    const settled = deferred();
+    const subscribed = deferred();
+    let generation = 0;
+    let snapshots = 0;
+    let open: () => void = () => {};
+    const mutations: (string | null)[] = [];
+    globalThis.fetch = Object.assign(mock(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === "/api/bootstrap") return Response.json({ data: { capability: `generation-${++generation}` } });
+      if (String(input).endsWith("/snapshot")) {
+        snapshots += 1;
+        if (snapshots === (phase === "initial" ? 1 : 2)) {
+          started.resolve();
+          await release.promise;
+          return Response.json({ error: { code: "forbidden", message: "old generation" } }, { status: 403 });
+        }
+        return Response.json({ data: snapshot(0) });
+      }
+      mutations.push(new Headers(init?.headers).get("x-burnguard-capability"));
+      return Response.json({ data: {} });
+    }), { preconnect: originalFetch.preconnect });
+    await bootstrapApiAuthority();
+    const stop = openSessionStream("s1", { current: null }, {
+      setState: () => {},
+      setError: (value) => { if (value) settled.resolve(); },
+      setReconnecting: () => {},
+      setStale: (value) => { if (value) settled.resolve(); },
+      onLive: () => {},
+    }, {
+      getSessionSnapshot,
+      listSessionEvents: async () => [],
+      subscribeSessionStream: (_id, _onEvent, _onError, options) => {
+        open = () => options?.onOpen?.();
+        subscribed.resolve();
+        return () => {};
+      },
+    });
+    try {
+      if (phase === "resync") { await subscribed.promise; open(); }
+      await started.promise;
+      await bootstrapApiAuthority();
+      release.resolve();
+      await settled.promise;
+      expect(isAuthorityExpired()).toBe(false);
+      expect((await authorizedFetch("/api/projects", { method: "POST" })).status).toBe(200);
+      expect(mutations).toEqual(["generation-2"]);
+    } finally {
+      release.resolve();
+      stop();
+    }
+  });
+}
+
+test("Given repeated errors in one disconnect cycle When the authorized snapshot rejects Then one check closes the stale stream and preserves its state", async () => {
+  const subscribed = deferred();
+  const closed = deferred();
+  const checking = deferred();
+  let snapshots = 0;
+  let report: (error: SessionStreamReport) => void = () => {};
+  const stateRef: Parameters<typeof openSessionStream>[1] = { current: null };
+  const flags: string[] = [];
+  globalThis.fetch = Object.assign(mock(async (input: RequestInfo | URL) => {
+    if (String(input) === "/api/bootstrap") return Response.json({ data: { capability: "disconnect-generation" } });
+    snapshots += 1;
+    if (snapshots > 1) {
+      await checking.promise;
+      return Response.json({ error: { code: "forbidden", message: "private" } }, { status: 403 });
+    }
+    return Response.json({ data: snapshot(0) });
+  }), { preconnect: originalFetch.preconnect });
+  await bootstrapApiAuthority();
+  const stop = openSessionStream("s1", stateRef, {
+    setState: () => {},
+    setError: (value) => { flags.push(`error:${value}`); },
+    setReconnecting: (value) => { flags.push(`reconnecting:${value}`); },
+    setStale: () => {},
+    onLive: () => {},
+  }, {
+    getSessionSnapshot,
+    listSessionEvents: async () => [],
+    subscribeSessionStream: (_id, _onEvent, onError) => {
+      report = (error) => onError?.(error);
+      subscribed.resolve();
+      return () => closed.resolve();
+    },
+  });
+  try {
+    await subscribed.promise;
+    const previous = stateRef.current;
+    report({ kind: "connection", state: "connecting", message: "" });
+    expect(snapshots).toBe(1);
+    report({ kind: "connection", state: "closed", message: "" });
+    report({ kind: "connection", state: "closed", message: "" });
+    checking.resolve();
+    await closed.promise;
+    expect(snapshots).toBe(2);
+    expect(stateRef.current).toBe(previous);
+    expect(flags.at(-1)).toBe("error:true");
+    expect(flags.at(-2)).toBe("reconnecting:false");
+  } finally {
+    checking.resolve();
+    stop();
+  }
+});
+
+test("Given bootstrap denies a reconnect When retrying Then no new stream is opened", async () => {
+  let subscriptions = 0;
+  globalThis.fetch = Object.assign(mock(async () => Response.json({ error: { code: "forbidden", message: "private" } }, { status: 403 })), { preconnect: originalFetch.preconnect });
+  await expect(retrySessionStream(() => { subscriptions += 1; })).rejects.toMatchObject({ kind: "denied" });
+  expect(subscriptions).toBe(0);
 });
 
 test("Given an open stream whose resync snapshot fails When the stream opens Then the workspace is stale rather than disconnected, and the next envelope clears it", async () => {
@@ -66,7 +181,7 @@ test("Given an open stream whose resync snapshot fails When the stream opens The
 test("Given a launch capability the backend no longer accepts When the stream is retried Then the snapshot is requested again with a fresh capability and the error clears without a reload", async () => {
   let bootstraps = 0;
   const snapshotCapabilities: (string | null)[] = [];
-  globalThis.fetch = mock(async (input: RequestInfo | URL, init?: RequestInit) => {
+  globalThis.fetch = Object.assign(mock(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     if (url === "/api/bootstrap") {
       bootstraps += 1;
@@ -81,7 +196,7 @@ test("Given a launch capability the backend no longer accepts When the stream is
     }
     if (url.endsWith("/events")) return Response.json({ data: [] });
     return Response.json({ error: { code: "not_found", message: "missing" } }, { status: 404 });
-  }) as typeof fetch;
+  }), { preconnect: originalFetch.preconnect });
   class Source {
     static CLOSED = 2;
     readyState = 1;

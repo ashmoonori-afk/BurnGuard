@@ -1,7 +1,7 @@
 import { useT, type MessageKey } from "@/i18n/t";
 
 /** Why the composer cannot send right now; `null` means it can. */
-export type ComposerDisabledReason = "busy" | "directions" | "disconnected" | null;
+export type ComposerDisabledReason = "busy" | "directions" | "disconnected" | "authority" | null;
 
 export function composerPlaceholderKey(reason: ComposerDisabledReason): MessageKey {
   switch (reason) {
@@ -11,6 +11,8 @@ export function composerPlaceholderKey(reason: ComposerDisabledReason): MessageK
       return "chat.composer.placeholderDirections";
     case "disconnected":
       return "chat.composer.placeholderDisconnected";
+    case "authority":
+      return "chat.composer.placeholderAuthority";
     case null:
       return "chat.composer.placeholder";
     default: {

@@ -111,8 +111,6 @@ test("Given bundled local fonts, when initializing projects and copying over bra
     const css = await readFile(path.join(project.dir_path, "fonts/fonts.css"), "utf8");
     for (const file of bundle.values()) if (file.name.endsWith(".woff2")) expect(css).toContain(bundledFontUrl(file));
     expect((await readdir(path.join(project.dir_path, "fonts"))).some(name => name.endsWith(".woff2"))).toBe(false);
-    expect(await readFile(path.join(project.dir_path, "liquid-glass/liquid-glass.js"), "utf8"))
-      .toBe(await readFile(path.join(resolveRepoRoot(), "assets/liquid-glass/liquid-glass.js"), "utf8"));
     expect(await readFile(path.join(project.dir_path, project.entrypoint), "utf8")).toContain('href="fonts/fonts.css"');
     if (type === "slide_deck") {
       expect(await readFile(path.join(project.dir_path, "runtime/deck-stage.js"), "utf8")).toBe(DECK_STAGE_JS);

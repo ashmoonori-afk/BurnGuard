@@ -18,6 +18,8 @@ Navigation floating-island → hero fullbleed-top (62% copy zone, background med
 
 Keep putty, timber, clay and olive from the interior, plain practical lists and unraised square surfaces. The place leads; no cart, price or promotional offer. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
+For interior object detail pages, open with a two-panel room-and-product hero, credit the designer and year in the eyebrow, and present tactile upholstery or pastel finish swatches before care and dimension rows.
+
 ## Layout
 
 Use the `--layout-*` tokens; do not invent a grid per artifact. Content sits inside `--layout-max`

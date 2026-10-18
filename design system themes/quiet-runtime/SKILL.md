@@ -18,6 +18,8 @@ Navigation floating-island → hero centered-form (52% copy zone, background med
 
 Keep the warm grey ground, soft edged surfaces, humanist sans and one violet for actions. Semantic colours stay in their chips, and motion stays brief. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
+For calm productivity and workflow product pages, pair a promise-first headline with outcome-velocity proof, a 3x2 use-case tile grid, and tabbed workspace preview panels.
+
 ## Layout
 
 Use the `--layout-*` tokens; do not invent a grid per artifact. Content sits inside `--layout-max`

@@ -66,6 +66,8 @@ Navigation side-rail → hero framed-cover (28% copy zone, left media, 5 / 4, 62
 
 Keep fixed-width data columns, compact hairline rows and tabular mono numbers. Neutral tags carry coloured text; blue is reserved for links, focus and the active filter. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
+For enterprise platform and data-application pages, pair a live sortable application surface in the opening with three concise architectural claims, security proof badges, and fixed-column comparison tables.
+
 ## Image direction
 
 Every artifact on this system needs imagery of a specific kind; the palette alone will not

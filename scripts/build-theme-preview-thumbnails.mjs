@@ -79,7 +79,7 @@ try {
           return { ...await source(file), width, height };
         }));
         const session = await context.newCDPSession(page);
-        const screenshot = await session.send("Page.captureScreenshot", { format: "webp", quality, captureBeyondViewport: false });
+        const screenshot = await session.send("Page.captureScreenshot", { format: "webp", quality, captureBeyondViewport: true, clip: { x: 0, y: 0, ...viewport, scale: 1 } });
         await session.detach();
         const dimensions = await page.evaluate(async (data) => {
           const image = new Image();

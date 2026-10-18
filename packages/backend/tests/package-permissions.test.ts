@@ -40,7 +40,7 @@ test.skipIf(process.platform === "win32")("Given writable source dependencies Wh
   const output = path.join(root, "output");
   const files = {
     "LICENSE": "fixture license",
-    "assets/liquid-glass/tool.sh": "#!/bin/sh\nexit 0\n",
+    "assets/fonts/tool.sh": "#!/bin/sh\nexit 0\n",
     "packages/frontend/dist/index.html": "<!doctype html>",
     "packages/frontend/src/components/canvas/three-scene-runtime.ts": "export {};",
     "packages/backend/src/services/extraction-css-worker.ts": "export {};",
@@ -76,7 +76,7 @@ test.skipIf(process.platform === "win32")("Given writable source dependencies Wh
   await chmod(frontend, 0o777);
   await chmod(path.join(frontend, "index.html"), 0o666);
   await chmod(path.join(source, "LICENSE"), 0o600);
-  await chmod(path.join(source, "assets/liquid-glass/tool.sh"), 0o771);
+  await chmod(path.join(source, "assets/fonts/tool.sh"), 0o771);
 
   const external = path.join(root, "external");
   await mkdir(external);
@@ -99,7 +99,7 @@ test.skipIf(process.platform === "win32")("Given writable source dependencies Wh
   expect(await mode(path.join(resources, "packages/frontend/dist"))).toBe(0o755);
   expect(await mode(path.join(resources, "packages/frontend/dist/index.html"))).toBe(0o644);
   expect(await mode(path.join(resources, "LICENSE"))).toBe(0o600);
-  expect(await mode(path.join(resources, "assets/liquid-glass/tool.sh"))).toBe(0o751);
+  expect(await mode(path.join(resources, "assets/fonts/tool.sh"))).toBe(0o751);
   expect(await unsafeModes(output)).toEqual([]);
   expect(await mode(cli)).toBe(0o777);
   expect(await mode(native)).toBe(0o666);

@@ -129,7 +129,7 @@ test("Given an attached deck with restructuring selected When creating it Then t
 
 describe("selectableDesignSystems", () => {
   test("Given original templates, When choosing a supported format, Then requests retain the actual format", () => {
-    const originals = ["sonnel", "foliover", "oddward", "velune", "halide", "future-sample"].map((brand) =>
+    const originals = ["sonnel", "foliover", "oddward", "velune", "future-sample"].map((brand) =>
       system(`sample-system-original-${brand}`, "published", true));
     for (const type of ["prototype", "slide_deck", "graphic"] as const) {
       expect(selectableDesignSystems(originals, type)).toEqual(originals);

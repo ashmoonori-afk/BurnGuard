@@ -18,6 +18,8 @@ Navigation side-rail → hero filmstrip (86% copy zone, below media, 3 / 4, 700p
 
 Use near-black with signal red reserved for live state and the primary action. Large display type supplies scale; keep every meaningful label readable, with zero radius and no elevation. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
+For motion-studio and showreel case studies, pair edge-to-edge kinetic display headers with full-bleed reel stages, compact studio manifesto disclosures, and sequenced project outcome plates.
+
 ## Layout
 
 Use the `--layout-*` tokens; do not invent a grid per artifact. Content sits inside `--layout-max` with `--layout-margin` at the sides, body copy holds to `--layout-measure`, sections are separated by `--layout-section-y`, and dividers use `--layout-rule`. The base grid is `--layout-columns` columns with `--layout-gutter` between them, collapsing at `--layout-bp-md`. Secondary media defaults to `--layout-hero`; website opening media uses `--layout-hero-media-ratio` and the Hero section.

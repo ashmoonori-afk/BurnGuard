@@ -40,15 +40,13 @@ test("Given a 403 that is a domain refusal or a listener that unsubscribed When 
   expect(heard).toEqual([]);
 });
 
-test("Given repeated rejections When the restart notice is announced Then one persistent error toast offers Reload and its action reloads", () => {
-  let reloads = 0;
-  announceBackendRestart(() => { reloads += 1; });
-  announceBackendRestart(() => { reloads += 1; });
+test("Given repeated rejections When the restart notice is announced Then one persistent error gives normal-launch guidance without a futile reload action", () => {
+  announceBackendRestart();
+  announceBackendRestart();
   const toasts = useUIStore.getState().toasts;
   expect(toasts).toHaveLength(1);
   expect(toasts[0]?.tone).toBe("error");
-  expect(toasts[0]?.title).toBe(t("errors.forbidden"));
-  expect(toasts[0]?.action?.label).toBe(t("shell.reload"));
-  toasts[0]?.action?.onSelect();
-  expect(reloads).toBe(1);
+  expect(toasts[0]?.title).toBe(t("shell.launchExpiredTitle"));
+  expect(toasts[0]?.body).toBe(t("shell.launchExpiredBody"));
+  expect(toasts[0]?.action).toBeUndefined();
 });

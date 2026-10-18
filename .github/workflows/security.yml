@@ -257,6 +257,7 @@ jobs:
           packages/backend/tests/local-fonts.test.ts
           packages/frontend/tests/canvas-css-imports.browser.test.ts
           packages/frontend/tests/project-first-message.browser.test.ts
+          packages/frontend/tests/launch-authority.browser.test.ts
           packages/frontend/tests/design-system-pin.browser.test.ts
           packages/backend/tests/exports.test.ts
       # Every baseline suite (scripts/qa/os-matrix-baseline.txt) that an explicit list above does not already run, one

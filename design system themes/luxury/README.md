@@ -53,6 +53,8 @@ Navigation floating-island → hero framed-cover (40% copy zone, background medi
 
 Keep restrained captions, generous open space and large product portraits. Avoid repeated boxed cards. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
+For acoustic and mineral luxury object pages, pair warm portrait plates with two-line poetic material headlines, brushed-metal and textile swatch rows, and unhurried heritage chapters.
+
 ## Responsive
 
 Below the theme's existing compact breakpoint: Retain an inset frame but reduce its padding; stack side cells below the dominant cover so the main image remains usable. Keep navigation bounded to the viewport and use semantic native disclosures for groups. Mobile puts the logo first, keeps the two link columns side by side underneath, then shows a tighter photograph crop below the credit line. Keep meaningful reading order, remove desktop offsets and let labels and actions wrap. Body tables retain their own horizontal scroll region. At 200% zoom no meaningful text or control may clip. Fixed slide and graphic artboards keep their dimensions and adapt content inside the canvas.

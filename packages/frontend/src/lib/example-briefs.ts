@@ -31,10 +31,6 @@ const SAMPLES: readonly Sample[] = [
     web: { en: "A product website for moonlit glass lighting in deep plum and opal mint: collection, materials, room views and stockists.", ko: "짙은 자두색과 오팔 민트색의 달빛 유리 조명 제품 웹사이트: 컬렉션, 소재, 공간 연출, 판매처.", "zh-CN": "深梅色与蛋白石薄荷色的月光玻璃灯具产品网站：系列、材质、空间效果和经销商。" },
     slides: { en: "A collection deck for a glass lighting brand: the collection, materials, rooms it suits and ordering.", ko: "유리 조명 브랜드 컬렉션 소개 자료: 컬렉션, 소재, 어울리는 공간, 주문 방법.", "zh-CN": "玻璃灯具品牌的系列演示：系列、材质、适合的空间和订购方式。" },
     graphic: { en: "A product poster for a new glass pendant light with the product name and one line of copy.", ko: "제품명과 한 줄 문구를 담은 새 유리 펜던트 조명 제품 포스터.", "zh-CN": "包含产品名称和一句文案的新款玻璃吊灯产品海报。" } },
-  { slug: "halide", brand: "HALIDE", audience: { en: "Clients who need optical design and lens engineering", ko: "광학 설계와 렌즈 엔지니어링이 필요한 고객", "zh-CN": "需要光学设计和镜头工程的客户" },
-    web: { en: "A website for an optics studio built on refracting liquid-glass rings: what the studio designs, process, selected work and a consultation request.", ko: "빛을 굴절시키는 액체 유리 고리를 상징으로 삼은 광학 스튜디오 웹사이트: 설계 분야, 작업 과정, 대표 작업, 상담 요청.", "zh-CN": "以折射液态玻璃环为标志的光学工作室网站：设计领域、流程、精选作品和咨询申请。" },
-    slides: { en: "A capabilities deck for an optics studio: what it designs, process, selected work and how to start a project.", ko: "광학 스튜디오 역량 소개 자료: 설계 분야, 작업 과정, 대표 작업, 프로젝트 시작 방법.", "zh-CN": "光学工作室的能力介绍演示：设计领域、流程、精选作品和如何开始项目。" },
-    graphic: { en: "A poster for an optics studio with a refracting glass ring as the key visual and one line about what it designs.", ko: "굴절하는 유리 고리를 핵심 이미지로 쓰고 설계 분야를 한 줄로 소개하는 광학 스튜디오 포스터.", "zh-CN": "以折射玻璃环为主视觉、用一句话介绍设计领域的光学工作室海报。" } },
 ];
 
 const FORMATS = { prototype: "web", slide_deck: "slides", graphic: "graphic" } as const;
