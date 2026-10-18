@@ -172,6 +172,12 @@ The command opens the profile database at `BG_APP_ROOT` (default `~/.burnguard`)
 
 ## Changelog
 
+### 0.5.33
+
+- On every start, BurnGuard replaces any built-in theme folder in your local profile that is byte-for-byte identical to an earlier shipped release (line endings ignored) with the current bundled version, so installs updated from v0.5.31 or earlier receive the v0.5.32 classic theme palettes while edited theme folders, user-added files in `fonts/`, and files already generated in existing projects stay untouched (an interrupted swap is restored on the next start, and a failed update keeps the previous copy).
+- **Northvale** and **Splash** no longer store an unloadable placeholder preview path (and existing profiles are fixed on start), design systems without their own preview image show a project rendered with them (chosen in a fixed format order starting with websites; within that format, the most recently updated project), and new-project format pickers (such as **Graphic** and **Logo design**) fall back to a system's general preview instead of a blank "No preview" card.
+- When a per-launch access key expires (for example after the app restarts in the background), BurnGuard keeps your open workspace and unsent draft on screen and shows **This app launch has expired** with instructions to reopen the app instead of showing an offline state or a reload action that cannot renew access, while distinguishing access denial, network outages, and other startup errors in Korean, English, and Simplified Chinese.
+
 ### 0.5.32
 
 - On fresh installs, the ten classic built-in themes (**Light**, **Dark**, **Cupcake**, **Retro**, **Cyberpunk**, **Synthwave**, **Luxury**, **Dracula**, **Nord**, and **Business**) now ship with 73-token color palettes made for BurnGuard instead of palettes converted from an open-source UI library, with regenerated website and slide thumbnails and no third-party palette notices (upgraded installs keep any theme files already copied into your local profile). All 43 built-in themes are checked against WCAG 2.2 AA contrast thresholds (at least 4.5:1 for text pairs down to 9.5–12px captions and labels, and at least 3:1 for borders, focus rings, and primary controls), with small palette adjustments across the 31 existing original themes.
