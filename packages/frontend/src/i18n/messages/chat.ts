@@ -411,6 +411,11 @@ export const chatMessages = defineMessages({
     en: "The live connection is down. You can send a request once it reconnects.",
     "zh-CN": "实时连接已断开。重新连接后即可发送请求。",
   },
+  "chat.composer.placeholderAuthority": {
+    ko: "이 실행의 접근 권한이 만료됐어요. BurnGuard를 다시 열어 주세요.",
+    en: "This app launch has expired. Reopen BurnGuard to send a request.",
+    "zh-CN": "此次应用启动的访问权限已过期。请重新打开 BurnGuard 后发送请求。",
+  },
   "chat.composer.placeholderDirections": {
     ko: "디자인 방향을 만들고 있어요. 끝나면 요청을 보낼 수 있어요.",
     en: "Design directions are being generated. You can send a request when they are ready.",
