@@ -1,6 +1,6 @@
 # Dracula Built-in Theme
 
-A dark violet-gray system with bright pink, purple, amber, cyan, and green accents.
+A dark aubergine system with bright rose, periwinkle, brass, cyan, and mint accents.
 
 ## Files
 
@@ -9,13 +9,11 @@ A dark violet-gray system with bright pink, purple, amber, cyan, and green accen
 
 ## Design token contract
 
-The donor palette is expressed through BurnGuard's canonical neutral, brand, semantic, surface, chart, type, spacing, radius, elevation, and motion tokens. Use the complete `--gray-*` and `--chart-*` ramps for hierarchy and data visualization, and use `--r-*`, `--shadow-*`, and `--dur-*` tokens rather than introducing component-local scales.
+The palette is expressed through BurnGuard's canonical neutral, brand, semantic, surface, chart, type, spacing, radius, elevation, and motion tokens. Use the complete `--gray-*` and `--chart-*` ramps for hierarchy and data visualization, and use `--r-*`, `--shadow-*`, and `--dur-*` tokens rather than introducing component-local scales.
 
 ## Provenance
 
-Derived from the daisyUI `dracula` theme: https://github.com/saadeghi/daisyui/blob/master/packages/daisyui/src/themes/dracula.css
-
-Licensed under the MIT License, Copyright (c) 2020 Pouya Saadeghi. Source OKLCH values were converted offline to sRGB, gamut-clipped, and rounded to the nearest 8-bit channel. See the repository `NOTICE` file.
+Palette authored for BurnGuard. The colour values were chosen for this theme and every text and component pair is checked for WCAG 2.2 AA contrast; no third-party theme, stylesheet or palette is included, and it carries no external licence obligation. The `dracula` slug is kept from earlier releases because seeded workspaces key off `builtin-theme-dracula`.
 
 ## Local typography
 
@@ -65,23 +63,17 @@ Use `editorial-overlay` at `top`, with `80px` minimum height and `1320px` width 
 
 Mobile: below --layout-bp-md, bound navigation to the viewport and put links in semantic native disclosures where needed. Side, overlay or bottom navigation returns to a compact header in normal flow; preserve focus and reading order.
 
-Structural reference: [editorial-overlay](https://www.navbar.gallery/navbar/clonix). This is an original BurnGuard arrangement informed by the gallery screenshot; donor code, imagery, fonts and brand marks are not included.
-
 ## Hero
 
 Use `masthead-crop`: copy share `88%`, media at `background` in a `16 / 9` frame, minimum height `720px`, title measure `11ch`, alignment `center` and desktop offset `80px`. Let the display masthead and lower product silhouette carry the first fold; retain dark negative space and an asymmetric studio address ending. Retain the theme's existing image-fit, palette, font family and locally generated art unless a written theme invariant requires a more protective framing.
 
 Mobile: Below the theme's existing compact breakpoint: Reduce the oversized display to fit the viewport; move useful metadata into normal flow and keep the subject recognizable.
 
-Structural reference: [masthead-crop](https://supahero.io/hero/shaga-odyssey). Reuse this theme's original imagery and typography; the reference supplies hierarchy and arrangement only.
-
 ## Footer
 
 Use `studio-address` with `4` desktop groups and `520px` minimum height. Reserve 520px as the desktop minimum closing height with 4 information columns or groups. Use an asymmetrical studio directory whose location pair is a first-class structural feature. Do not collapse the whole footer to a generic four-column sitemap.
 
 Mobile stacks the link groups, keeps the two office addresses side by side, and moves the large wordmark below them. Allow links to wrap and let the closing region grow with content.
-
-Structural reference: [studio-address](https://www.footer.design/sites/reality-is). Adapt the structural idea with this theme's own tokens and content; do not copy donor assets or brand marks.
 
 ## Surfaces
 
@@ -97,7 +89,7 @@ Content values are authored for a `--content-base` shorter side. Per artboard se
 
 ## Slide deck
 
-Reference adaptation: 197 - Holographik Quantum Spa Brand Guidelines (pp. 1, 2, 4, 20, 40, 59, 78). Layout only; retain this system's own colours, fonts and image direction.
+Slide composition: layout only; retain this system's own colours, fonts and image direction.
 
 1920 x 1080; use --slide-* geometry and type. Keep required content inside --slide-pad-edge; captions at least 24px. No website navigation, hover or scrolling inside a slide.
 
@@ -115,7 +107,7 @@ Sequence: cover > claim > evidence > implication > closing; repeat claim/evidenc
 
 Each artboard is one fixed frame at the size the request declares. The requested kind's own rules come first - frame sizes, platform exclusion zones, print trim and bleed, and a product detail page's full-height section sequence with its closing call to action - and the rules below govern how each frame or section looks. Keep required content inside the safe inset (9% of the shorter side), place the primary figure at `--content-figure` (0.42) of the shorter side anchored center, and one deliberate full-bleed figure may cross the safe area because `--content-bleed` is `1`.
 
-- Frame: the dark documentation ground; purple or pink marks an active term.
+- Frame: the dark documentation ground; rose or periwinkle marks an active term.
 - Composition: continuous prose blocks and inset code examples; do not box every line. In a multi-frame set the first frame follows the cover rule above and the last carries the call to action; on a product detail page these rules apply per section.
 - Type: one claim per frame at `--content-type-hero` (136px at a 1080px shorter side, scaled by `--content-scale`), support at `--content-type-sub` (64px), and nothing below `--content-type-caption` (26px) or 12px once scaled.
 - Figure: a cropped masthead image, or a code surface rendered as a real element.

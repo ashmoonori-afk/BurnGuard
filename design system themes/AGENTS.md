@@ -2,12 +2,12 @@
 
 ## OVERVIEW
 
-Forty-one bundled design systems copied into every workspace on first run - ten converted from daisyUI donor palettes and thirty-one original systems; earned this guide at score 8 for subdirectory count plus a slug/token contract that backend seeding reads by path.
+Forty-one bundled design systems copied into every workspace on first run - ten classic slugs and thirty-one family and earlier originals, every palette authored for BurnGuard; earned this guide at score 8 for subdirectory count plus a slug/token contract that backend seeding reads by path.
 
 ## STRUCTURE
 
 ```text
-design system themes/<slug>/     # donor: light, dark, cupcake, retro, cyberpunk,
+design system themes/<slug>/     # classic: light, dark, cupcake, retro, cyberpunk,
 ├── colors_and_type.css          #   synthwave, luxury, dracula, nord, business
 │                                # original: cobalt-atelier, signal-reel, daylight-press,
 │                                #   blueprint-manual, ledger-index, dune-editorial, archive-folio
@@ -41,18 +41,17 @@ catalogue.html                   # every registered theme rendered on one page; 
 | Slug registry | `packages/backend/src/data/bundled-design-systems.ts` | `bundledDesignSystems`, `bundledDesignSystemId` → `builtin-theme-<slug>` |
 | Seeding | `packages/backend/src/bootstrap.ts` `seedBundledDesignSystems` | Copies `<slug>/` into `~/.burnguard/data/systems/builtin-theme-<slug>`, then bundled fonts; skips if the destination exists |
 | Packaging | `scripts/package-runtime.ts` | Ships everything under the `design system themes/` prefix - the path contains spaces, so quote it everywhere |
-| Verification | `packages/backend/tests/daisyui-seed-themes.test.ts` | Checks theme shape, token parity, provenance, layout and family tokens, and the reproduction sections |
+| Verification | `packages/backend/tests/bundled-seed-themes.test.ts` | Checks theme shape, token parity, provenance, classic-palette WCAG AA contrast, layout and family tokens, and the reproduction sections |
 | Surfaces | `scripts/build-theme-surfaces.ts` | `bun run surfaces` regenerates `surfaces/*.css` and the three README sections for every registered theme, the five original samples and the Northvale sample; never hand-edit them |
 | Catalogue | `scripts/build-theme-catalogue.ts` | `bun run catalogue` regenerates `catalogue.html` from the registry; never hand-edit it |
-| Attribution | `../NOTICE`, each `README.md` | daisyUI MIT attribution is required per theme |
 
 ## CONVENTIONS
 
 - A theme directory is three files plus a generated `surfaces/` directory; the slug must be registered in `bundledDesignSystems` or it is never seeded.
 - Colour, type families, spacing, radius, elevation, motion, the website grid (`--layout-*`) and the structural `--family-*` choices stay in `colors_and_type.css`. A surface file is tokens only - one `:root` block, no colour, no `@import` - and owns only its own geometry; `packages/shared/src/design-surface.ts` is the contract and `doc/22-design-system-surfaces-2026-09-15.md` the record (local-only, see doc/README.md).
 - `colors_and_type.css` is the single source of truth and uses BurnGuard's canonical token families: `--gray-*`, `--chart-*`, semantic pairs, `--r-*`, `--shadow-*`, `--dur-*`.
-- Donor palettes (daisyUI) are converted from OKLCH to sRGB **offline**, gamut-clipped, rounded to 8-bit, and recorded with license and source URL in `README.md`.
-- Original systems carry no donor attribution and must not claim one; their `README.md` states they are authored for BurnGuard. They additionally ship `--layout-*` tokens (max width, measure, columns, gutter, margin, section rhythm, rule weight, breakpoints, hero ratio) and document that grid under a `## Layout` heading, because layout is part of the system rather than a per-artifact decision.
+- Classic palettes are authored for BurnGuard; each `README.md` says so under `## Provenance`. Their text pairs (`--fg-1..4` on every ground, each `--fg-on-*` on its fill) meet 4.5:1 and `--border-strong`, `--focus-ring` and `--primary-blue` meet 3:1 against `--bg`; the seed test measures every pair.
+- No bundled system carries a third-party attribution or may claim one. Original systems state in `README.md` that they are authored for BurnGuard and additionally ship `--layout-*` tokens (max width, measure, columns, gutter, margin, section rhythm, rule weight, breakpoints, hero ratio) and document that grid under a `## Layout` heading, because layout is part of the system rather than a per-artifact decision.
 - An original system must be rebuildable from its own three files plus an image generator, so every `README.md` carries `## Composition` (the arrangement rules tokens cannot express), `## Image direction` (subject, treatment, light, framing, palette, a never-list and a prompt skeleton) and `## Reproducing this system` (a self-check list).
 - Family systems additionally ship `--family-*` tokens for the one structural decision their design family turns on - navigation placement, media fit, gallery pattern, table layout, image bleed - and document them under `## Family tokens`. Keep them after the colour section so the hex-only rule on colours still holds.
 - `SKILL.md` carries YAML front matter (`name: builtin-<slug>-design`, `description`, `user-invocable: true`) and points the reader at `README.md` first.
@@ -65,5 +64,5 @@ catalogue.html                   # every registered theme rendered on one page; 
 - Do not hand-edit `surfaces/*.css` or the generated `## Surfaces` / `## Slide deck` / `## Content artboards` sections; change the spec or the derivation in `scripts/build-theme-surfaces.ts` and rerun `bun run surfaces`.
 - Do not add a theme directory without registering the slug, and do not rename a slug - seeded workspaces key off `builtin-theme-<slug>`.
 - Do not introduce component-local color, radius, or duration scales instead of the canonical tokens.
-- Do not drop the provenance or license paragraph; the `NOTICE` file and the README must agree.
+- Do not drop the `## Provenance` paragraph, and do not copy another theme library's palette into a theme.
 - Do not drop a semantic background's paired foreground token; contrast guarantees depend on the pair.

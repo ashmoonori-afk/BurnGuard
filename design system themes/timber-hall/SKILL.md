@@ -85,19 +85,13 @@ Read Navigation, Hero, Footer, Layout and Responsive in README.md before arrangi
 
 Follow README.md's Navigation section and the corresponding --layout-* tokens. Use top navigation with a 1240px maximum width and 96px header height. At compact widths, use brand plus close control and stacked product/service disclosures. Stack columns and move featured content below links.
 
-Reference: https://www.navbar.gallery/navbar/chesapeake-plywood
-
 ## Hero
 
 Follow README.md's Hero section and the corresponding --layout-* tokens. Retain the serif statement on solid ground at left and a dark-edged panoramic room scene at right; do not float the statement directly over the photograph. Retain the theme's existing image-fit, palette, font family and locally generated art unless a written theme invariant requires a more protective framing.
 
-Reference: https://supahero.io/hero/yucca-packing
-
 ## Footer
 
 Follow README.md's Footer section and the corresponding --layout-* tokens. Reserve 480px as the desktop minimum closing height with 3 information columns or groups. Use a three-part community directory with a separate decorative baseline. Preserve real semantic links and a clear primary join action; use original local artwork.
-
-Reference: https://www.footer.design/sites/harvest-hall
 
 ## Surfaces
 

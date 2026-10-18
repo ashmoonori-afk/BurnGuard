@@ -85,19 +85,13 @@ Read Navigation, Hero, Footer, Layout and Responsive in README.md before arrangi
 
 Follow README.md's Navigation section and the corresponding --layout-* tokens. Use top navigation with a 1160px maximum width and 88px header height. At compact widths, use product/use-case/enterprise disclosure rows. Use single-column disclosures; keep the promotional card secondary.
 
-Reference: https://www.navbar.gallery/navbar/velt
-
 ## Hero
 
 Follow README.md's Hero section and the corresponding --layout-* tokens. Use a sparse constellation of original work tiles around a dominant plane, retaining only the theme's existing single minus-three-degree display tilt. Retain the theme's existing image-fit, palette, font family and locally generated art unless a written theme invariant requires a more protective framing.
 
-Reference: https://supahero.io/hero/bychudy
-
 ## Footer
 
 Follow README.md's Footer section and the corresponding --layout-* tokens. Reserve 580px as the desktop minimum closing height with 3 information columns or groups. Build the footer as title stage, compact link panels, then a three-cell brand band. Keep panels in normal document flow on narrow screens; animation is optional.
-
-Reference: https://www.footer.design/sites/the-design-society
 
 ## Surfaces
 

@@ -1,6 +1,6 @@
 # Dark Built-in Theme
 
-A cool charcoal canvas with vivid violet, pink, and teal accents.
+A cool charcoal canvas with vivid azure, rose, and lime accents.
 
 ## Files
 
@@ -9,13 +9,11 @@ A cool charcoal canvas with vivid violet, pink, and teal accents.
 
 ## Design token contract
 
-The donor palette is expressed through BurnGuard's canonical neutral, brand, semantic, surface, chart, type, spacing, radius, elevation, and motion tokens. Use the complete `--gray-*` and `--chart-*` ramps for hierarchy and data visualization, and use `--r-*`, `--shadow-*`, and `--dur-*` tokens rather than introducing component-local scales.
+The palette is expressed through BurnGuard's canonical neutral, brand, semantic, surface, chart, type, spacing, radius, elevation, and motion tokens. Use the complete `--gray-*` and `--chart-*` ramps for hierarchy and data visualization, and use `--r-*`, `--shadow-*`, and `--dur-*` tokens rather than introducing component-local scales.
 
 ## Provenance
 
-Derived from the daisyUI `dark` theme: https://github.com/saadeghi/daisyui/blob/master/packages/daisyui/src/themes/dark.css
-
-Licensed under the MIT License, Copyright (c) 2020 Pouya Saadeghi. Source OKLCH values were converted offline to sRGB, gamut-clipped, and rounded to the nearest 8-bit channel. See the repository `NOTICE` file.
+Palette authored for BurnGuard. The colour values were chosen for this theme and every text and component pair is checked for WCAG 2.2 AA contrast; no third-party theme, stylesheet or palette is included, and it carries no external licence obligation. The `dark` slug is kept from earlier releases because seeded workspaces key off `builtin-theme-dark`.
 
 ## Local typography
 
@@ -65,23 +63,17 @@ Use `segmented-pill` at `top`, with `72px` minimum height and `1040px` width (0p
 
 Mobile: below --layout-bp-md, bound navigation to the viewport and put links in semantic native disclosures where needed. Side, overlay or bottom navigation returns to a compact header in normal flow; preserve focus and reading order.
 
-Structural reference: [segmented-pill](https://www.navbar.gallery/navbar/consensys). This is an original BurnGuard arrangement informed by the gallery screenshot; donor code, imagery, fonts and brand marks are not included.
-
 ## Hero
 
 Use `centered-form`: copy share `62%`, media at `background` in a `21 / 9` frame, minimum height `660px`, title measure `18ch`, alignment `center` and desktop offset `0px`. Keep the form-like action group on the central axis, with an ample dark field before the scenic closing landscape. Retain the theme's existing image-fit, palette, font family and locally generated art unless a written theme invariant requires a more protective framing.
 
 Mobile: Below the theme's existing compact breakpoint: Keep a single central axis; stack paired actions when needed and reduce purely decorative accents before reducing text size.
 
-Structural reference: [centered-form](https://supahero.io/hero/better-stack). Reuse this theme's original imagery and typography; the reference supplies hierarchy and arrangement only.
-
 ## Footer
 
 Use `scenic-overlay` with `3` desktop groups and `560px` minimum height. Reserve 560px as the desktop minimum closing height with 3 information columns or groups. Reserve a scenic field above a readable information zone on narrow screens. Use an original local background; do not depend on WebGL or video for access to navigation.
 
 Mobile gives the scene its own tall area above a dark information region. Navigation becomes a two-column grid; a row of three small marks and the tagline follow. Allow links to wrap and let the closing region grow with content.
-
-Structural reference: [scenic-overlay](https://www.footer.design/sites/eclipse-space). Adapt the structural idea with this theme's own tokens and content; do not copy donor assets or brand marks.
 
 ## Surfaces
 
@@ -97,7 +89,7 @@ Content values are authored for a `--content-base` shorter side. Per artboard se
 
 ## Slide deck
 
-Reference adaptation: 164 - Perplexity Ads Pitch Deck (pp. 1, 3, 4, 9, 17, 25). Layout only; retain this system's own colours, fonts and image direction.
+Slide composition: layout only; retain this system's own colours, fonts and image direction.
 
 1920 x 1080; use --slide-* geometry and type. Keep required content inside --slide-pad-edge; captions at least 24px. No website navigation, hover or scrolling inside a slide.
 
@@ -115,7 +107,7 @@ Sequence: cover > claim > evidence > implication > closing; repeat claim/evidenc
 
 Each artboard is one fixed frame at the size the request declares. The requested kind's own rules come first - frame sizes, platform exclusion zones, print trim and bleed, and a product detail page's full-height section sequence with its closing call to action - and the rules below govern how each frame or section looks. Keep required content inside the safe inset (7% of the shorter side), place the primary figure at `--content-figure` (0.55) of the shorter side anchored center, and one deliberate full-bleed figure may cross the safe area because `--content-bleed` is `1`.
 
-- Frame: the dark workspace ground; steel blue marks the live metric or control and nothing else.
+- Frame: the dark workspace ground; azure marks the live metric or control and nothing else.
 - Composition: compact metric rows and contextual controls on the slide grid, one operational takeaway per frame. In a multi-frame set the first frame follows the cover rule above and the last carries the call to action; on a product detail page these rules apply per section.
 - Type: one claim per frame at `--content-type-hero` (120px at a 1080px shorter side, scaled by `--content-scale`), support at `--content-type-sub` (56px), and nothing below `--content-type-caption` (24px) or 12px once scaled.
 - Figure: an interface panel or scenic field dark enough for type to cross it.

@@ -28,19 +28,13 @@ Read Navigation, Hero, Footer, Layout and Responsive in README.md before arrangi
 
 Follow README.md's Navigation section and the corresponding --layout-* tokens. Use overlay navigation with a 520px maximum width and 60px header height. At compact widths, use an expanded dark vertical menu with brand and close control. Preserve compact header and expand links vertically.
 
-Reference: https://www.navbar.gallery/navbar/supaste
-
 ## Hero
 
 Follow README.md's Hero section and the corresponding --layout-* tokens. Treat the existing art as a tall editorial cover, with a narrow centered text axis and quiet photo colophon; avoid stock SaaS cards. Retain the theme's existing image-fit, palette, font family and locally generated art unless a written theme invariant requires a more protective framing.
 
-Reference: https://supahero.io/hero/casa-lunara
-
 ## Footer
 
 Follow README.md's Footer section and the corresponding --layout-* tokens. Reserve 540px as the desktop minimum closing height with 2 information columns or groups. Separate a useful navigation band from an original local photo strip. Decorative shapes must not obscure or intercept links. Do not copy the person's portrait or brand assets.
-
-Reference: https://www.footer.design/sites/carolyn-lee
 
 ## Surfaces
 

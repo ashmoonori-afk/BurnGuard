@@ -74,6 +74,7 @@ jobs:
           packages/backend/tests/extraction-website-boundaries.test.ts
           packages/backend/tests/export-naming.test.ts
           packages/backend/tests/design-system-contrast.test.ts
+          packages/backend/tests/bundled-seed-themes.test.ts
           packages/backend/tests/design-system-starter.test.ts
           packages/frontend/tests/canvas-edit-review.test.ts
           packages/frontend/tests/revision-thumbnails.test.ts
@@ -166,6 +167,7 @@ jobs:
           packages/backend/tests/chromium-launch-hardening.test.ts
           packages/backend/tests/design-audit-skip-link.test.ts
           scripts/qa/check-os-matrix-coverage.test.ts
+          scripts/qa/frontend-failure-evidence.test.ts
           scripts/qa/check-flake-patterns.test.ts
           scripts/qa/check-migration-order.test.ts
           scripts/whitespace-base.test.ts

@@ -28,19 +28,13 @@ Read Navigation, Hero, Footer, Layout and Responsive in README.md before arrangi
 
 Follow README.md's Navigation section and the corresponding --layout-* tokens. Use top navigation with a 1040px maximum width and 72px header height. Mobile screenshot has product CTA and close above large stacked product/ecosystem/company rows. Keep grouping and use stacked drill-down rows.
 
-Reference: https://www.navbar.gallery/navbar/consensys
-
 ## Hero
 
 Follow README.md's Hero section and the corresponding --layout-* tokens. Keep the form-like action group on the central axis, with an ample dark field before the scenic closing landscape. Retain the theme's existing image-fit, palette, font family and locally generated art unless a written theme invariant requires a more protective framing.
 
-Reference: https://supahero.io/hero/better-stack
-
 ## Footer
 
 Follow README.md's Footer section and the corresponding --layout-* tokens. Reserve 560px as the desktop minimum closing height with 3 information columns or groups. Reserve a scenic field above a readable information zone on narrow screens. Use an original local background; do not depend on WebGL or video for access to navigation.
-
-Reference: https://www.footer.design/sites/eclipse-space
 
 ## Surfaces
 
