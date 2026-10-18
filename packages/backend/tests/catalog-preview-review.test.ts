@@ -52,6 +52,20 @@ test("Given no preview folder When the system is listed Then the response is emp
   expect(await response.json()).toEqual({ data: [] });
 });
 
+test("Given a system without its own image whose sample was rendered When listing the catalog Then the card shows that rendered sample", async () => {
+  const db = getSqlite();
+  const project = `${id}-sample`;
+  db.prepare(`INSERT INTO projects(id,name,type,design_system_id,dir_path,backend_id,created_at,updated_at,current_revision,current_digest)
+    VALUES (?,?,'from_template',?,?,'codex',1,1,1,?)`).run(project, "sample", id, root, "e".repeat(64));
+  try {
+    const response = await app.request(`http://preview.test/api/design-systems/${id}`, { headers });
+    expect(response.status).toBe(200);
+    expect((await response.json()).data.thumbnail_path).toBe(projectThumbnailUrl({ id: project, current_revision: 1, current_digest: "e".repeat(64) }));
+  } finally {
+    db.prepare("DELETE FROM projects WHERE id=?").run(project);
+  }
+});
+
 test("Given multiple output formats When reading the catalog Then previews use the latest non-archived rendered output of each type", async () => {
   const db = getSqlite();
   const insert = db.prepare(`INSERT INTO projects(id,name,type,design_system_id,dir_path,backend_id,created_at,updated_at,archived_at,current_revision,current_digest)
@@ -72,6 +86,7 @@ test("Given multiple output formats When reading the catalog Then previews use t
       prototype: projectThumbnailUrl({ id: `${id}-web`, current_revision: 1, current_digest: "a".repeat(64) }),
       slide_deck: projectThumbnailUrl({ id: `${id}-deck`, current_revision: 1, current_digest: "c".repeat(64) }),
     });
+    expect(body.data.thumbnail_path).toBe(body.data.thumbnail_paths.prototype);
   } finally {
     for (const row of rows) db.prepare("DELETE FROM projects WHERE id=?").run(`${id}-${row.suffix}`);
   }
