@@ -65,6 +65,8 @@ Navigation icon-taxonomy → hero framed-cover (66% copy zone, background media,
 
 Keep photography dominant and chrome compact. Paired product rows retain tight gaps; bone-on-black or black-on-bone actions and large scale differences replace coloured emphasis. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
+For garment detail pages, alternate lookbook pairs with studio close-ups while the sticky purchase rail holds monochrome option selectors, material composition lines, model-fit notes, and a compact garment measurement table.
+
 ## Image direction
 
 Every artifact on this system needs imagery of a specific kind; the palette alone will not

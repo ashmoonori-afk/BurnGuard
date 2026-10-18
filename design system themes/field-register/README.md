@@ -66,6 +66,8 @@ Navigation enterprise-columns → hero split-left (40% copy zone, right media, 1
 
 Keep the warm paper ground, white fields, label/value rows and explicit required and validation text. Teal is for focus or action; retain the stationery character. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
+For financial and operational business pages, pair live savings counters and ROI calculators with two-track specification rows, audit-ready ledger tables, and clear action strips.
+
 ## Image direction
 
 Every artifact on this system needs imagery of a specific kind; the palette alone will not

@@ -24,7 +24,7 @@ Create websites, slide decks, graphics, and logos with AI, edit them on a live c
 
 Pick a project format, write your idea, and optionally select a registered design system. BurnGuard suggests an editable project name from your idea, makes the audience field optional, shows up to four design-system suggestions inline, and keeps detailed brief controls under **Advanced**. Selecting **Create and generate** creates the project and sends your idea as the first request in one step. On a fresh install, a dismissible first-run card on Home checks your Claude Code and Codex connections and lets you create and generate your first website project directly from that card. Create a project without a design system if you prefer.
 
-The built-in catalogue includes **41 themes**, including **31 original themes**. Each theme pairs typography and color tokens with navigation, hero, and footer layout rules. The original sample systems and prompt presets also include layout rules. You can import your own design systems from supported documents, websites, Git repositories, Figma files, or a single `DESIGN.md` Markdown file, then review and publish them for project use. Any registered system or built-in theme can also be downloaded as one `DESIGN.md` file, and each system stores up to 60 explicit **Do** and **Don't** rules that are included in every generation that uses it. [Explore the 41 built-in layouts](<design system themes/>)
+The built-in catalogue includes **43 themes**, including **33 original themes**. Each theme pairs typography and color tokens with navigation, hero, and footer layout rules. The original sample systems and prompt presets also include layout rules. You can import your own design systems from supported documents, websites, Git repositories, Figma files, or a single `DESIGN.md` Markdown file, then review and publish them for project use. Any registered system or built-in theme can also be downloaded as one `DESIGN.md` file, and each system stores up to 60 explicit **Do** and **Don't** rules that are included in every generation that uses it. [Explore the 43 built-in layouts](<design system themes/>)
 
 ![Create a new project dialog with format chips, design-system search, Refresh button, and system selection](doc/images/readme-design-system-picker.png)
 
@@ -40,7 +40,7 @@ Open any system overview to read its navigation, hero, and footer rules. **Direc
 
 *A project's Choose a direction tab showing the same Cobalt Atelier layout rules, with Model set to Sonnet and Reasoning effort set to Low. This screenshot shows the configured guidance rather than a model benchmark.*
 
-Desktop packages ship with **41 website examples**, **41 generated WebP illustrations**, and **41 website thumbnails captured in a headless browser**. The design-system library and project creation picker display those thumbnails, and each theme overview includes a scrollable website preview. Browse the [website preview gallery](design%20system%20themes/previews/index.html) and the [theme token catalogue](design%20system%20themes/catalogue.html).
+Desktop packages ship with **43 website examples**, **43 generated WebP illustrations**, and **43 website thumbnails captured in a headless browser**. The design-system library and project creation picker display those thumbnails, and each theme overview includes a scrollable website preview. Browse the [website preview gallery](design%20system%20themes/previews/index.html) and the [theme token catalogue](design%20system%20themes/catalogue.html).
 
 ![Design-system library showing actual website thumbnails in BurnGuard](doc/images/readme-design-system-library.png)
 
@@ -90,7 +90,7 @@ Assign each image a clear role, such as product hero, campaign scene, explanator
 
 Open the **Chart** panel to add area, line, bar, composed, radar, pie, radial, or Sankey charts. Paste tab-separated rows from a spreadsheet, adjust colors, and save portable SVG charts that keep their source data inside the HTML. The **3D** panel edits built-in 3D objects and sends scene modification requests to the AI. [Chart guide](doc/charts.md)
 
-Explore the five original sample collections: **SONNEL**, **FOLIOVER**, **ODDWARD**, **VELUNE**, and **HALIDE**. Each collection includes a website, a six-slide deck, a graphic, and a design system. On the Examples view, select **See the brief** on any of the 15 sample cards to read its audience and objective in Korean, English, or Simplified Chinese, and select **Start from this** to open the creation dialog prefilled in your active interface language. [Sample collections](samples/original/README.md) · [Image recipe gallery](doc/images/image-recipes/README.md)
+Explore the four original sample collections: **SONNEL**, **FOLIOVER**, **ODDWARD**, and **VELUNE**. Each collection includes a website, a six-slide deck, a graphic, and a design system. On the Examples view, select **See the brief** on any of the 12 sample cards to read its audience and objective in Korean, English, or Simplified Chinese, and select **Start from this** to open the creation dialog prefilled in your active interface language. [Sample collections](samples/original/README.md) · [Image recipe gallery](doc/images/image-recipes/README.md)
 
 ## Get started
 

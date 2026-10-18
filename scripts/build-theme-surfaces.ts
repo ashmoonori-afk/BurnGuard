@@ -217,6 +217,14 @@ const SPECS: Readonly<Record<string, SurfaceSpec>> = {
     figure: "technical drawing and measured artifacts; line work rather than photography",
     never: "perspective renders, colour beyond the amber callout, soft shadows",
   },
+  "exploded-field-module": {
+    ground: "anodized warm stone with carbon ink and hairline rules",
+    signal: "signal vermilion marks the active module or rotary control",
+    cover: "a complete hardware specimen or exploded module array with a numbered revision badge",
+    structure: "numbered module breakdown cells, all-caps capability lists, and component upgrade tables",
+    figure: "precision portable hardware or disassembled expansion modules shot straight on",
+    never: "lifestyle models, neon glow, unstructured marketing copy without module specifications",
+  },
   "long-form-press": {
     ground: "the continuous serif reading ground",
     signal: "rust marks links and pull quotes",
@@ -280,6 +288,14 @@ const SPECS: Readonly<Record<string, SurfaceSpec>> = {
     structure: "mono specifications under each object, shared edges, nothing raised",
     figure: "one object documented straight on or in strict profile, as a record shot",
     never: "angled hero shots, coloured backdrops, props or styling context",
+  },
+  "modular-configurator": {
+    ground: "gallery-white paper with anodized graphite framing and 1px rules",
+    signal: "cobalt-chrome marks the selected bay, swatch, or configuration action",
+    cover: "an orthographic modular system elevation beneath a longevity claim and spec strip",
+    structure: "contained bay elevations, finish swatch matrices, and tabular dimension ladders",
+    figure: "a modular shelving or ergonomic furniture system photographed straight on in a gallery",
+    never: "domestic clutter, wide-angle distortion, cropping into structural bays or dimension lines",
   },
   "night-marquee": {
     ground: "one cinematic still with achromatic chrome",
@@ -408,14 +424,6 @@ const SPECS: Readonly<Record<string, SurfaceSpec>> = {
     structure: "immersive image chapters with small material captions and calm negative space around each object",
     figure: "sculptural lighting objects cropped so the material leads",
     never: "crowding the object, warm grading, treating a generated form as production evidence",
-  },
-  halide: {
-    ground: "the optical stage centred on a square field",
-    signal: "the refracting ring is the only bright event",
-    cover: "a circular optical stage with the title aligned to its edges",
-    structure: "focused optical details and concise specifications; preserve the stage geometry",
-    figure: "an optical ring or refraction study, not a blurred glass panel",
-    never: "flat blur passed off as refraction, off-centre stages, busy backgrounds",
   },
   "northvale-capital": {
     ground: "the editorial finance ground",
@@ -625,7 +633,7 @@ async function registeredSystems(): Promise<readonly System[]> {
   const themes = [...registry.matchAll(/\{ slug: "([a-z0-9-]+)", name: "([^"]+)" \}/g)]
     .map((match) => ({ name: match[2]!, dir: path.join(themesRoot, match[1]!), slug: match[1]! }));
   if (themes.length === 0) throw new Error("No themes found in the bundled registry");
-  const samples = ["sonnel", "foliover", "oddward", "velune", "halide"].map((slug) => ({
+  const samples = ["sonnel", "foliover", "oddward", "velune"].map((slug) => ({
     name: `${slug.toUpperCase()} sample system`,
     dir: path.join(repoRoot, "samples", "original", slug, "design-system"),
     slug,

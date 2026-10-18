@@ -32,7 +32,7 @@ describe("Design system layout contract", () => {
       const readme = path.join(dir, "README.md");
       await writeFile(css, ":root { --layout-max: 999px; }");
       await writeFile(readme, "## Composition\n\nKeep the authored layout.\n");
-      for (const id of ["builtin-theme-dark", ...PROMPT_SAMPLES.map(s => `sample-system-${s.slug}`), "splash", "sample-system-original-halide", "northvale-capital"]) {
+      for (const id of ["builtin-theme-dark", ...PROMPT_SAMPLES.map(s => `sample-system-${s.slug}`), "splash", "sample-system-original-sonnel", "northvale-capital"]) {
         const layout = await readDesignSystemLayout({ id, dir_path: dir, tokens_css_path: css, readme_md_path: readme });
         expect(missingDesignSystemLayout(layout)).toEqual([]);
         expect(layout.tokens["--layout-max"]).toBe("999px");

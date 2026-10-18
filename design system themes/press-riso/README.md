@@ -65,6 +65,8 @@ Navigation icon-taxonomy → hero portfolio-peek (48% copy zone, background medi
 
 Keep cream stock and flat vermilion, ultramarine and sun-yellow roles. Condensed large type, one three-degree display rotation, 2px rules and square corners retain the printed character. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
+For illustrated and tactile campaign stories, stack paper-textured chapter cards with flat spot-ink linework, hand-set display headlines, and plain-language story captions.
+
 ## Image direction
 
 Every artifact on this system needs imagery of a specific kind; the palette alone will not

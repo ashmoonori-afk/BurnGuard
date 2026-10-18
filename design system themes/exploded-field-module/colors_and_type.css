@@ -1,0 +1,202 @@
+@import url("./fonts/fonts.css");
+
+/* Exploded Field Module Theme - an original BurnGuard design system. */
+/* Palette, type pairing, scale, layout and composition rules composed for this theme. */
+
+:root {
+
+  /* Neutrals */
+  --gray-100: #F2EFE9;
+  --gray-90: #E5E1D9;
+  --gray-80: #D2CEC4;
+  --gray-70: #B9B4A9;
+  --gray-60: #9E998E;
+  --gray-50: #827E74;
+  --gray-40: #66625A;
+  --gray-30: #4B4842;
+  --gray-20: #302E2A;
+  --gray-10: #141413;
+
+  /* Brand and accents */
+  --primary-blue: #B82E16;
+  --action-blue: #B82E16;
+  --red-60: #B82E16;
+  --red-50: #D4432A;
+  --red-10: #F9DCD6;
+  --orange-50: #A84B10;
+  --orange-10: #F5E1D0;
+  --yellow-30: #875F00;
+  --yellow-10: #F4E8C1;
+  --green-60: #1B6B45;
+  --green-50: #2D865B;
+  --green-10: #D3EAE0;
+  --teal-50: #11645C;
+  --teal-10: #CDE7E4;
+  --aqua-60: #185A7A;
+  --aqua-10: #D2E4EE;
+  --blue-90: #4A140A;
+  --blue-80: #6E1C0E;
+  --blue-70: #932512;
+  --blue-60: #B82E16;
+  --blue-50: #D9533B;
+  --blue-30: #EBA092;
+  --blue-10: #F9DCD6;
+  --ultramarine-60: #263E7A;
+  --purple-60: #4B4E58;
+  --pink-60: #7D3B46;
+
+  /* Semantic */
+  --success: #1B6B45;
+  --warning-yellow: #875F00;
+  --warning-orange: #A84B10;
+  --error: #A61E1E;
+  --info: #185A7A;
+
+  /* Surface and text */
+  --bg: #F2EFE9;
+  --bg-subtle: #EAE6DF;
+  --bg-muted: #E1DDD5;
+  --surface: #EDE9E2;
+  --surface-inverse: #141413;
+  --fg-1: #141413;
+  --fg-2: #2F2E2B;
+  --fg-3: #4C4A45;
+  --fg-4: #5F5C56;
+  --fg-on-dark: #F2EFE9;
+  --fg-on-brand: #FFFFFF;
+  --border: #CFCBC1;
+  --border-strong: #7C786F;
+  --focus-ring: #B82E16;
+
+  /* Paired donor colors retained for accessible combinations */
+  --secondary: #4B4E58;
+  --fg-on-secondary: #FFFFFF;
+  --accent: #11645C;
+  --fg-on-accent: #FFFFFF;
+  --fg-on-info: #FFFFFF;
+  --fg-on-success: #FFFFFF;
+  --fg-on-warning: #FFFFFF;
+  --fg-on-error: #FFFFFF;
+
+  /* Charts */
+  --chart-1: #B82E16;
+  --chart-2: #11645C;
+  --chart-3: #4B4E58;
+  --chart-4: #185A7A;
+  --chart-5: #1B6B45;
+  --chart-6: #875F00;
+  --chart-7: #A61E1E;
+  --chart-8: #263E7A;
+  --chart-9: #5F5C56;
+  --chart-10: #7D3B46;
+
+  /* Type families */
+  --font-display: "Space Grotesk", "Pretendard", sans-serif;
+  --font-serif: "Newsreader", "Nanum Myeongjo", serif;
+  --font-body: "IBM Plex Sans", "Pretendard", sans-serif;
+  --font-sans: "IBM Plex Sans", "Pretendard", sans-serif;
+  --font-mono: "IBM Plex Mono", "Pretendard", monospace;
+
+  /* Type scale */
+  --fs-12: 0.75rem;
+  --fs-13: 0.8125rem;
+  --fs-14: 0.875rem;
+  --fs-16: 1rem;
+  --fs-18: 1.125rem;
+  --fs-20: 1.25rem;
+  --fs-24: 1.5rem;
+  --fs-28: 1.75rem;
+  --fs-32: 2rem;
+  --fs-40: 2.5rem;
+  --fs-48: 3rem;
+  --fs-64: 4rem;
+  --fs-80: 5rem;
+
+  /* Weight, leading, and tracking */
+  --fw-light: 300;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --fw-black: 900;
+  --lh-tight: 1.08;
+  --lh-snug: 1.25;
+  --lh-normal: 1.45;
+  --lh-relaxed: 1.6;
+  --ls-tight: -0.02em;
+  --ls-normal: 0em;
+  --ls-wide: 0.02em;
+  --ls-eyebrow: 0.14em;
+
+  /* Spacing: 4px grid */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+  --sp-20: 80px;
+
+  /* Radii */
+  --r-0: 0px;
+  --r-2: 2px;
+  --r-4: 3px;
+  --r-8: 4px;
+  --r-pill: 999px;
+
+  /* Elevation */
+  --shadow-1: none;
+  --shadow-2: none;
+  --shadow-3: none;
+  --shadow-4: none;
+
+  /* Motion */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasis: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 160ms;
+  --dur-base: 260ms;
+  --dur-slow: 420ms;
+
+  /* Layout */
+  --layout-max: 1380px;
+  --layout-measure: 62ch;
+  --layout-columns: 12;
+  --layout-gutter: 20px;
+  --layout-margin: clamp(20px, 3.5vw, 56px);
+  --layout-section-y: clamp(48px, 6vw, 96px);
+  --layout-rule: 1px;
+  --layout-bp-md: 800px;
+  --layout-bp-lg: 1160px;
+  --layout-hero: 4 / 3;
+  --layout-nav-h: 64px;
+
+  /* Family extensions */
+  --family-ui-navigation-placement: top;
+  --family-ui-navigation-span: 2;
+  --family-ui-label-placement: beside;
+}
+
+:root { --layout-structure: editorial; }
+
+/* Website regions; legacy layout and family tokens continue to govern body content. */
+:root {
+  --layout-nav-pattern: icon-taxonomy;
+  --layout-nav-position: top;
+  --layout-nav-height: 76px;
+  --layout-nav-width: 1320px;
+  --layout-hero-pattern: specimen-poster;
+  --layout-hero-copy-ratio: 42%;
+  --layout-hero-media-ratio: 4 / 3;
+  --layout-hero-media-position: background;
+  --layout-hero-min-height: 700px;
+  --layout-hero-title-measure: 14ch;
+  --layout-hero-align: start;
+  --layout-hero-offset: 40px;
+  --layout-footer-pattern: studio-address;
+  --layout-footer-columns: 4;
+  --layout-footer-height: 520px;
+}

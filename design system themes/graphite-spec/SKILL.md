@@ -18,6 +18,8 @@ Navigation segmented-pill → hero specimen-poster (34% copy zone, background me
 
 Keep a measured mono body, numbered figures, margin annotations and first-class tables. Amber marks the discussed value; graphite, bone, zero radius and rules do the rest. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
+For repairable and modular hardware detail pages, combine orthographic exploded-view diagrams with numbered callout leaders, component-by-component upgrade tables, and tabular port/dimension matrices.
+
 ## Layout
 
 Use the `--layout-*` tokens; do not invent a grid per artifact. Content sits inside `--layout-max`

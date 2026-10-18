@@ -51,6 +51,8 @@ Navigation mega-feature → hero framed-cover (70% copy zone, below media, 16 / 
 
 Use warm off-white paper, soft lowercase display type, buttercup only for action and active state, pill actions and warm hairline dividers. Keep the body approachable and printed. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
+For approachable software and editorial product pages, pair warm paper grounds and serif-accented headlines with press-quote proof, split-view workflow frames, and plain-language feature cards.
+
 ## Image direction
 
 Every artifact on this system needs imagery of a specific kind; the palette alone will not
