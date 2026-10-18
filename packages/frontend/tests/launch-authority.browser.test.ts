@@ -116,6 +116,7 @@ async function fixture() {
       const ready = observe(page, { bootstrap: null, draft: "", disabled: false, opened: 1 });
       await page.evaluate(() => globalThis.launchAuthorityTest.mount());
       await Promise.all([ready, resynced.then((response) => response.finished())]);
+      await page.evaluate(() => globalThis.launchAuthorityTest.settleInitialQueries());
     },
     async restart() {
       const oldPid = server.pid;
@@ -181,6 +182,10 @@ describe("expired launch authority with real middleware and backend processes", 
       }
       expect(await f.page.locator("textarea").inputValue()).toBe("F08 unsent draft");
       expect(await f.page.evaluate(() => globalThis.launchAuthorityTest.sameComposer())).toBe(true);
+      await f.page.evaluate(() => globalThis.launchAuthorityTest.refetchWorkspace());
+      expect(await f.page.evaluate(() => globalThis.launchAuthorityTest.sameComposer())).toBe(true);
+      expect(await f.page.locator("textarea").inputValue()).toBe("F08 unsent draft");
+      expect(await f.page.locator("[data-authority-expired]").count()).toBe(1);
       const beforeMutation = f.requests.length;
       expect(await f.page.evaluate(() => globalThis.launchAuthorityTest.attemptMutation())).toEqual({ code: "forbidden", status: 403 });
       expect(f.requests).toHaveLength(beforeMutation);

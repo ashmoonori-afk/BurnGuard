@@ -48,7 +48,7 @@ import {
   listProjectFiles,
   refreshArtifacts,
 } from "@/api/project";
-import { ApiError } from "@/api/client";
+import { ApiError, isAuthorityDenied } from "@/api/client";
 import { isStaleIdentityError, readFileIdentity } from "@/lib/artifact-identity";
 import { getProjectDesignAudit, retryProjectDesignAudit } from "@/api/design-audit";
 import { restoreCheckpoint } from "@/api/checkpoints";
@@ -1140,7 +1140,8 @@ export default function ProjectView() {
 
   const loadQueries = [projectQuery, filesQuery, artifactsQuery, sessionQuery];
   const loadError = loadQueries.find((query) => query.error && (
-    query.data === undefined || !isTransientProjectLoadError(query.error)
+    query.data === undefined || (!isTransientProjectLoadError(query.error) &&
+      !(stream.authorityExpired && isAuthorityDenied(query.error)))
   ))?.error;
   const refreshError = loadQueries.find((query) => query.error)?.error;
   const isLoading = !loadError && (
@@ -1165,10 +1166,10 @@ export default function ProjectView() {
     return (
       <div className="grid min-h-0 flex-1 place-items-center overflow-y-auto p-6">
         <div className="max-w-md rounded-2xl border border-border bg-card p-7 text-center shadow-sm" role="alert">
-          <h1 className="text-lg font-semibold">{t("workspace.project.openFailed")}</h1>
-          <p className="mt-3 text-sm leading-6 text-muted-foreground">{loadError ? apiErrorCopy(loadError) : t("workspace.project.connectionHelp")}</p>
+          <h1 className="text-lg font-semibold">{t(stream.authorityExpired ? "shell.launchExpiredTitle" : "workspace.project.openFailed")}</h1>
+          <p className="mt-3 text-sm leading-6 text-muted-foreground">{stream.authorityExpired ? t("shell.launchExpiredBody") : loadError ? apiErrorCopy(loadError) : t("workspace.project.connectionHelp")}</p>
           <div className="mt-6 flex flex-wrap justify-center gap-2">
-            <button type="button" className="min-h-11 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-foreground" onClick={() => { void projectQuery.refetch(); void sessionQuery.refetch(); void filesQuery.refetch(); void artifactsQuery.refetch(); stream.retry(); }}>{t("workspace.project.retry")}</button>
+            {!stream.authorityExpired && <button type="button" className="min-h-11 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-foreground" onClick={() => void stream.retry().then(() => { void projectQuery.refetch(); void sessionQuery.refetch(); void filesQuery.refetch(); void artifactsQuery.refetch(); }).catch((error: unknown) => pushToast({ title: t("shell.reconnectFailed"), body: apiErrorCopy(error), tone: "error" }))}>{t("workspace.project.retry")}</button>}
             <button type="button" className="min-h-11 rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted" onClick={() => navigate("/")}>{t("workspace.project.home")}</button>
           </div>
         </div>

@@ -1,7 +1,9 @@
 import { createRoot } from "react-dom/client";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { flushSync } from "react-dom";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { authorizedFetch, isAuthorityExpired } from "../../src/api/client";
+import { queryClient } from "../../src/api/queryClient";
 import Bootstrap from "../../src/components/Bootstrap";
 import ProjectView from "../../src/views/ProjectView";
 import { useLocaleStore } from "../../src/i18n/locale";
@@ -30,6 +32,8 @@ declare global {
     attemptMutation(): Promise<{ code: string; status: number }>;
     rememberComposer(): void;
     sameComposer(): boolean;
+    settleInitialQueries(): Promise<void>;
+    refetchWorkspace(): Promise<void>;
   };
 }
 
@@ -42,13 +46,13 @@ let composer: Element | null = null;
 const changed = () => document.dispatchEvent(new Event("f08:state"));
 // Observe the real fetch rejection; no response or authority decision is mocked.
 const nativeFetch = globalThis.fetch.bind(globalThis);
-globalThis.fetch = async (input, init) => {
+globalThis.fetch = Object.assign(async (input: RequestInfo | URL, init?: RequestInit) => {
   try { return await nativeFetch(input, init); }
   catch (error) {
     if (String(input).endsWith("/snapshot")) { snapshotNetworkFailures += 1; changed(); }
     throw error;
   }
-};
+}, { preconnect: globalThis.fetch.preconnect });
 class ObservedEventSource extends NativeEventSource {
   constructor(url: string | URL, init?: EventSourceInit) {
     super(url, init);
@@ -87,8 +91,7 @@ new MutationObserver(changed).observe(container, { subtree: true, attributes: tr
 globalThis.launchAuthorityTest = {
   mount() {
     useLocaleStore.setState({ locale: "en" });
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } } });
-    root.render(<Bootstrap><QueryClientProvider client={client}><BrowserRouter><Routes>
+    root.render(<Bootstrap><QueryClientProvider client={queryClient}><BrowserRouter><Routes>
       <Route path="/projects/:id" element={<ProjectView />} />
     </Routes></BrowserRouter></QueryClientProvider></Bootstrap>);
   },
@@ -128,4 +131,25 @@ globalThis.launchAuthorityTest = {
   },
   rememberComposer() { composer = document.querySelector("textarea"); },
   sameComposer() { return composer !== null && composer === document.querySelector("textarea"); },
+  settleInitialQueries() {
+    return new Promise((resolve, reject) => {
+      const check = () => {
+        if (queryClient.isFetching() !== 0) return;
+        clearTimeout(timer);
+        unsubscribe();
+        resolve();
+      };
+      const timer = setTimeout(() => {
+        unsubscribe();
+        reject(new Error("Initial authority fixture queries did not settle"));
+      }, 5000);
+      const unsubscribe = queryClient.getQueryCache().subscribe(check);
+      check();
+    });
+  },
+  async refetchWorkspace() {
+    await queryClient.refetchQueries({ type: "active" });
+    // Commit the real query results before checking whether the workspace stayed mounted.
+    flushSync(() => globalThis.launchAuthorityTest.mount());
+  },
 };
