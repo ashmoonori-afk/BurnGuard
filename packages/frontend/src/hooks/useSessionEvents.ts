@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { NormalizedEvent } from "@bg/shared";
-import { bootstrapApiAuthority, isAuthorityDenied, onAuthorityRejected, rejectLaunchAuthority } from "@/api/client";
+import { bootstrapApiAuthority, onAuthorityRejected } from "@/api/client";
 import { getSessionSnapshot, listSessionEvents, subscribeSessionStream } from "@/api/session";
 import { mergeSessionEvents, type SessionEventState } from "@/lib/session-event-state";
 import { useLaunchAuthority } from "./useLaunchAuthority";
@@ -56,12 +56,6 @@ export function openSessionStream(sessionId: string, stateRef: StateRef, handler
     handlers.setError(true);
   };
   const stopAuthorityListener = onAuthorityRejected(closeDenied);
-  const handleFailure = (error: unknown) => {
-    if (active && isAuthorityDenied(error)) {
-      rejectLaunchAuthority();
-      closeDenied();
-    }
-  };
   const checkDisconnect = () => {
     if (checkedDisconnect) return;
     checkedDisconnect = true;
@@ -69,8 +63,8 @@ export function openSessionStream(sessionId: string, stateRef: StateRef, handler
     disconnectCheck = controller;
     const timer = setTimeout(() => controller.abort(), 15_000);
     void api.getSessionSnapshot(sessionId, controller.signal)
-      .catch((error: unknown) => {
-        if (!controller.signal.aborted) handleFailure(error);
+      .catch(() => {
+        if (active && !controller.signal.aborted) handlers.setError(true);
       })
       .finally(() => clearTimeout(timer));
   };
@@ -111,7 +105,7 @@ export function openSessionStream(sessionId: string, stateRef: StateRef, handler
         handlers.setStale(true);
         refreshSessionSnapshot(sessionId, stateRef, handlers.setState, api)
           .then(() => { if (active) handlers.setStale(false); })
-          .catch((error: unknown) => { handleFailure(error); if (active) handlers.setStale(true); });
+          .catch(() => { if (active) handlers.setStale(true); });
       }, {
         afterSequence: stateRef.current.sequence,
         onOpen: () => {
@@ -122,10 +116,10 @@ export function openSessionStream(sessionId: string, stateRef: StateRef, handler
           handlers.setReconnecting(false);
           refreshSessionSnapshot(sessionId, stateRef, handlers.setState, api)
             .then(() => { if (active) handlers.setStale(false); })
-            .catch((error: unknown) => { handleFailure(error); if (active) handlers.setStale(true); });
+            .catch(() => { if (active) handlers.setStale(true); });
         },
       });
-    } catch (error) { handleFailure(error); if (active) handlers.setError(true); }
+    } catch { if (active) handlers.setError(true); }
   })();
   return () => { active = false; disconnectCheck?.abort(); stopAuthorityListener(); unsubscribe(); };
 }
