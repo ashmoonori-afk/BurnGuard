@@ -18,6 +18,8 @@ Navigation mega-feature → hero split-left (44% copy zone, right media, 21 / 9,
 
 Keep dark timber and warm lamplight, low-light rooms with dark edges, serif statements and quiet practical information. Amber marks action, radii stay at most 2px and nothing is elevated. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
+For dark-ground furniture and architectural object pages, pair raking-light macro upholstery and wood-grain plates with timber species sections, oiled finish swatches, and downloadable technical specification sheets.
+
 ## Layout
 
 Use the `--layout-*` tokens; do not invent a grid per artifact. Content sits inside `--layout-max`

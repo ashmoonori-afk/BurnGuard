@@ -1,6 +1,5 @@
 import { DEFAULT_DISPLAY_NAME } from "@bg/shared";
 import { copyBundledFonts } from "../data/bundled-fonts";
-import { copyBundledLiquidGlass } from "../data/bundled-liquid-glass";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { and, desc, eq, isNull } from "drizzle-orm";
@@ -167,7 +166,6 @@ export async function seedCoreData() {
     });
     await new ArtifactCoordinator(getSqlite()).initializeProject(project.id, dirPath, async (stage) => {
       await copyBundledFonts(stage);
-      await copyBundledLiquidGlass(stage);
       if (html === undefined) return;
       await writeFile(path.join(stage, entrypoint), html, "utf8");
       if (project.type === "slide_deck") {
@@ -376,7 +374,6 @@ export async function createProjectRecord(input: {
       else if (original && originalFormat) await copyOriginalSample(original.slug, originalFormat.directory, stage);
       else {
         await copyBundledFonts(stage);
-        await copyBundledLiquidGlass(stage);
         await writeFile(path.join(stage, input.entrypoint), initialArtifact, "utf8");
         if (input.type === "slide_deck") {
           await mkdir(path.join(stage, "runtime"), { recursive: true });

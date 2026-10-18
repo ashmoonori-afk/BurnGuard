@@ -18,6 +18,8 @@ Navigation profile-popover → hero fullbleed-top (54% copy zone, background med
 
 Keep linen, serif statements, heavily spaced eyebrows and the partial image bleed. Plain rooms, rates and arrival lists accompany one tan booking action; use restrained small radii. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
+For craft furniture detail pages, pair sunlit room plates with quantified making narratives — process steps, woven cord or textile yardage, and hours of handwork — followed by natural material selectors and care rules.
+
 ## Layout
 
 Use the `--layout-*` tokens; do not invent a grid per artifact. Content sits inside `--layout-max`

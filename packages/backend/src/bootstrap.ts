@@ -1,5 +1,4 @@
 import { copyBundledFonts } from "./data/bundled-fonts";
-import { copyBundledLiquidGlass } from "./data/bundled-liquid-glass";
 import type { Database } from "bun:sqlite";
 import { randomUUID } from "node:crypto";
 import { cp, mkdir, rename, rm, stat } from "node:fs/promises";
@@ -86,7 +85,6 @@ export async function seedBundledDesignSystems(
       try {
         await cp(path.join(themesSource, slug), stage, { recursive: true });
         await copyBundledFonts(stage, repoRoot);
-        await copyBundledLiquidGlass(stage, repoRoot);
         await rename(stage, destination);
       } finally {
         await rm(stage, { recursive: true, force: true });

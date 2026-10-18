@@ -48,6 +48,7 @@ const FAMILY_ORIGINAL_SLUGS = [
   "paper-instrument",
   "quiet-runtime",
   "graphite-spec",
+  "exploded-field-module",
   "long-form-press",
   "wide-gutter-review",
   "quarterly-folio",
@@ -56,6 +57,7 @@ const FAMILY_ORIGINAL_SLUGS = [
   "atelier-counter",
   "market-stack",
   "vitrine-mono",
+  "modular-configurator",
   "night-marquee",
   "stencil-field",
   "press-riso",
@@ -149,8 +151,8 @@ describe("bundled design systems", () => {
     // Eighty-two theme files; allow bounded slow-disk I/O as the seed-copy case below does.
   }, 30_000);
 
-  test("Given a classic theme palette When its colour pairs are measured Then each meets WCAG 2.2 AA", async () => {
-    for (const slug of CLASSIC_SLUGS) {
+  test("Given every bundled theme palette When its colour pairs are measured Then each meets WCAG 2.2 AA", async () => {
+    for (const slug of THEME_SLUGS) {
       const css = await readFile(path.join(themesRoot, slug, "colors_and_type.css"), "utf8");
       const colors = await extractCssCustomProperties(css);
       const color = (token: string): string => {

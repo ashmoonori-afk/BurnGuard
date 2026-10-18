@@ -65,6 +65,8 @@ Navigation editorial-overlay → hero masthead-crop (38% copy zone, background m
 
 Keep goods as exhibits in shared-edge ruled cells. Contain the objects, place mono specifications beneath them and use position or rule weight for emphasis; zero radius. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
+For modular object and hardware detail pages, pair orthographic case plates with component dimension ladders, surface-compatibility notes, and finish swatch codes inside shared-edge ruled cells.
+
 ## Image direction
 
 Every artifact on this system needs imagery of a specific kind; the palette alone will not

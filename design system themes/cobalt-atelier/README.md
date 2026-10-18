@@ -51,6 +51,8 @@ Navigation profile-popover → hero split-left (42% copy zone, right media, 4 / 
 
 Cobalt is the ground, not an accent. Keep the light serif voice, mono labels, near-square unraised controls and visible cobalt around inset imagery. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
+For chaptered craft and material-story pages, pin a five-chapter index beside isolated cobalt specimen plates, pairing one sensory claim per chapter with mono process facts.
+
 ## Image direction
 
 Every artifact on this system needs imagery of a specific kind; the palette alone will not

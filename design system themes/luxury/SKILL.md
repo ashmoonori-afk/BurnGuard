@@ -22,7 +22,7 @@ Read README.md first, then use colors_and_type.css as the single source of truth
 
 ## Required layout
 
-Read Navigation, Hero, Footer, Layout and Responsive in README.md before arranging content. Apply the named region patterns and every corresponding --layout-* value; use family tokens for the body. Preserve the theme identity and supplied art. Direction variants may change emphasis but retain these regions unless the user overrides them. Check wide and narrow rendering and 200% zoom.
+Read Navigation, Hero, Footer, Layout and Responsive in README.md before arranging content. Apply the named region patterns and every corresponding --layout-* value; use family tokens for the body. Preserve the theme identity and supplied art. For acoustic and mineral luxury object pages, pair warm portrait plates with two-line poetic material headlines, brushed-metal and textile swatch rows, and unhurried heritage chapters. Direction variants may change emphasis but retain these regions unless the user overrides them. Check wide and narrow rendering and 200% zoom.
 
 ## Navigation
 

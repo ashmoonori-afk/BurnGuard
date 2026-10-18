@@ -41,10 +41,10 @@ const ARCHETYPE: Record<string, Archetype> = {
   "archive-folio": "workspace",
   // Family systems.
   "signal-console": "marketing", "paper-instrument": "marketing",
-  "quiet-runtime": "workspace", "graphite-spec": "marketing",
+  "quiet-runtime": "workspace", "graphite-spec": "marketing", "exploded-field-module": "marketing",
   "long-form-press": "article", "wide-gutter-review": "article",
   "quarterly-folio": "article", "night-edition": "article",
-  "studio-counter": "shop", "atelier-counter": "shop", "market-stack": "shop", "vitrine-mono": "shop",
+  "studio-counter": "shop", "atelier-counter": "shop", "market-stack": "shop", "vitrine-mono": "shop", "modular-configurator": "shop",
   "night-marquee": "poster", "stencil-field": "poster", "press-riso": "poster", "exhibit-wall": "poster",
   "index-table": "workspace", "facet-archive": "workspace",
   "console-ledger": "workspace", "field-register": "workspace",

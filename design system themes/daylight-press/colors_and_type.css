@@ -19,8 +19,8 @@
   --gray-10: #282725;
 
   /* Brand and accents */
-  --primary-blue: #FFCF4A;
-  --action-blue: #FFCF4A;
+  --primary-blue: #AD8C32;
+  --action-blue: #AD8C32;
   --red-60: #C4483F;
   --red-50: #CE6860;
   --red-10: #F2DAD3;
@@ -61,13 +61,13 @@
   --surface-inverse: #1B1A18;
   --fg-1: #1B1A18;
   --fg-2: #444240;
-  --fg-3: #6C6B67;
-  --fg-4: #94938F;
+  --fg-3: #696864;
+  --fg-4: #686865;
   --fg-on-dark: #FCFAF4;
   --fg-on-brand: #101014;
   --border: #DCDBD5;
-  --border-strong: #B0AEA9;
-  --focus-ring: #C79A16;
+  --border-strong: #92908C;
+  --focus-ring: #B38A14;
 
   /* Paired donor colors retained for accessible combinations */
   --secondary: #6C8F6A;

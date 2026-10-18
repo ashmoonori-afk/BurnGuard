@@ -18,6 +18,8 @@ Navigation profile-popover → hero type-marquee (84% copy zone, background medi
 
 Keep warm bone paper, didone brand voice, contained product plates and a humanist reading face. Oxblood marks price or action; use hairline rows and no elevation. Body content continues to use the existing family gallery, paragraph, table and media rules. Do not substitute another theme's opening just because its palette is similar.
 
+For craft-led product detail pages, sequence sentence-case titles, material provenance subtitles, a single molding or tailoring paragraph, construction and care bullets, a multi-region size conversion table, and a paired styling grid.
+
 ## Layout
 
 Use the `--layout-*` tokens; do not invent a grid per artifact. Content sits inside `--layout-max`

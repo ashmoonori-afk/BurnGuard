@@ -51,9 +51,9 @@ try {
   assert.ok((await readFile(path.join(profile, "burnguard.db"))).length > 0);
   checks.push("fresh-migrations-and-seeded-systems");
   const originals = projects.data.filter((project) => project.name.startsWith("[burnguard:original-sample]"));
-  assert.equal(originals.length, 15, "the packaged runtime must seed all five original collections in three formats");
-  assert.equal(systems.data.filter((system) => system.id.startsWith("sample-system-original-")).length, 5);
-  assert.equal(systems.data.filter((system) => system.id.startsWith("builtin-theme-")).length, 41);
+  assert.equal(originals.length, 12, "the packaged runtime must seed all four original collections in three formats");
+  assert.equal(systems.data.filter((system) => system.id.startsWith("sample-system-original-")).length, 4);
+  assert.equal(systems.data.filter((system) => system.id.startsWith("builtin-theme-")).length, 43);
   for (const project of originals) {
     const { data: detail } = await (await request(`/api/projects/${project.id}`, { headers })).json();
     const { data: session } = await (await request(`/api/projects/${project.id}/session`, { headers })).json();
@@ -61,17 +61,12 @@ try {
     const html = await request(`/api/projects/${project.id}/fs/${detail.entrypoint}`, { headers });
     assert.equal(html.status, 200);
     const sampleHtml = await html.text();
-    if (project.design_system_id === "sample-system-original-halide") {
-      assert.match(sampleHtml, /liquid-glass\/liquid-glass\.js/);
-      const glass = await request(`/api/projects/${project.id}/fs/liquid-glass/liquid-glass.js`, { headers });
-      assert.equal(glass.status, 200);
-      assert.match(await glass.text(), /renderLiquidGlassRing/);
-    } else assert.match(sampleHtml, /assets\/hero\.png/);
+    assert.match(sampleHtml, /assets\/hero\.png/);
     const hero = await request(`/api/projects/${project.id}/fs/assets/hero.png`, { headers });
     assert.equal(hero.status, 200);
     assert.match(hero.headers.get("content-type"), /image\/png/);
   }
-  checks.push("fifteen-original-samples-five-systems-forty-one-themes-and-local-images");
+  checks.push("twelve-original-samples-four-systems-forty-three-themes-and-local-images");
   const ui = await request("/");
   assert.equal(ui.status, 200);
   assert.match(await ui.text(), /<div id="root"/);

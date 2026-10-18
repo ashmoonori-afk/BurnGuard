@@ -62,11 +62,11 @@
   --fg-1: #EDEAE4;
   --fg-2: #C6C3BF;
   --fg-3: #9E9C99;
-  --fg-4: #777574;
-  --fg-on-dark: #EDEAE4;
+  --fg-4: #8C8A89;
+  --fg-on-dark: #121214;
   --fg-on-brand: #101014;
   --border: #313031;
-  --border-strong: #5C5B5B;
+  --border-strong: #636262;
   --focus-ring: #D98E3A;
 
   /* Paired donor colors retained for accessible combinations */
