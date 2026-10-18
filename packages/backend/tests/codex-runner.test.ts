@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { once } from "node:events";
+import * as fs from "node:fs";
 import { chmod, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -216,6 +217,23 @@ describe("user Codex OpenTelemetry destination detection", () => {
 });
 
 describe("runCodexTurn image-tool lifecycle (real subprocess fixtures)", () => {
+  runnerTest("Given controlled image notifications When an unrelated native watcher is created Then its callback and lifetime are preserved", async () => {
+    await using fixture = await codexFixture({ controlledWatch: true });
+    const receipts = path.join(fixture.root, "receipts");
+    await mkdir(receipts);
+    const notifications: (string | null)[] = [];
+    const watcher = fs.watch(receipts, (_type, filename) => notifications.push(filename));
+    const closed = once(watcher, "close", { signal: AbortSignal.timeout(5_000) });
+    try {
+      expect(fixture.watches.map((entry) => entry.path)).not.toContain(receipts);
+      watcher.emit("change", "rename", "launch.json");
+      expect(notifications).toEqual(["launch.json"]);
+    } finally {
+      watcher.close();
+      await closed;
+    }
+  });
+
   for (const missingRoot of [false, true]) {
     runnerTest(`Given generated_images is ${missingRoot ? "missing" : "present"} When a PNG lands after watcher attachment Then its hash is delivered live exactly once`, async () => {
       await using fixture = await codexFixture({ missingRoot });
@@ -244,6 +262,66 @@ describe("runCodexTurn image-tool lifecycle (real subprocess fixtures)", () => {
     });
   }
 
+  runnerTest("Given a watched image root When a new thread directory precedes its PNG Then a direct thread notification delivers the hash live", async () => {
+    await using fixture = await codexFixture({ controlledWatch: true });
+    const finished = Promise.withResolvers<void>();
+    const run = fixture.start({ onEvent: async (event) => { if (event.type === "tool.finished") finished.resolve(); } });
+    await fixture.ready;
+    await fixture.imageAttached;
+    await mkdir(fixture.threadDir);
+    imageWatch(fixture).emit("change", "rename", path.basename(fixture.threadDir));
+    const watcher = fixture.watches.find(entry => entry.path === fixture.threadDir)?.watcher;
+    if (!watcher) throw new Error("New thread directory has no direct image observer");
+    const observed = Promise.race([finished.promise, run.then(() => { throw new Error("thread image not delivered live"); })]);
+    await fixture.image();
+    watcher.emit("change", "rename", "exec-1.png");
+    await observed;
+    await fixture.command("complete");
+    expect(await run).toEqual({ exitCode: 0 });
+    expect(fixture.events.filter(event => event.type === "tool.finished")).toEqual([
+      expect.objectContaining({ output: { image_sha256: [PNG_SHA] } }),
+    ]);
+    expectGone(fixture.pids);
+  });
+
+  runnerTest("Given a newly created thread watcher When it errors Then its replacement delivers the next PNG live", async () => {
+    await using fixture = await codexFixture({ controlledWatch: true });
+    const finished = Promise.withResolvers<void>();
+    const run = fixture.start({ onEvent: async (event) => { if (event.type === "tool.finished") finished.resolve(); } });
+    await fixture.ready;
+    await fixture.imageAttached;
+    await mkdir(fixture.threadDir);
+    imageWatch(fixture).emit("change", "rename", path.basename(fixture.threadDir));
+    const failed = fixture.watches.find(entry => entry.path === fixture.threadDir)?.watcher;
+    if (!failed) throw new Error("Thread image observer missing");
+    failed.emit("error", new Error("thread_watch_lost"));
+    const replacement = [...fixture.watches].reverse().find(entry => entry.path === fixture.threadDir)?.watcher;
+    if (!replacement) throw new Error("Replacement thread observer missing");
+    expect(replacement).not.toBe(failed);
+    const observed = Promise.race([finished.promise, run.then(() => { throw new Error("replacement thread image not delivered live"); })]);
+    await fixture.image();
+    replacement.emit("change", "rename", null);
+    await observed;
+    await fixture.command("complete");
+    expect(await run).toEqual({ exitCode: 0 });
+    expect(fixture.events.filter(event => event.type === "tool.finished")).toHaveLength(1);
+    expectGone(fixture.pids);
+  });
+
+  runnerTest("Given a thread symlink escaping Codex home When the image root reports its creation Then direct observation stays inside the boundary", async () => {
+    await using fixture = await codexFixture({ controlledWatch: true });
+    const run = fixture.start();
+    await fixture.ready;
+    await fixture.imageAttached;
+    await symlink(fixture.root, fixture.threadDir, "junction");
+    imageWatch(fixture).emit("change", "rename", path.basename(fixture.threadDir));
+    expect(fixture.watches.some(entry => entry.path === fixture.threadDir)).toBe(false);
+    await fixture.command("complete");
+    expect(await run).toEqual({ exitCode: 0 });
+    expect(fixture.events.some(event => event.type === "tool.started")).toBe(false);
+    expectGone(fixture.pids);
+  });
+
   runnerTest("Given a basename notification When a PNG exists in the current thread Then its hash is delivered before completion", async () => {
     await using fixture = await codexFixture({ controlledWatch: true });
     const imageFinished = Promise.withResolvers<void>();
@@ -265,19 +343,25 @@ describe("runCodexTurn image-tool lifecycle (real subprocess fixtures)", () => {
     expectGone(fixture.pids);
   });
 
-  runnerTest("Given a silent owned child When a live callback rejects Then intake closes and settlement rejects with the same error without an external abort", async () => {
-    await using fixture = await codexFixture();
-    const failure = new Error("persistence_unavailable");
-    const run = fixture.start({ onEvent: async (event) => {
-      if (event.type === "tool.started") throw failure;
-    } });
-    await fixture.ready;
-    await fixture.image();
-    expect(await run).toBe(failure);
-    expect(fixture.controller.signal.aborted).toBe(false);
-    expect(fixture.events.map((event) => event.type)).toEqual(["chat.delta", "tool.started"]);
-    expectGone(fixture.pids);
-  });
+  for (const controlledWatch of [false, true]) {
+    runnerTest(`Given a silent owned child with ${controlledWatch ? "controlled" : "native"} notifications When a live callback rejects Then intake closes and settlement rejects with the same error without an external abort`, async () => {
+      await using fixture = await codexFixture({ controlledWatch });
+      const failure = new Error("persistence_unavailable");
+      const run = fixture.start({ onEvent: async (event) => {
+        if (event.type === "tool.started") throw failure;
+      } });
+      await fixture.ready;
+      await fixture.imageAttached;
+      const closed = fixture.intakeClosed;
+      await fixture.image();
+      if (controlledWatch) imageWatch(fixture).emit("change", "rename", null);
+      await closed;
+      expect(await run).toBe(failure);
+      expect(fixture.controller.signal.aborted).toBe(false);
+      expect(fixture.events.map((event) => event.type)).toEqual(["chat.delta", "tool.started"]);
+      expectGone(fixture.pids);
+    });
+  }
 
   runnerTest("Given a blocked stdout callback When a watcher scan and turn completion arrive Then parsing and callbacks preserve global delivery order", async () => {
     await using fixture = await codexFixture({ controlledWatch: true });
@@ -302,23 +386,27 @@ describe("runCodexTurn image-tool lifecycle (real subprocess fixtures)", () => {
   });
 
   runnerTest("Given an in-flight image callback When stderr rejects Then owned cleanup closes intake and drains that callback before rejecting", async () => {
-    await using fixture = await codexFixture();
-    const entered = Promise.withResolvers<void>();
+    await using fixture = await codexFixture({ controlledWatch: true });
     const release = Promise.withResolvers<void>();
     const failure = new Error("trace_unavailable");
     const run = fixture.start({
-      onEvent: async (event) => { if (event.type === "tool.started") { entered.resolve(); await release.promise; } },
+      onEvent: async (event) => { if (event.type === "tool.started") await release.promise; },
       onStderr: async () => { throw failure; },
     });
     try {
       await fixture.ready;
-      const closed = once(imageWatch(fixture), "close", { signal: AbortSignal.timeout(5_000) });
-      const observed = Promise.race([entered.promise, run.then(() => { throw new Error("image callback not entered"); })]);
+      await fixture.imageAttached;
+      const entered = fixture.imageCallbackEntered;
+      const rejected = fixture.stderrRejected;
+      const closed = fixture.intakeClosed;
       await fixture.image();
-      await observed;
+      imageWatch(fixture).emit("change", "rename", null);
+      await entered;
       await fixture.command("stderr");
+      await rejected;
       await closed;
       expect(fixture.settled).toBe(false);
+      expect(fixture.watches.every((entry) => entry.closed)).toBe(true);
       release.resolve();
       expect(await run).toBe(failure);
       expect(fixture.controller.signal.aborted).toBe(false);
@@ -332,13 +420,70 @@ describe("runCodexTurn image-tool lifecycle (real subprocess fixtures)", () => {
     const finished = Promise.withResolvers<void>();
     const run = fixture.start({ onEvent: async (event) => { if (event.type === "tool.finished") finished.resolve(); } });
     await fixture.ready;
-    await fixture.image();
+    await fixture.parentAttached;
+    expect(fixture.watches.some((entry) => entry.path === fixture.imageRoot)).toBe(false);
+    const attached = fixture.imageAttached;
     const observed = Promise.race([finished.promise, run.then(() => { throw new Error("null-name attachment failed"); })]);
+    await fixture.image();
     parentWatch(fixture).emit("change", "rename", null);
+    await attached;
     await observed;
+    expect(fixture.events.filter((event) => event.type === "tool.finished")).toHaveLength(1);
     await fixture.command("complete");
     expect(await run).toEqual({ exitCode: 0 });
     expect(fixture.events[2]).toMatchObject({ output: { image_sha256: [PNG_SHA] } });
+    expectGone(fixture.pids);
+  });
+
+  runnerTest("Given repeated controlled notifications When the same PNG is scanned Then its image tool pair is delivered once", async () => {
+    await using fixture = await codexFixture({ controlledWatch: true });
+    const finished = Promise.withResolvers<void>();
+    const run = fixture.start({ onEvent: async (event) => { if (event.type === "tool.finished") finished.resolve(); } });
+    await fixture.ready;
+    await fixture.imageAttached;
+    const observed = Promise.race([finished.promise, run.then(() => { throw new Error("image not delivered live"); })]);
+    await fixture.image();
+    const watcher = imageWatch(fixture);
+    watcher.emit("change", "rename", null);
+    watcher.emit("change", "change", "exec-1.png");
+    await observed;
+    watcher.emit("change", "rename", null);
+    await fixture.command("complete");
+    expect(await run).toEqual({ exitCode: 0 });
+    expect(fixture.events.filter((event) => event.type === "tool.started")).toHaveLength(1);
+    expect(fixture.events.filter((event) => event.type === "tool.finished")).toEqual([
+      expect.objectContaining({ output: { image_sha256: [PNG_SHA] } }),
+    ]);
+    expectGone(fixture.pids);
+  });
+
+  runnerTest("Given stderr has closed intake When the held image callback also rejects Then the original failure remains authoritative", async () => {
+    await using fixture = await codexFixture({ controlledWatch: true });
+    const release = Promise.withResolvers<void>();
+    const first = new Error("trace_unavailable");
+    const second = new Error("image_persistence_unavailable");
+    const run = fixture.start({
+      onEvent: async (event) => { if (event.type === "tool.started") await release.promise; },
+      onStderr: async () => { throw first; },
+    });
+    try {
+      await fixture.ready;
+      await fixture.imageAttached;
+      const entered = fixture.imageCallbackEntered;
+      const rejected = fixture.stderrRejected;
+      const closed = fixture.intakeClosed;
+      await fixture.image();
+      imageWatch(fixture).emit("change", "rename", null);
+      await entered;
+      await fixture.command("stderr");
+      await rejected;
+      await closed;
+      expect(fixture.settled).toBe(false);
+      release.reject(second);
+      expect(await run).toBe(first);
+      expect(fixture.events.map((event) => event.type)).toEqual(["chat.delta", "tool.started"]);
+      expectGone(fixture.pids);
+    } finally { release.resolve(); }
   });
 
   runnerTest("Given an attached image watcher When it reports an error Then a replacement delivers the next null-name notification live", async () => {

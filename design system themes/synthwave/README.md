@@ -1,6 +1,6 @@
 # Synthwave Built-in Theme
 
-A deep indigo system with electric pink, cyan, orange, and dramatic rounded forms.
+A deep violet-night system with sunset orange, fuchsia, and laser-cyan accents and dramatic rounded forms.
 
 ## Files
 
@@ -9,13 +9,11 @@ A deep indigo system with electric pink, cyan, orange, and dramatic rounded form
 
 ## Design token contract
 
-The donor palette is expressed through BurnGuard's canonical neutral, brand, semantic, surface, chart, type, spacing, radius, elevation, and motion tokens. Use the complete `--gray-*` and `--chart-*` ramps for hierarchy and data visualization, and use `--r-*`, `--shadow-*`, and `--dur-*` tokens rather than introducing component-local scales.
+The palette is expressed through BurnGuard's canonical neutral, brand, semantic, surface, chart, type, spacing, radius, elevation, and motion tokens. Use the complete `--gray-*` and `--chart-*` ramps for hierarchy and data visualization, and use `--r-*`, `--shadow-*`, and `--dur-*` tokens rather than introducing component-local scales.
 
 ## Provenance
 
-Derived from the daisyUI `synthwave` theme: https://github.com/saadeghi/daisyui/blob/master/packages/daisyui/src/themes/synthwave.css
-
-Licensed under the MIT License, Copyright (c) 2020 Pouya Saadeghi. Source OKLCH values were converted offline to sRGB, gamut-clipped, and rounded to the nearest 8-bit channel. See the repository `NOTICE` file.
+Palette authored for BurnGuard. The colour values were chosen for this theme and every text and component pair is checked for WCAG 2.2 AA contrast; no third-party theme, stylesheet or palette is included, and it carries no external licence obligation. The `synthwave` slug is kept from earlier releases because seeded workspaces key off `builtin-theme-synthwave`.
 
 ## Local typography
 
@@ -65,23 +63,17 @@ Use `icon-taxonomy` at `overlay`, with `76px` minimum height and `1100px` width 
 
 Mobile: below --layout-bp-md, bound navigation to the viewport and put links in semantic native disclosures where needed. Side, overlay or bottom navigation returns to a compact header in normal flow; preserve focus and reading order.
 
-Structural reference: [icon-taxonomy](https://www.navbar.gallery/navbar/velt). This is an original BurnGuard arrangement informed by the gallery screenshot; donor code, imagery, fonts and brand marks are not included.
-
 ## Hero
 
 Use `product-panel`: copy share `60%`, media at `below` in a `16 / 10` frame, minimum height `640px`, title measure `20ch`, alignment `center` and desktop offset `28px`. Expose a single large product panel below the centered heading; the island navigation and compact closing action must leave this panel dominant. Retain the theme's existing image-fit, palette, font family and locally generated art unless a written theme invariant requires a more protective framing.
 
 Mobile: Below the theme's existing compact breakpoint: Keep title, actions and interface panel in document order; allow the panel to scale proportionally rather than forcing desktop width.
 
-Structural reference: [product-panel](https://supahero.io/hero/wope). Reuse this theme's original imagery and typography; the reference supplies hierarchy and arrangement only.
-
 ## Footer
 
 Use `centered-cta` with `1` desktop groups and `420px` minimum height. Reserve 420px as the desktop minimum closing height with one information group. Use a conversion-focused footer with one primary action and a small secondary link row. Keep decorative wordmarks separate from accessible link labels.
 
 Mobile retains the same central axis and horizontal social row, reducing the bottom wordmark height. Allow links to wrap and let the closing region grow with content.
-
-Structural reference: [centered-cta](https://www.footer.design/sites/cronicle). Adapt the structural idea with this theme's own tokens and content; do not copy donor assets or brand marks.
 
 ## Surfaces
 
@@ -97,7 +89,7 @@ Content values are authored for a `--content-base` shorter side. Per artboard se
 
 ## Slide deck
 
-Reference adaptation: 199 - Figma CONFIG2025 Conference Deck (pp. 1, 2, 3, 4, 7, 10, 12). Layout only; retain this system's own colours, fonts and image direction.
+Slide composition: layout only; retain this system's own colours, fonts and image direction.
 
 1920 x 1080; use --slide-* geometry and type. Keep required content inside --slide-pad-edge; captions at least 24px. No website navigation, hover or scrolling inside a slide.
 

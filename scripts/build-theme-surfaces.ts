@@ -51,7 +51,7 @@ type SurfaceSpec = {
 const SPECS: Readonly<Record<string, SurfaceSpec>> = {
   light: {
     ground: "the crisp neutral canvas, kept open",
-    signal: "violet, pink or teal touches one element per frame",
+    signal: "cobalt, crimson or jade touches one element per frame",
     cover: "a centred title over one uninterrupted wide scene with generous whitespace around it",
     structure: "aligned evidence rows and a flat hierarchy; let the canvas stay open rather than filling it",
     figure: "one clean product or scene image, never a grey placeholder box",
@@ -59,7 +59,7 @@ const SPECS: Readonly<Record<string, SurfaceSpec>> = {
   },
   dark: {
     ground: "the dark workspace ground",
-    signal: "steel blue marks the live metric or control and nothing else",
+    signal: "azure marks the live metric or control and nothing else",
     cover: "a centred statement with the wide background field behind it",
     structure: "compact metric rows and contextual controls on the slide grid, one operational takeaway per frame",
     figure: "an interface panel or scenic field dark enough for type to cross it",
@@ -67,7 +67,7 @@ const SPECS: Readonly<Record<string, SurfaceSpec>> = {
   },
   cupcake: {
     ground: "soft pastel panels on warm paper",
-    signal: "pink or teal carries one friendly action",
+    signal: "blush or lavender carries one friendly action",
     cover: "a welcoming title above a rounded media panel",
     structure: "benefit groups in soft panels and calm story sections; nothing is boxed twice",
     figure: "a bright product or everyday scene, with soft corners applied in CSS rather than baked in",
@@ -107,7 +107,7 @@ const SPECS: Readonly<Record<string, SurfaceSpec>> = {
   },
   dracula: {
     ground: "the dark documentation ground",
-    signal: "purple or pink marks an active term",
+    signal: "rose or periwinkle marks an active term",
     cover: "a display masthead with the subject silhouette below it",
     structure: "continuous prose blocks and inset code examples; do not box every line",
     figure: "a cropped masthead image, or a code surface rendered as a real element",
@@ -123,7 +123,7 @@ const SPECS: Readonly<Record<string, SurfaceSpec>> = {
   },
   business: {
     ground: "the sober charcoal ground",
-    signal: "muted blue marks the decision value",
+    signal: "muted cobalt marks the decision value",
     cover: "the main statement across the top with evidence left and the action stack right",
     structure: "metrics, filters and one table in decision order, with numeric columns aligned",
     figure: "a wide evidence panel or chart; stay text-first so PPTX export survives",

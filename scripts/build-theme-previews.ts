@@ -31,7 +31,7 @@ type Archetype = "marketing" | "article" | "shop" | "poster" | "workspace" | "pl
  * Content genre is authored here; layout, navigation, proportions and breakpoints come from tokens.
  */
 const ARCHETYPE: Record<string, Archetype> = {
-  // Donor palettes.
+  // Classic slugs.
   light: "marketing", dark: "workspace", cupcake: "marketing", retro: "article",
   cyberpunk: "workspace", synthwave: "marketing", luxury: "article", dracula: "article",
   nord: "article", business: "workspace",

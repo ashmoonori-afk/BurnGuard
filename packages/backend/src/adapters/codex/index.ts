@@ -107,8 +107,10 @@ export async function runCodexTurn(
   let accepting = true;
   let imageWatcher: FSWatcher | undefined;
   let rootWatcher: FSWatcher | undefined;
+  let threadWatcher: FSWatcher | undefined;
   const closeIntake = () => {
     accepting = false;
+    threadWatcher?.close();
     imageWatcher?.close();
     rootWatcher?.close();
   };
@@ -147,16 +149,26 @@ export async function runCodexTurn(
           watchGeneratedImages();
         });
       }
-      if (imageWatcher !== undefined) return;
-      // Do not observe a generated_images symlink that escapes the scanner's boundary.
-      const watcher = watch(resolveWithin(ctx.codexHome, "generated_images"), { recursive: true }, () => {
+      if (imageWatcher === undefined) {
+        // Observe directory creation directly instead of relying on recursive watcher enrollment.
+        const watcher = watch(resolveWithin(ctx.codexHome, "generated_images"), () => watchGeneratedImages());
+        imageWatcher = watcher;
+        watcher.on("error", () => {
+          watcher.close();
+          if (imageWatcher === watcher) imageWatcher = undefined;
+          watchGeneratedImages();
+        });
+      }
+      if (threadWatcher !== undefined) return;
+      // Subscribe before the first sweep, including a thread created after generated_images was watched.
+      const watcher = watch(resolveWithin(ctx.codexHome, "generated_images", ctx.threadId), () => {
         // Notification names are advisory; the scanner selects the current thread's files.
         void scanImages();
       });
-      imageWatcher = watcher;
+      threadWatcher = watcher;
       watcher.on("error", () => {
         watcher.close();
-        if (imageWatcher === watcher) imageWatcher = undefined;
+        if (threadWatcher === watcher) threadWatcher = undefined;
         watchGeneratedImages();
       });
       // Includes anything saved between thread.started and attachment/recovery.

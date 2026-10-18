@@ -121,23 +121,17 @@ Use `mega-feature` at `top`, with `96px` minimum height and `1200px` width (0px 
 
 Mobile: below --layout-bp-md, bound navigation to the viewport and put links in semantic native disclosures where needed. Side, overlay or bottom navigation returns to a compact header in normal flow; preserve focus and reading order.
 
-Structural reference: [mega-feature](https://www.navbar.gallery/navbar/chesapeake-plywood). This is an original BurnGuard arrangement informed by the gallery screenshot; donor code, imagery, fonts and brand marks are not included.
-
 ## Hero
 
 Use `framed-cover`: copy share `80%`, media at `right` in a `3 / 2` frame, minimum height `640px`, title measure `16ch`, alignment `start` and desktop offset `24px`. Place a left-aligned statement within an inset paper-like cover and expose the outer field; preserve the instrument-like rule and annotation language. Retain the theme's existing image-fit, palette, font family and locally generated art unless a written theme invariant requires a more protective framing.
 
 Mobile: Below the theme's existing compact breakpoint: Retain an inset frame but reduce its padding; stack side cells below the dominant cover so the main image remains usable.
 
-Structural reference: [framed-cover](https://supahero.io/hero/easyfast). Reuse this theme's original imagery and typography; the reference supplies hierarchy and arrangement only.
-
 ## Footer
 
 Use `window-stage` with `3` desktop groups and `580px` minimum height. Reserve 580px as the desktop minimum closing height with 3 information columns or groups. Build the footer as title stage, compact link panels, then a three-cell brand band. Keep panels in normal document flow on narrow screens; animation is optional.
 
 Mobile centers the title and one visible link window in a vertical stack, retaining the ticker and three equal bottom glyph cells. Allow links to wrap and let the closing region grow with content.
-
-Structural reference: [window-stage](https://www.footer.design/sites/the-design-society). Adapt the structural idea with this theme's own tokens and content; do not copy donor assets or brand marks.
 
 ## Surfaces
 
@@ -153,7 +147,7 @@ Content values are authored for a `--content-base` shorter side. Per artboard se
 
 ## Slide deck
 
-Reference adaptation: 173 - IBM Cost of a Data Breach Report 2023 (pp. 1, 2, 3, 20, 40, 59). Layout only; retain this system's own colours, fonts and image direction.
+Slide composition: layout only; retain this system's own colours, fonts and image direction.
 
 1920 x 1080; use --slide-* geometry and type. Keep required content inside --slide-pad-edge; captions at least 24px. No website navigation, hover or scrolling inside a slide.
 

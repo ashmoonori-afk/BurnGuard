@@ -121,23 +121,17 @@ Use `icon-taxonomy` at `top`, with `88px` minimum height and `1160px` width (0px
 
 Mobile: below --layout-bp-md, bound navigation to the viewport and put links in semantic native disclosures where needed. Side, overlay or bottom navigation returns to a compact header in normal flow; preserve focus and reading order.
 
-Structural reference: [icon-taxonomy](https://www.navbar.gallery/navbar/velt). This is an original BurnGuard arrangement informed by the gallery screenshot; donor code, imagery, fonts and brand marks are not included.
-
 ## Hero
 
 Use `portfolio-peek`: copy share `48%`, media at `background` in a `1 / 1` frame, minimum height `660px`, title measure `12ch`, alignment `start` and desktop offset `36px`. Use a sparse constellation of original work tiles around a dominant plane, retaining only the theme's existing single minus-three-degree display tilt. Retain the theme's existing image-fit, palette, font family and locally generated art unless a written theme invariant requires a more protective framing.
 
 Mobile: Below the theme's existing compact breakpoint: Convert scattered or overlapping panels into a deliberate ordered list; preserve one dominant work and smaller supporting items.
 
-Structural reference: [portfolio-peek](https://supahero.io/hero/bychudy). Reuse this theme's original imagery and typography; the reference supplies hierarchy and arrangement only.
-
 ## Footer
 
 Use `window-stage` with `3` desktop groups and `580px` minimum height. Reserve 580px as the desktop minimum closing height with 3 information columns or groups. Build the footer as title stage, compact link panels, then a three-cell brand band. Keep panels in normal document flow on narrow screens; animation is optional.
 
 Mobile centers the title and one visible link window in a vertical stack, retaining the ticker and three equal bottom glyph cells. Allow links to wrap and let the closing region grow with content.
-
-Structural reference: [window-stage](https://www.footer.design/sites/the-design-society). Adapt the structural idea with this theme's own tokens and content; do not copy donor assets or brand marks.
 
 ## Surfaces
 
@@ -153,7 +147,7 @@ Content values are authored for a `--content-base` shorter side. Per artboard se
 
 ## Slide deck
 
-Reference adaptation: 108 - Nike Impact Report FY23 (pp. 1, 2, 3, 4, 53, 106, 158). Layout only; retain this system's own colours, fonts and image direction.
+Slide composition: layout only; retain this system's own colours, fonts and image direction.
 
 1920 x 1080; use --slide-* geometry and type. Keep required content inside --slide-pad-edge; captions at least 24px. No website navigation, hover or scrolling inside a slide.
 

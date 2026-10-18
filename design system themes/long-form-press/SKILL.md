@@ -85,19 +85,13 @@ Read Navigation, Hero, Footer, Layout and Responsive in README.md before arrangi
 
 Follow README.md's Navigation section and the corresponding --layout-* tokens. Use side navigation with a 200px maximum width and 80px header height. At compact widths, use compact icon/hamburger top bar and large vertical text menu. Convert the desktop rail to an overlay so content retains width.
 
-Reference: https://www.navbar.gallery/navbar/big-dirty-agency
-
 ## Hero
 
 Follow README.md's Hero section and the corresponding --layout-* tokens. Preserve a complete document or image on the left and a narrow right heading, with a second substantial paragraph aligned along the lower baseline. Retain object-fit: contain for the original artwork: the whole building, document or object must remain visible. Interpret oversized/cropped reference geometry through the frame and typography, not by clipping the artwork.
 
-Reference: https://supahero.io/hero/habito
-
 ## Footer
 
 Follow README.md's Footer section and the corresponding --layout-* tokens. Reserve 420px as the desktop minimum closing height with 3 information columns or groups. Use a three-part community directory with a separate decorative baseline. Preserve real semantic links and a clear primary join action; use original local artwork.
-
-Reference: https://www.footer.design/sites/harvest-hall
 
 ## Surfaces
 

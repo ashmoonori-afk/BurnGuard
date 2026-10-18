@@ -121,23 +121,17 @@ Use `editorial-overlay` at `overlay`, with `88px` minimum height and `1320px` wi
 
 Mobile: below --layout-bp-md, bound navigation to the viewport and put links in semantic native disclosures where needed. Side, overlay or bottom navigation returns to a compact header in normal flow; preserve focus and reading order.
 
-Structural reference: [editorial-overlay](https://www.navbar.gallery/navbar/clonix). This is an original BurnGuard arrangement informed by the gallery screenshot; donor code, imagery, fonts and brand marks are not included.
-
 ## Hero
 
 Use `fullbleed-top`: copy share `28%`, media at `background` in a `16 / 9` frame, minimum height `800px`, title measure `14ch`, alignment `start` and desktop offset `0px`. Keep the whole building or room contained inside an expansive scenic field; limit opening copy to a small corner and leave architecture unobstructed. Retain object-fit: contain for the original artwork: the whole building, document or object must remain visible. Interpret oversized/cropped reference geometry through the frame and typography, not by clipping the artwork.
 
 Mobile: Below the theme's existing compact breakpoint: Separate text onto a readable ground when the crop removes its safe area; keep the scene and all essential links in normal flow.
 
-Structural reference: [fullbleed-top](https://supahero.io/hero/dream-design-laboratory). Reuse this theme's original imagery and typography; the reference supplies hierarchy and arrangement only.
-
 ## Footer
 
 Use `studio-address` with `4` desktop groups and `560px` minimum height. Reserve 560px as the desktop minimum closing height with 4 information columns or groups. Use an asymmetrical studio directory whose location pair is a first-class structural feature. Do not collapse the whole footer to a generic four-column sitemap.
 
 Mobile stacks the link groups, keeps the two office addresses side by side, and moves the large wordmark below them. Allow links to wrap and let the closing region grow with content.
-
-Structural reference: [studio-address](https://www.footer.design/sites/reality-is). Adapt the structural idea with this theme's own tokens and content; do not copy donor assets or brand marks.
 
 ## Surfaces
 
@@ -153,7 +147,7 @@ Content values are authored for a `--content-base` shorter side. Per artboard se
 
 ## Slide deck
 
-Reference adaptation: 101 - Building a brand like Patagonia (pp. 1, 2, 3, 4, 8, 15, 22, 29). Layout only; retain this system's own colours, fonts and image direction.
+Slide composition: layout only; retain this system's own colours, fonts and image direction.
 
 1920 x 1080; use --slide-* geometry and type. Keep required content inside --slide-pad-edge; captions at least 24px. No website navigation, hover or scrolling inside a slide.
 

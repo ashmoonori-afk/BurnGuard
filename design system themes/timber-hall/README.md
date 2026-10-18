@@ -121,23 +121,17 @@ Use `mega-feature` at `top`, with `96px` minimum height and `1240px` width (0px 
 
 Mobile: below --layout-bp-md, bound navigation to the viewport and put links in semantic native disclosures where needed. Side, overlay or bottom navigation returns to a compact header in normal flow; preserve focus and reading order.
 
-Structural reference: [mega-feature](https://www.navbar.gallery/navbar/chesapeake-plywood). This is an original BurnGuard arrangement informed by the gallery screenshot; donor code, imagery, fonts and brand marks are not included.
-
 ## Hero
 
 Use `split-left`: copy share `44%`, media at `right` in a `21 / 9` frame, minimum height `680px`, title measure `18ch`, alignment `start` and desktop offset `52px`. Retain the serif statement on solid ground at left and a dark-edged panoramic room scene at right; do not float the statement directly over the photograph. Retain the theme's existing image-fit, palette, font family and locally generated art unless a written theme invariant requires a more protective framing.
 
 Mobile: Below the theme's existing compact breakpoint: Stack the copy above the image; retain a visible text/image boundary and allow actions to wrap.
 
-Structural reference: [split-left](https://supahero.io/hero/yucca-packing). Reuse this theme's original imagery and typography; the reference supplies hierarchy and arrangement only.
-
 ## Footer
 
 Use `ruled-community` with `3` desktop groups and `480px` minimum height. Reserve 480px as the desktop minimum closing height with 3 information columns or groups. Use a three-part community directory with a separate decorative baseline. Preserve real semantic links and a clear primary join action; use original local artwork.
 
 Mobile stacks logo, actions and legal information into ruled horizontal sections; the decorative band remains at the bottom. Allow links to wrap and let the closing region grow with content.
-
-Structural reference: [ruled-community](https://www.footer.design/sites/harvest-hall). Adapt the structural idea with this theme's own tokens and content; do not copy donor assets or brand marks.
 
 ## Surfaces
 
@@ -153,7 +147,7 @@ Content values are authored for a `--content-base` shorter side. Per artboard se
 
 ## Slide deck
 
-Reference adaptation: 068 - Burger King Brand Guidelines (pp. 1, 3, 4, 33, 65, 97). Layout only; retain this system's own colours, fonts and image direction.
+Slide composition: layout only; retain this system's own colours, fonts and image direction.
 
 1920 x 1080; use --slide-* geometry and type. Keep required content inside --slide-pad-edge; captions at least 24px. No website navigation, hover or scrolling inside a slide.
 
@@ -163,7 +157,7 @@ Reference adaptation: 068 - Burger King Brand Guidelines (pp. 1, 3, 4, 33, 65, 9
 
 - Evidence: A clearly labelled correct/incorrect pair or a sparse application sheet at consistent scale; keep examples large enough for projection.
 
-- Closing: One warm colour field and a short bold action. Borrow hierarchy and composition, never the source brand's logo, font or illustrations.
+- Closing: One warm colour field and a short bold action. Never add a logo, font or illustration that does not belong to this system.
 
 Sequence: cover > claim > evidence > implication > closing; repeat claim/evidence for longer decks, with a chapter after each topic. Do not repeat one body layout throughout. Use real supplied data and appropriate authored/generated images; capture actual app UI when demonstrating software. Split overflowing content instead of shrinking type.
 

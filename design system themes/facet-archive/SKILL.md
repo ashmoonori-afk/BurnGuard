@@ -86,19 +86,13 @@ Read Navigation, Hero, Footer, Layout and Responsive in README.md before arrangi
 
 Follow README.md's Navigation section and the corresponding --layout-* tokens. Use top navigation with a 1360px maximum width and 104px header height. At compact widths, use category rows with chevrons under a compact brand/close bar. Collapse taxonomy columns into grouped disclosures.
 
-Reference: https://www.navbar.gallery/navbar/cloudflare
-
 ## Hero
 
 Follow README.md's Hero section and the corresponding --layout-* tokens. Set a broad heading over a scene that begins beneath it, while a compact top taxonomy and lower photo strip create three clear horizontal levels. Retain the theme's existing image-fit, palette, font family and locally generated art unless a written theme invariant requires a more protective framing.
 
-Reference: https://supahero.io/hero/eventbeds
-
 ## Footer
 
 Follow README.md's Footer section and the corresponding --layout-* tokens. Reserve 540px as the desktop minimum closing height with 2 information columns or groups. Separate a useful navigation band from an original local photo strip. Decorative shapes must not obscure or intercept links. Do not copy the person's portrait or brand assets.
-
-Reference: https://www.footer.design/sites/carolyn-lee
 
 ## Surfaces
 

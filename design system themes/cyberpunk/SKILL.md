@@ -28,19 +28,13 @@ Read Navigation, Hero, Footer, Layout and Responsive in README.md before arrangi
 
 Follow README.md's Navigation section and the corresponding --layout-* tokens. Use top navigation with a 1440px maximum width and 104px header height. At compact widths, use category rows with chevrons under a compact brand/close bar. Collapse taxonomy columns into grouped disclosures.
 
-Reference: https://www.navbar.gallery/navbar/cloudflare
-
 ## Hero
 
 Follow README.md's Hero section and the corresponding --layout-* tokens. Use a broad phone/product scene with headline in the top third and a pair of broad action bands; keep navigation in two clearly separated tiers. Retain the theme's existing image-fit, palette, font family and locally generated art unless a written theme invariant requires a more protective framing.
 
-Reference: https://supahero.io/hero/payy
-
 ## Footer
 
 Follow README.md's Footer section and the corresponding --layout-* tokens. Reserve 520px as the desktop minimum closing height with 3 information columns or groups. Reserve a scenic field above a readable information zone on narrow screens. Use an original local background; do not depend on WebGL or video for access to navigation.
-
-Reference: https://www.footer.design/sites/eclipse-space
 
 ## Surfaces
 
