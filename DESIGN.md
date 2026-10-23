@@ -234,7 +234,8 @@ spline mode for optional smoothing, not the upstream least-squares fitter.
 Transparent pixels stay transparent; partially transparent pixels are
 thresholded, an explicit limitation for translucent artwork.
 
-Retain disjoint palette masks with evenodd holes and an area-only speckle
+Round-1 decision, superseded by the round-2 results below:
+retain disjoint palette masks with evenodd holes and an area-only speckle
 threshold (four pixels by default, not the upstream four-pixel side length).
 On the same frozen set, the attempted cumulative-mask variant grew from
 2,093,464 to 2,737,760 bytes. Adding upstream `runner.rs::patch_good`'s
@@ -316,3 +317,46 @@ and output budget. Integration drives the real finalize stage and completion
 gate without asking the adapter to write SVG or selection. Mutate the
 binary threshold comparison and require the focused test to fail, then
 restore it and run the relevant suite once. Package notices must be shipped.
+
+## Round 2: compact output under explicit fidelity bounds
+
+Owner request, 2026-10-23 11:23 KST: on the unchanged 18 SHA-locked PNGs,
+total SVG bytes must be <= 111,615, mean foreground IoU >= 0.985,
+mean RGB error <= 1.5/255, and validation 18/18. Keep the same renderer,
+white compositing, foreground threshold and timing harness. The five
+supplemental PNGs remain separate. No fixture-name-specific tuning.
+
+First remove representation overhead: choose shorter absolute or relative
+polygon segments and omit separators before negative coordinates. Polygon
+coordinates already lie on integer pixel vertices; do not claim a new
+rounding gain there. One compound path per palette color already exists.
+
+Then scale the default Douglas-Peucker tolerance with image dimensions,
+while preserving explicit zero-tolerance tracing for exact contour geometry.
+Do not restore every original point when a nonzero-tolerance contour reduces
+to a line: discard that subpixel contour instead. For fully opaque input,
+paint the largest palette region as a solid background before other masks;
+small discarded holes then reveal a stable paint rather than transparency.
+Never paint that background for transparent input. Check synthetic thin
+marks, holes and diagonal contacts independently.
+
+If these simpler changes still miss the target, absorb small connected
+antialias regions into adjacent stable regions before tracing. Only consider
+upstream spline fitting if polygon reduction and compact encoding are not
+enough. Report the measured compromise and every missed target; do not claim
+lower RAM or a pure-engine speedup.
+
+The first round-2 measurement reached 111,514 bytes but mean IoU was only
+0.983392 (MAE 1.361233/255, validation 18/18), so it failed. Nearby fitted
+palette colors still create separate antialias boundaries. Coalesce fitted
+colors within squared RGB distance 3 * 16^2, keeping the earlier
+centroid, and reduce simplification from max-dimension/512 to /640. The
+color cap stays at eight; no fixture-specific palette or tolerance is used.
+
+The accepted round-2 measurement is 41,656 total bytes, mean IoU 0.988051,
+mean MAE 1.035609/255 and SVG validation 18/18. All four owner-set targets
+pass. Full logo regressions pass 429 tests; typecheck and OS coverage pass.
+Stop optimizing at this measured result. Palette coalescing remains lossy
+even at zero geometry tolerance; tiny contours may disappear at nonzero
+tolerance. Keep the reference, mean/individual distinction and unfavorable
+before/after accuracy changes in RESULTS.md.

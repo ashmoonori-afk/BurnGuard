@@ -59,7 +59,11 @@ function fitPalette(bins: readonly Bin[], count: number): Color[] {
       if (sum[3]) palette[i] = [Math.round(sum[0] / sum[3]), Math.round(sum[1] / sum[3]), Math.round(sum[2] / sum[3])];
     }
   }
-  return palette;
+  const distinct: Color[] = [];
+  for (const color of palette) {
+    if (!distinct.some(other => colorDistance(color, other) <= 3 * 16 ** 2)) distinct.push(color);
+  }
+  return distinct;
 }
 
 function nearest(color: Color, palette: readonly Color[]): number {
@@ -147,16 +151,25 @@ export async function traceLogoPixels(data: Uint8ClampedArray, width: number, he
   if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1 || data.length !== width * height * 4
     || !/^explorations\/round-\d{1,2}\/candidate-[1-4]\.png$/.test(options.source)
     || !Number.isInteger(options.colors ?? 8) || (options.colors ?? 8) < 1 || (options.colors ?? 8) > 8
-    || !Number.isFinite(options.tolerance ?? 0.75) || (options.tolerance ?? 0.75) < 0 || (options.tolerance ?? 0.75) > 2
+    || !Number.isFinite(options.tolerance ?? 0.75) || (options.tolerance ?? 0.75) < 0 || (options.tolerance ?? 0.75) > 16
     || !Number.isInteger(options.speckle ?? 4) || (options.speckle ?? 4) < 0 || (options.speckle ?? 4) > 128
     || !Number.isInteger(options.threshold ?? 128) || (options.threshold ?? 128) < 0 || (options.threshold ?? 128) > 255) throw new LogoTraceError("input");
   if (width * height > MAX_PIXELS) throw new LogoTraceError("budget");
   const { labels, palette } = await labelPixels(data, width, height, options);
   await mergeSpeckles(labels, width, height, options.speckle ?? 4, palette, options.signal);
+  const areas = new Uint32Array(palette.length);
+  let opaque = true;
+  for (const label of labels) {
+    if (label === 0) { opaque = false; break; }
+    areas[label - 1]++;
+  }
+  const background = opaque && palette.length ? areas.indexOf(Math.max(...areas)) : -1;
+  const order = palette.map((_, i) => i);
+  if (background >= 0) { order.splice(order.indexOf(background), 1); order.unshift(background); }
   let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" ${LOGO_SOURCE_ATTRIBUTE}="${options.source}">`;
   let paths = 0;
-  for (let i = 0; i < palette.length; i++) {
-    const d = await traceColor(labels, width, height, i + 1, options);
+  for (const i of order) {
+    const d = i === background ? `M0 0H${width}V${height}H0Z` : await traceColor(labels, width, height, i + 1, options);
     if (!d) continue;
     const hex = palette[i].map(c => c.toString(16).padStart(2, "0")).join("");
     svg += `<path fill="#${hex}" fill-rule="evenodd" d="${d}"/>`;

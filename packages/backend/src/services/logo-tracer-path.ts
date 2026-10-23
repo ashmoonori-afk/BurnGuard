@@ -48,7 +48,7 @@ function simplify(points: readonly Point[], tolerance: number): Point[] {
     if (furthest !== -1) { keep[furthest] = 1; stack.push([first, furthest], [furthest, last]); }
   }
   const reduced = closed.filter((_, i) => keep[i]).slice(0, -1);
-  return reduced.length >= 3 ? reduced : [...points];
+  return reduced.length >= 3 ? reduced : tolerance === 0 ? [...points] : [];
 }
 
 function encodeContour(points: readonly Point[], curve: "polygon" | "spline"): string {
@@ -68,11 +68,21 @@ function encodeContour(points: readonly Point[], curve: "polygon" | "spline"): s
     return d + "Z";
   }
   let d = `M${points[0][0]} ${points[0][1]}`;
+  let previousCommand = "M";
+  const pair = (x: number, y: number): string => `${x}${y < 0 ? "" : " "}${y}`;
   for (let i = 1; i < points.length; i++) {
     const a = points[i - 1], b = points[i];
-    if (a[1] === b[1]) d += `H${b[0]}`;
-    else if (a[0] === b[0]) d += `V${b[1]}`;
-    else d += `L${b[0]} ${b[1]}`;
+    if (a[0] === b[0] && a[1] === b[1]) continue;
+    const candidates = a[1] === b[1] ? [["H", String(b[0])], ["h", String(b[0] - a[0])]]
+      : a[0] === b[0] ? [["V", String(b[1])], ["v", String(b[1] - a[1])]]
+        : [["L", pair(b[0], b[1])], ["l", pair(b[0] - a[0], b[1] - a[1])]];
+    const encoded = candidates.map(([command, values]) => ({
+      command,
+      text: command === previousCommand || (previousCommand === "M" && command === "L")
+        ? `${values.startsWith("-") ? "" : " "}${values}` : command + values,
+    })).sort((a, b) => a.text.length - b.text.length)[0];
+    d += encoded.text;
+    previousCommand = encoded.command;
   }
   return d + "Z";
 }
@@ -114,7 +124,10 @@ export async function traceColor(labels: Uint8Array, width: number, height: numb
       if (nextDirection !== direction) points.push([end % stride, Math.floor(end / stride)]);
       direction = nextDirection; edge = end * 4 + direction;
     }
-    if (points.length >= 3) contours.push(encodeContour(simplify(points, options.tolerance ?? 0.75), options.curve ?? "polygon"));
+    if (points.length >= 3) {
+      const reduced = simplify(points, options.tolerance ?? Math.max(0.75, Math.max(width, height) / 640));
+      if (reduced.length >= 3) contours.push(encodeContour(reduced, options.curve ?? "polygon"));
+    }
   }
   return contours.join("");
 }

@@ -41,12 +41,34 @@ test.each(["hole", "diagonal", "thin-cross"] as const)("Given a %s When polygon 
   expect(() => validateLogoSvg(svg)).not.toThrow();
 });
 
+test("Given far-offset stair-step edges When compactly encoded Then relative segments preserve native pixels", async () => {
+  const data = pixels(128, 128, (x, y) => x >= 80 && y >= 80 && x + y < 216 ? [10, 20, 30, 255] : [255, 255, 255, 255]);
+  const svg = await traceLogoPixels(data, 128, 128, { source, tolerance: 0, speckle: 0 });
+  expect(await raster(svg, 128, 128)).toEqual(data);
+  expect(Buffer.byteLength(svg)).toBeLessThan(800);
+});
+
+test.each([0, 2])("Given an opaque image with a tiny color contour When tolerance is %i Then reduction reveals a painted background", async tolerance => {
+  const data = pixels(128, 128, (x, y) => x >= 60 && x < 62 && y >= 60 && y < 62 ? [255, 0, 0, 255] : [255, 255, 255, 255]);
+  const svg = await traceLogoPixels(data, 128, 128, { source, tolerance, speckle: 0 });
+  expect(await raster(svg, 128, 128)).toEqual(tolerance === 0 ? data : pixels(128, 128, () => [255, 255, 255, 255]));
+});
+
 test("Given more than eight colors When traced Then deterministic output uses at most eight compound paths", async () => {
   const data = pixels(32, 32, (x, y) => [x * 8, y * 8, (x + y) * 4, 255]);
   const options = { source, speckle: 0 };
   const svg = await traceLogoPixels(data, 32, 32, options);
   expect((svg.match(/<path /g) ?? []).length).toBeLessThanOrEqual(8);
   expect(await traceLogoPixels(data, 32, 32, options)).toBe(svg);
+});
+
+test("Given nearly identical fitted colors When traced Then one paint replaces redundant boundaries", async () => {
+  const data = pixels(32, 32, x => x < 16 ? [16, 16, 16, 255] : [28, 28, 28, 255]);
+  const svg = await traceLogoPixels(data, 32, 32, { source, tolerance: 0, speckle: 0 });
+  const actual = await raster(svg, 32, 32);
+  expect((svg.match(/<path /g) ?? []).length).toBe(1);
+  expect([...actual.slice(0, 4)]).toEqual([...actual.slice(31 * 4, 32 * 4)]);
+  expect(actual[3]).toBe(255);
 });
 
 test("Given a one-pixel speckle When filtered Then it merges into its adjacent region", async () => {

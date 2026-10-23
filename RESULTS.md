@@ -1,8 +1,106 @@
-# Faithful automatic SVG output, but the compactness target failed
+# Round 2 meets the fixed-set size and fidelity targets
+
+Measured on 2026-10-23 KST on hpdesk WSL with the same 18 SHA-locked PNGs and unchanged measurement harness. Total SVG size fell from 2,093,464 to 41,656 bytes, a 98.01% reduction. It is 62.68% below the unchanged 111,615-byte vtracer polygon reference. No merge, release or version bump is included.
+
+## Before and after, same 18 fixtures
+
+| Version | Total SVG bytes | Mean IoU | Mean MAE (0..255) | Total paths | Mean per-fixture median ms | Valid |
+|---|---:|---:|---:|---:|---:|---:|
+| Round 1 | 2093464 | 0.993185 | 0.744014 | 113 | 114.37 | 18/18 |
+| Round 2 | 41656 | 0.988051 | 1.035609 | 66 | 101.57 | 18/18 |
+| vtracer polygon | 111615 | 0.989460 | 1.306078 | 581 | 110.41 | 0/18 |
+
+All four owner-set targets passed: total bytes <= 111,615; mean IoU >= 0.985; mean MAE <= 1.5/255; SVG validation 18/18. These are means across images, not per-image minimum/maximum guarantees. Accuracy is lower than round 1: IoU decreased by 0.005134 and MAE increased by 0.291595/255. The worst individual IoU is 0.965257 (dori-v2-candidate-3), and the largest MAE is 2.562514/255 (sisyphus-1). These individual results are not hidden by the aggregate pass.
+
+Reference validation is still source-only adaptation and fails svg_viewbox_missing, not rendering. Reference sizes are raw; source injection adds 66 bytes per file, or 1,188 bytes total. Ours already includes both source and viewBox. Timing remains three measured repeats after one warm-up: ours includes in-process decode+trace, versus cold CLI plus file I/O for reference. No pure-engine speed or memory improvement is claimed.
+
+## What changed in round 2
+
+- Choose shorter absolute/relative polygon commands, omit repeated command letters and separators before negative coordinates. Polygon vertices were already integers; no new coordinate-rounding benefit is claimed.
+- Scale default Douglas-Peucker tolerance to max(0.75, maximum image dimension / 640). Keep explicit zero tolerance for exact contour geometry. Nonzero-tolerance contours that collapse below three points are discarded instead of restoring every old point.
+- Paint the largest palette region as a solid background only when every label is opaque. Other colors remain compound masks with holes. Transparent and binary-background pixels do not receive a background fill.
+- Coalesce nearly identical fitted colors within squared RGB distance 3 * 16^2. This removes redundant antialias boundaries while retaining the existing eight-color cap and one compound path per remaining color. This quantization is lossy, including with zero geometry tolerance.
+- Keep the existing candidate identity, source attribute, allowlist, byte/work budgets, cancellation, publication and AI fallback/tidy-up contracts. No upstream spline fitting, native binary, WASM or dependency was added.
+
+The first round-2 candidate used dimension/512 tolerance without palette coalescing: 111,514 bytes, mean IoU 0.983392, MAE 1.361233 and validation 18/18. It failed IoU and was not selected. The accepted candidate has four passing targets; optimization stopped there.
+
+## Verification for the final round-2 code
+
+- 429 tests passed across 18 logo-related files, including 19 tracer tests. New tests cover exact pixels with compact signed/relative commands, a fixed serialized-size ceiling, opaque-background behavior for discarded contours, preservation at zero geometry tolerance, and close-color boundary coalescing.
+- Workspace typecheck and OS-matrix coverage guard passed on hpdesk WSL. The original threshold mutation proof remains in the round-1 history below; it was not presented as a new round-2 mutation run.
+- All 18 original SHA identities were checked directly on hpdesk before optimization. git diff confirms the measurement script, fixture generator, both identity locks and dependency manifests/lock are unchanged from df1f42c9. The five supplemental PNGs were measured separately by the same unchanged harness.
+- Inspected the final dori, sisyphus and synthetic native-rendered comparison sheets. Symbols, lettering and holes remain recognizable; polygons and small details can still be less smooth than the originals. These checks exercise the tracing API and real staged-turn integration, not a newly packaged desktop build or a paid provider run.
+
+## Per-fixture before and after
+
+All after SVGs in this table passed the existing validator and size limit.
+
+| Fixture | Before bytes | After bytes | Before IoU | After IoU | Before MAE | After MAE | Reference polygon bytes |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| dori-idea-1 | 26634 | 1500 | 0.994847 | 0.988290 | 0.286678 | 0.549669 | 2399 |
+| dori-idea-2 | 28661 | 1436 | 0.993120 | 0.987675 | 0.303177 | 0.534096 | 2386 |
+| dori-idea-3 | 25166 | 1645 | 0.995908 | 0.988968 | 0.270310 | 0.581459 | 2304 |
+| dori-v2-candidate-1 | 163524 | 2279 | 0.984191 | 0.972551 | 1.043318 | 1.312089 | 7404 |
+| dori-v2-candidate-2 | 178485 | 2424 | 0.984613 | 0.972935 | 1.088570 | 1.386964 | 7999 |
+| dori-v2-candidate-3 | 157298 | 3436 | 0.981700 | 0.965257 | 1.063989 | 1.552036 | 7842 |
+| dori-v2-candidate-4 | 151136 | 2894 | 0.985919 | 0.969050 | 1.021374 | 1.478180 | 7863 |
+| dori-candidate-4 | 162651 | 2480 | 0.987534 | 0.977405 | 1.040385 | 1.328073 | 7487 |
+| sisyphus-1 | 339764 | 6186 | 0.995065 | 0.992968 | 1.690106 | 2.562514 | 23871 |
+| sisyphus-2 | 342219 | 5838 | 0.995238 | 0.993994 | 1.739223 | 2.256138 | 16105 |
+| sisyphus-3 | 283075 | 4925 | 0.996166 | 0.994325 | 1.527482 | 2.267005 | 13297 |
+| sisyphus-4 | 231749 | 4293 | 0.996873 | 0.995344 | 1.300659 | 1.937907 | 10632 |
+| rectangle | 307 | 284 | 1.000000 | 1.000000 | 0.000000 | 0.000000 | 283 |
+| ring | 342 | 303 | 1.000000 | 1.000000 | 0.000000 | 0.000000 | 328 |
+| diagonal | 335 | 300 | 1.000000 | 1.000000 | 0.000000 | 0.000000 | 306 |
+| thin-cross | 355 | 306 | 1.000000 | 1.000000 | 0.000000 | 0.000000 | 321 |
+| three-color | 1217 | 671 | 1.000000 | 1.000000 | 0.357971 | 0.235819 | 457 |
+| transparent-disk | 546 | 456 | 0.986158 | 0.986158 | 0.659017 | 0.659017 | 331 |
+
+## Supplemental after results, excluded from the 18-image score
+
+| Fixture | SVG bytes | IoU | MAE (0..255) | Validation |
+|---|---:|---:|---:|---|
+| supplemental-candidate-1 | 2265 | 0.977268 | 1.199907 | pass |
+| supplemental-candidate-2 | 2308 | 0.969359 | 1.267688 | pass |
+| supplemental-candidate-3 | 2499 | 0.976207 | 1.284111 | pass |
+| supplemental-access-expired | 5364 | 0.468905 | 0.738415 | pass |
+| supplemental-failure-panel | 34570 | 0.417631 | 7.139252 | pass |
+
+## Security audit classification, round 2
+
+Compared the PR against freshly fetched origin/main: package.json, all
+workspace package manifests and bun.lock are unchanged. The security workflow
+diff only registers logo-tracer.test.ts; no audit ignore entry was added.
+Security run 39888838311 fails on the inherited dependency set, unrelated to
+the tracer's dependency changes (there are none). The run reports six
+advisories: one high, four moderate and one low:
+
+- Vite: GHSA-9jrq-w75r-8gcw, GHSA-rq7h-c2jc-7f22.
+- launch-editor: GHSA-698v-4r3x-3vcv, GHSA-r825-w8mm-5pxw,
+  GHSA-587h-7wmj-h5pm.
+- Hono: GHSA-5r4p-p66f-jhc7.
+
+Classified as pre-existing/unrelated as requested. This does not establish
+when the upstream advisories were published or say the findings are safe.
+No dependency bump or suppression is included in the tracer optimization.
+
+## Remaining limits and reproduction
+
+The accepted tradeoff can merge legitimate near-identical colors and discard tiny contours. Alpha thresholding, an eight-color palette and polygon fitting still do not preserve arbitrary translucency, gradients or all subpixel details. The fixed-set pass is not a universal fidelity guarantee. No AI-redrawn SVG pairs were available, so that comparison remains N/A. Native desktop packaging and exact-head cross-platform CI are not claimed as passed; the unrelated dependency audit remains red.
+
+Reuse the original frozen synthetic PNGs across architectures. Re-rendering two circles on Linux changes their SHA; do not modify the identity lock to hide this. The unchanged reproduction command is:
+
+```sh
+bun scripts/measure-logo-tracer.ts "$DORI_DIR" "$MERCH_DIR" "$RUN_DIR" "$VTRACER_CLI" "$FROZEN_SYNTHETIC_DIR"
+```
+
+## Historical round 1 baseline (df1f42c9)
+
+Everything below is preserved round-1 history. Its descriptions of the retained version and failed compactness target refer to round 1, not the accepted round-2 code above.
 
 Measured on 2026-10-23 KST, on hpdesk WSL with Bun 1.4.2 and the locked native canvas dependency. The retained TypeScript tracer needs no new runtime dependency, executable or WASM. Its frozen-set SVGs are **18.76 times larger** than vtracer polygon output, so this is a draft experiment, not a proven lighter replacement. No merge, release or version bump is included.
 
-## Frozen 18-fixture comparison
+### Frozen 18-fixture comparison
 
 | Engine | Mean IoU | Mean MAE (0..255) | Total SVG bytes | Total paths | Mean per-fixture median ms | Validator pass |
 |---|---:|---:|---:|---:|---:|---:|
@@ -20,7 +118,7 @@ The reference validator check only injects the required source attribute. Every 
 
 No AI-redrawn SVG files were found recursively in either supplied directory. AI comparison is N/A, not a claimed win.
 
-## Acceptance and unsuccessful variants
+### Acceptance and unsuccessful variants
 
 - Validation: 18/18 passed, all under the existing 1 MiB per-file limit, with the selected-source attribute.
 - Relative fidelity: 18/18 met IoU >= polygon reference - 0.02 and MAE <= reference + 3. No fidelity-threshold misses were hidden.
@@ -28,7 +126,7 @@ No AI-redrawn SVG files were found recursively in either supplied directory. AI 
 - A cumulative-mask experiment produced 2,737,760 bytes, mean IoU 0.990383 and MAE 0.781886. Adding upstream's area/perimeter thread rejection produced 2,767,964 bytes, IoU 0.990174 and MAE 0.822320. Both were worse than the retained disjoint masks and were removed. The same 18 inputs and identities were used each time.
 - The final source was remeasured after selection. All IoU, MAE, byte counts, path counts and validation outcomes exactly match the first disjoint-mask run. The final modules also bound polygon-reduction distance evaluations.
 
-## What was ported and what was dropped
+### What was ported and what was dropped
 
 Adapted vtracer/visioncortex's staged segmentation-to-vector pipeline, transparency separation, four-connected lattice-edge boundary walking with straight-run skipping, holes, and bounded-error polygon reduction. The polygon reduction follows the approach credited upstream to simplify-js, with an iterative work list and explicit work budget. MIT, Apache-2.0 and conservative BSD notices are retained in source, NOTICE and THIRD_PARTY_NOTICES.md; packaging includes the notice file.
 
@@ -36,7 +134,7 @@ Replaced hierarchical clustering with a deterministic RGB histogram and weighted
 
 Pure TypeScript reuses BurnGuard's existing native canvas decode path on the supported platforms. WASM or a Rust CLI would add packaging/build/runtime machinery; neither is shipped. This avoids dependency growth, but has not demonstrated smaller SVGs or lower memory usage.
 
-## Integration and regression evidence
+### Integration and regression evidence
 
 On explicit candidate selection, turns.ts pins the expectation, verifies the candidate file and digest, and stages logo.svg and the manifest selection before invoking the AI adapter. The SVG passes the existing allowlist. A ready context tells the adapter to reuse it for guidelines; expected input, empty-output or budget failures retain the existing AI vectorization route. Explicit AI tidy-up remains possible. Unexpected errors still fail, and publication, provenance, originality, cancellation, repair and rollback checks remain in charge.
 
@@ -50,7 +148,7 @@ Final checks:
 - Native-size fixture comparison rendered all 23 inputs through each of the three engines. The dori, sisyphus and synthetic comparison sheets were inspected: the original symbols, lettering and holes remain recognizable; polygon circles still have visibly angular edges. This is not a packaged desktop-app or provider-inference test.
 - Windows and macOS CI on the eventual pushed head and native desktop packaging were not run locally. The new tests are listed in both OS and security workflows as required by AGENTS.md.
 
-## Fixed data and reproduction
+### Fixed data and reproduction
 
 The original scripts/logo-tracer-fixtures.json preserves all 18 SHA identities: eight dori logos, four sisyphus illustrations and six fixed synthetic marks. The five other PNGs matched by the requested dori glob have a separate supplemental lock: three earlier candidates and two UI screenshots. They are reported below, not pooled into the frozen acceptance score. Both screenshots are deliberately retained as stress cases, not relabeled as logos.
 
@@ -63,7 +161,7 @@ bun run typecheck
 bun scripts/qa/check-os-matrix-coverage.ts
 ```
 
-## Frozen per-fixture measurements
+### Frozen per-fixture measurements
 
 | Fixture | Engine | IoU | MAE (0..255) | SVG bytes | Paths | Median ms | Validation |
 |---|---|---:|---:|---:|---:|---:|---|
@@ -122,7 +220,7 @@ bun scripts/qa/check-os-matrix-coverage.ts
 | transparent-disk | vtracer-polygon | 0.973362 | 2.127767 | 331 | 1 | 1.58 | svg_viewbox_missing |
 | transparent-disk | vtracer-spline | 0.966010 | 2.189433 | 449 | 1 | 1.65 | svg_viewbox_missing |
 
-## Supplemental measurements
+### Supplemental measurements
 
 | Fixture | Engine | IoU | MAE (0..255) | SVG bytes | Paths | Median ms | Validation |
 |---|---|---:|---:|---:|---:|---:|---|
@@ -142,7 +240,7 @@ bun scripts/qa/check-os-matrix-coverage.ts
 | supplemental-failure-panel | vtracer-polygon | 0.718692 | 5.925979 | 114830 | 1028 | 849.05 | svg_viewbox_missing |
 | supplemental-failure-panel | vtracer-spline | 0.702340 | 6.008122 | 435183 | 1028 | 964.00 | svg_viewbox_missing |
 
-## Scope and remaining risks
+### Scope and remaining risks
 
 Restored the pre-existing design-system text in DESIGN.md instead of replacing it. Removed duplicate attribution and unused competing trace-state plumbing. Kept the two one-line CI additions: repository policy requires every new test file on Ubuntu, macOS and Windows. Kept only source verification, tracing, prompt integration, notices, packaging selection, tests and the fixed-data measurement tools.
 
