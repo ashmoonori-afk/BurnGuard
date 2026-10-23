@@ -49,6 +49,7 @@ import { captureImmutableAttachments, verifyImmutableAttachments } from "./immut
 import { redactPrivateAttachmentPaths, withPrivateAttachmentInputs } from "./stage-attachment-inputs";
 import { sanitizeTurnEvent, turnRejectionReason } from "./turn-error-sanitizer";
 import { isRepairableLogoRejection, repairLogoCompletion } from "./logo-completion-repair";
+import { prepareLogoTrace } from "./logo-trace-finalize";
 import { logoSvgViolation } from "./logo-svg-validation";
 import { startTurnPreview } from "./turn-preview";
 import { findHtmlEncodingIssues } from "./generated-html-encoding";
@@ -545,6 +546,7 @@ async function runUserTurnInternal(
           rejectionReason = turnRejectionReason(error);
           throw error;
         }) : null;
+        const logoTrace = logoExpectation === null ? null : await prepareLogoTrace(stageDir, logoExpectation, activeTurn.abortController.signal);
         const logoIdeate = logoExpectation?.phase === "ideate";
         const logoEvidence = logoExpectation === null ? null : new LogoEvidenceCollector(stageDir, logoExpectation);
         const deckStarter = project.type === "slide_deck" && (await readFile(path.join(stageDir, project.entrypoint), "utf8")).includes("Send your first prompt in chat to expand this deck.");
@@ -574,7 +576,8 @@ async function runUserTurnInternal(
             const webAssetTool = backendId === "claude-code" && modelProfile.asset_strategy === "web_search" && config.webAssets.searchEnabled
               ? { command: webAssetsMcpCommand(stageDir) }
               : undefined;
-            const prompt = await buildPrompt(sessionContext, contextPayload, { outputDirectory: stageDir, contextMode: config.chat.contextMode, visualSourceManifest: visualSources, stageAttachmentInputs: stageInputs, backendId, generation, ...(logoPipeline === undefined ? {} : { logoPipeline }), webAssetTools: webAssetTool !== undefined, onTaskGuidance: (value) => { shippedPreset = value; } }) + sourceInstructions;
+            const traceContext = logoTrace === null ? "" : `\n<burnguard-logo-trace-v1>\n${JSON.stringify({ schema_version: 1, status: logoTrace, file: LOGO_FILES.logo, source: logoExpectation?.selected?.file })}\n</burnguard-logo-trace-v1>\n`;
+            const prompt = await buildPrompt(sessionContext, contextPayload, { outputDirectory: stageDir, contextMode: config.chat.contextMode, visualSourceManifest: visualSources, stageAttachmentInputs: stageInputs, backendId, generation, ...(logoPipeline === undefined ? {} : { logoPipeline }), webAssetTools: webAssetTool !== undefined, onTaskGuidance: (value) => { shippedPreset = value; } }) + sourceInstructions + traceContext;
             await appendSessionTrace(sessionId, { level: "prompt_built", turnId, prompt_chars: prompt.length, context_mode: config.chat.contextMode, backend_id: backendId, task_preset: shippedPreset });
             const adapterInput: Parameters<typeof runAdapterTurn>[1] = {
               sessionId, turnId, projectDir: stageDir, binaryPath, prompt,

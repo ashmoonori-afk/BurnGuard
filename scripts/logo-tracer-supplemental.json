@@ -1,0 +1,7 @@
+[
+  {"name":"supplemental-candidate-1","sha256":"b7dca06934729cfb59cd17334c1940c2cbe44707bfbf52a2cb301aff05cafc87"},
+  {"name":"supplemental-candidate-2","sha256":"880216926fe303a377e10733ea3aa6ce53be7d9fdee23a7dfffea2b4b104402f"},
+  {"name":"supplemental-candidate-3","sha256":"0811920130459d5023d5f4f11978a496fcd13a9d68d9b4b4533cb43ff70a427e"},
+  {"name":"supplemental-access-expired","sha256":"9d62d73d17aea143b8f836e0538e4b7ebe3aacfcbbf410f05b5acc19ec9591f5"},
+  {"name":"supplemental-failure-panel","sha256":"978f79f33aa3c1e068ebeef3cee689aa3f0c24b3aa49ed75258eca6855b4e097"}
+]

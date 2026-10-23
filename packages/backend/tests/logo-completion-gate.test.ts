@@ -15,7 +15,7 @@ import { ArtifactCoordinator } from "../src/services/artifact-coordinator";
 import { broker } from "../src/services/broker";
 import { inspectCanonicalTree } from "../src/services/canonical-tree-manifest";
 import { repairLogoCompletion } from "../src/services/logo-completion-repair";
-import { logoSvgContract } from "../src/services/logo-svg-validation";
+import { logoSvgContract, logoSvgSource, validateLogoSvg } from "../src/services/logo-svg-validation";
 import { addMoodboardFiles, addMoodboardLink, readLogoMoodboard } from "../src/services/logo-moodboard";
 import { readLogoAdoptionState, writeLogoAdoption } from "../src/services/logo-pipeline-state";
 import { captureLogoTurnExpectation } from "../src/services/logo-deliverables";
@@ -49,8 +49,8 @@ const BROKEN_SVG = logoSvg(' data-variant="primary"');
 const VALID_SVG = logoSvg();
 
 // Decodable square PNGs with distinct pixels, not header-only or timing-dependent fixtures.
-function png(seed: number): Buffer {
-  const size = 256, raw = Buffer.alloc((size + 1) * size);
+function png(seed: number, oversized = false): Buffer {
+  const size = oversized ? 2049 : 256, raw = Buffer.alloc((size + 1) * size);
   for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) raw[y * (size + 1) + 1 + x] = (x * 7 + y * 3 + seed) & 255;
   const chunk = (name: string, data: Buffer): Buffer => {
     const typed = Buffer.concat([Buffer.from(name), data]);
@@ -61,7 +61,7 @@ function png(seed: number): Buffer {
   const header = Buffer.alloc(13); header.writeUInt32BE(size, 0); header.writeUInt32BE(size, 4); header[8] = 8;
   return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", header), chunk("IDAT", deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]);
 }
-const images = [1, 2, 3, 4].map(png);
+const images = [1, 2, 3, 4].map(seed => png(seed));
 const ROUNDS = [{
   round: 1,
   candidates: images.map((_, index) => ({
@@ -103,7 +103,7 @@ afterEach(async () => {
 });
 
 type Scenario =
-  | "repair-success" | "repair-still-invalid" | "repair-exit" | "repair-error-event" | "repair-cancelled"
+  | "trace-only" | "trace-fallback" | "repair-success" | "repair-still-invalid" | "repair-exit" | "repair-error-event" | "repair-cancelled"
   | "repair-image-call" | "repair-mutated-candidate" | "repair-mutated-guidelines" | "repair-extra-file"
   | "source-mismatch" | "history-appended" | "candidate-mutated" | "selection-not-recorded" | "revision-conflict";
 
@@ -115,6 +115,8 @@ type Expected = {
 };
 
 const cases = [
+  ["trace-only", { code: null, reason: null, repairs: 0, stopReason: "end_turn" }],
+  ["trace-fallback", { code: null, reason: null, repairs: 0, stopReason: "end_turn" }],
   ["repair-success", { code: null, reason: null, repairs: 1, stopReason: "end_turn" }],
   ["repair-still-invalid", { code: "logo_deliverables_missing", reason: "logo_svg_invalid", repairs: 1, stopReason: "error" }],
   ["repair-exit", { code: "logo_deliverables_missing", reason: "logo_svg_invalid", repairs: 1, stopReason: "error" }],
@@ -135,11 +137,14 @@ const cases = [
 ] as const satisfies readonly (readonly [Scenario, Expected])[];
 
 test.each(cases)("Given %s in a finalize logo turn Then the gate, the repair budget and the project tree agree", async (scenario, expected) => {
+  const candidateImages = scenario === "trace-fallback" ? images.map((image, i) => i === 1 ? png(2, true) : image) : images;
+  if (scenario === "trace-fallback") await writeFile(path.join(projectDir, SELECTED_FILE), candidateImages[1]);
   const before = await new ArtifactCoordinator(getSqlite()).initialize(projectId, projectDir);
   const events: NormalizedEvent[] = [];
   const unsubscribe = broker.subscribe(sessionId, event => { events.push(event); });
   let generations = 0, repairs = 0;
   let generationPrompt = "";
+  let traceState: unknown = null;
   try {
     const turn = startUserTurn(sessionId, { type: "user.message", text: REQUEST }, undefined, {
       detectBackends: async () => ({ backends: [{ id: "codex", found: true, binary_path: "unused", version: "fixture", authenticated: true, image_generation: true }] }),
@@ -188,12 +193,18 @@ test.each(cases)("Given %s in a finalize logo turn Then the gate, the repair bud
         }
         generations++;
         generationPrompt = input.prompt;
+        if (scenario === "trace-only" || scenario === "trace-fallback") {
+          const trace = /<burnguard-logo-trace-v1>\n([^\n]+)\n<\/burnguard-logo-trace-v1>/.exec(input.prompt);
+          traceState = trace?.[1] ? JSON.parse(trace[1]) : null;
+        }
         await writeFile(path.join(input.projectDir, "index.html"), GUIDELINES);
-        await writeFile(path.join(input.projectDir, "logo.svg"),
+        if (scenario !== "trace-only") {
+          await writeFile(path.join(input.projectDir, "logo.svg"),
           scenario === "source-mismatch" ? logoSvg("", "explorations/round-1/candidate-1.png")
             : scenario.startsWith("repair-") ? BROKEN_SVG : VALID_SVG);
+        }
         if (scenario === "candidate-mutated") await writeFile(path.join(input.projectDir, SELECTED_FILE), png(9));
-        await writeFile(path.join(input.projectDir, "explorations/manifest.json"), manifestJson(
+        if (scenario !== "trace-only") await writeFile(path.join(input.projectDir, "explorations/manifest.json"), manifestJson(
           scenario === "selection-not-recorded" ? null : { round: 1, candidate_id: SELECTED },
           scenario === "history-appended"
             ? [...ROUNDS, { round: 2, candidates: Array.from({ length: 4 }, (_, index) => ({ id: `candidate-${index + 1}`, file: `explorations/round-2/candidate-${index + 1}.png`, logo_type: "abstract", prompt: "fixture", rationale: "fixture" })) }]
@@ -212,6 +223,9 @@ test.each(cases)("Given %s in a finalize logo turn Then the gate, the repair bud
     ownTurn(turn);
     await Promise.all([turn.prepared, turn.promise]);
 
+    if (scenario === "trace-only" || scenario === "trace-fallback") expect(traceState).toEqual({
+      schema_version: 1, status: scenario === "trace-only" ? "ready" : "fallback", file: "logo.svg", source: SELECTED_FILE,
+    });
     expect(generations).toBe(1);
     // At most one bounded repair, ever: a second refusal is final.
     expect(repairs).toBe(expected.repairs);
@@ -241,9 +255,16 @@ test.each(cases)("Given %s in a finalize logo turn Then the gate, the repair bud
 
     const committed = expected.stopReason === "end_turn";
     expect(getSqlite().prepare("SELECT status FROM artifact_operations WHERE id=?").get(turn.operationId)).toEqual({ status: committed ? "committed" : "failed" });
+    if (scenario === "trace-only") {
+      const svg = await readFile(path.join(projectDir, "logo.svg"), "utf8");
+      expect(() => validateLogoSvg(svg)).not.toThrow();
+      expect(logoSvgSource(svg)).toBe(SELECTED_FILE);
+      expect(JSON.parse(await readFile(path.join(projectDir, "explorations/manifest.json"), "utf8")).selected)
+        .toEqual({ round: 1, candidate_id: SELECTED });
+    }
 
     // The selection is authoritative and immutable: a repair cannot change which bytes were chosen.
-    for (const [index, bytes] of images.entries()) {
+    for (const [index, bytes] of candidateImages.entries()) {
       const candidate = path.join(projectDir, `explorations/round-1/candidate-${index + 1}.png`);
       const expectedBytes = !committed || scenario !== "candidate-mutated" || index !== 1 ? bytes : png(9);
       expect(createHash("sha256").update(await readFile(candidate)).digest("hex"))

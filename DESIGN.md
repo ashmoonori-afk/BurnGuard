@@ -185,3 +185,134 @@ Visual review covers desktop and narrow viewport screenshots, keyboard focus,
 empty/loading/error/recovery states, and reduced motion. Generated artifacts
 must remain understandable on disk and reversible through the existing file
 patch and undo contracts.
+
+## Deterministic logo tracing before AI finalization
+
+Design and test protocol frozen before implementation, 2026-10-23.
+
+## Source study
+
+Read vtracer `e71343fbcbf469b8a72a255030408a39939162eb` and
+visioncortex `0062088c89645aac76c00e066deb7e8f53980dd7`.
+The checked-out repositories now declare MIT OR Apache-2.0, rather than
+the older single-license descriptions in the task. Retain both requested
+notices conservatively; upstream visioncortex has no NOTICE file.
+
+- vtracer `frontend/color_cluster.rs` keys transparency, reduces color
+  precision and drives visioncortex's incremental cluster builder.
+- visioncortex `color_clusters/builder.rs` first joins similar adjacent
+  pixels, then visits clusters by area, merges into the closest-color
+  neighbor, and optionally preserves a contrasting patch as a deeper layer.
+  `runner.rs::patch_good` absorbs speckles and rejects thread-like regions.
+- `path/walker.rs` follows lattice edges separating inside/outside pixels
+  and skips straight runs. Diagonally connected components are separated.
+- `path/paths.rs`, `simplify.rs`, `reduce.rs` remove staircase corners and
+  reduce polygons. `spline.rs` smooths/subdivides polygons, detects corners
+  and splice points, then fits cubic Beziers using flo_curves.
+- vtracer `compose.rs` stacks solid parent masks underneath child layers.
+  Cutout now uses a shared-boundary mosaic graph to avoid hairline seams.
+
+## Smaller scope
+
+Use pure TypeScript, not WASM or a Rust executable. BurnGuard already ships
+`@napi-rs/canvas` on Windows x64 and macOS arm64 through
+`export-native-modules.ts`; reuse it solely for PNG decode and test rasterization.
+No new runtime dependency, native build, download or subprocess is needed.
+
+Decode the pinned PNG buffer after retaining only pixel/transparency/color
+management chunks. Native canvas mistakes `<svg` inside C2PA `caBX` metadata
+for an SVG; removing text and EXIF alone is insufficient on the supplied PNGs.
+File-path decode succeeds on the same bytes. Test both text and C2PA metadata.
+
+Adapt the lattice-edge walking and bounded-error polygon reduction approach.
+Replace the hierarchical cluster graph with a deterministic RGB histogram,
+weighted palette fitting (at most eight colors), and four-connected masks.
+Merge tiny components into an adjacent palette region rather than deleting
+foreground pixels. Emit one compound path per color with evenodd holes.
+Default to polygon mode to retain sharp logo corners; offer a local quadratic
+spline mode for optional smoothing, not the upstream least-squares fitter.
+Transparent pixels stay transparent; partially transparent pixels are
+thresholded, an explicit limitation for translucent artwork.
+
+Retain disjoint palette masks with evenodd holes and an area-only speckle
+threshold (four pixels by default, not the upstream four-pixel side length).
+On the same frozen set, the attempted cumulative-mask variant grew from
+2,093,464 to 2,737,760 bytes. Adding upstream `runner.rs::patch_good`'s
+area/perimeter rejection grew it again to 2,767,964 bytes and increased color
+error. Discard both experiments, not their unfavorable measurements.
+The retained version is still 18.8 times larger than the reference and misses
+the size target. It is a draft experiment, not a demonstrated compact replacement.
+Bound Douglas-Peucker distance evaluations per contour as well as edge count,
+pixels and SVG bytes.
+Drop photo mode, gradients, watershed, adaptive thresholding, arbitrary
+palettes, hierarchical cluster graphs, mosaic topology, least-squares cubics,
+animation and interactive cached segmentation. Binary mode uses a fixed
+luminance threshold. Do not imply this is a byte-for-byte port of vtracer.
+Bound input pixels, contour complexity and SVG bytes. Cancellation must be
+observed between asynchronous batches, not just before a synchronous loop.
+
+## Integration and authority
+
+`turns.ts` captures `LogoTurnExpectation` before the adapter. Immediately
+after expectation capture and before the adapter, finalize prepares `logo.svg` from that pinned selected PNG and
+records the selected pair in the staged manifest. The AI receives a finite
+ready/fallback context, writes guidelines, and leaves a ready SVG alone unless
+the person explicitly asks for tidy-up. Unsupported or over-budget tracing
+uses the existing AI vectorization path. Unexpected errors still fail.
+
+Trace only selected exploration candidates, never moodboard references.
+Check the selected digest and normal managed-path/file identity rules.
+Validate generated SVG using the existing validator and set
+`data-bg-source-exploration` to the exact selected candidate path.
+Keep all existing history, provenance, originality, repair, transactional
+publication and cancellation gates. This does not fix AI-authored guidelines.
+
+## Fixed evaluation, defined before code
+
+Freeze SHA-256 identities before tracing. Use all seven root `idea-*.png`
+and `v2-candidate-*.png` files present in the supplied dori directory, plus
+`candidate-4.png` as the eighth: the requested name patterns contain seven,
+not eight files. Also use all four `option-*-illustration.png` files.
+Add six fixed 128 px synthetic marks: rectangle, ring with a hole, diagonal
+touch, thin cross, three-color nested mark, and transparent disk. Their
+geometry and colors are constants, not generated by a model.
+
+Pass the optional frozen-synthetic directory to the measurement command when
+moving between OS/CPU architectures. Re-rendering circles on Linux changes
+two PNG identities; reuse the six originally frozen PNGs instead of updating
+the lock or accepting different pixels.
+
+Measure each original PNG at its native dimensions with no crop, alignment
+search or background removal. Rasterize SVG with the same installed canvas
+renderer for both implementations. Compare RGB composited onto white with
+mean absolute error (0..255). Also report foreground IoU: pixels differing
+from white by more than 24 in any channel. This silhouette metric alone is
+insufficient on dark backgrounds, so retain color error and visual checks.
+Report original SVG UTF-8 bytes, path count, wall time and validator result.
+vtracer 1.0.0-alpha.4 gets the same original input, --max-colors 8,
+polygon mode and default speckle threshold; also report its spline output.
+This is a matched palette cap, not equivalent clustering or fitting.
+Only inject the required source attribute for reference validation; do not
+silently sanitize invalid output or omit its cost. Report cold CLI elapsed
+time separately from our in-process decode+trace time, not as a speedup.
+Run three measured repeats after one warm-up; report medians.
+
+Search both supplied directories for existing AI-redrawn SVGs; compare only
+when an SVG can be paired with its actual source. Missing pairs are N/A.
+
+Preserve the original 18-file SHA lock unchanged. Also measure the other five
+PNGs in the requested dori glob under a separate supplemental lock: three
+earlier candidates and two UI screenshots. Do not count screenshots as logo
+acceptance fixtures, and do not pool supplemental rows into the frozen score.
+
+Predeclared acceptance target: validation on 18/18; per-fixture IoU within
+0.02 of the matched polygon reference and MAE at most reference + 3/255;
+smaller total bytes than the eight-color polygon reference. Show every miss.
+Do not tune the fixture set or hide failures to satisfy the target.
+
+Unit tests cover exact binary/threshold behavior, holes, diagonals, sharp
+corners, palette cap, speckles, transparency, invalid input, cancellation,
+and output budget. Integration drives the real finalize stage and completion
+gate without asking the adapter to write SVG or selection. Mutate the
+binary threshold comparison and require the focused test to fail, then
+restore it and run the relevant suite once. Package notices must be shipped.
