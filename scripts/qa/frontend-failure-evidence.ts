@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 // F06: preserve the next failure, not a guessed fix for the unrecovered hpdesk failure.
-import { createCipheriv, createHash, createPublicKey, publicEncrypt, randomBytes, constants } from "node:crypto";
+import { constants, createCipheriv, createHash, createPublicKey, publicEncrypt, randomBytes } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -58,6 +58,16 @@ export function testRecords(text: string): readonly { readonly file: string; rea
     if (match && file) records.push({ file, status: match[1], name: match[2] });
   }
   return records;
+}
+
+/** Public logs carry only stable digests; names and diagnostics remain in the encrypted evidence. */
+export function failedTestDigests(
+  records: readonly { readonly file: string; readonly status: string; readonly name: string }[],
+): readonly string[] {
+  return records
+    .filter(record => record.status === "fail")
+    .map(record => createHash("sha256").update(`${record.file}\t${record.name}`).digest("hex"))
+    .sort();
 }
 
 /** Only ciphertext leaves the runner. The RSA private key stays with the evidence owner. */
@@ -150,6 +160,7 @@ if (import.meta.main) {
       skipped: run.records.filter(record => record.status === "skip").length,
       todo: run.records.filter(record => record.status === "todo").length,
     }));
+    const failedTestIds = tests.map(run => ({ phase: run.phase, ids: failedTestDigests(run.records) }));
     const incomplete = results.some(result => result.stdout.truncated || result.stderr.truncated || !result.stdout.complete || !result.stderr.complete);
     const failed = results.some(result => result.exit !== 0) || !sameNames || !sameStatuses || incomplete;
     if (failed) {
@@ -159,7 +170,14 @@ if (import.meta.main) {
         incomplete,
       }), recipient), { mode: 0o600, flag: "wx" });
     }
-    console.log(JSON.stringify({ event: "frontend_evidence_summary", counts, same_names: sameNames, same_statuses: sameStatuses, retained: failed }));
+    console.log(JSON.stringify({
+      event: "frontend_evidence_summary",
+      counts,
+      failed_test_ids: failedTestIds,
+      same_names: sameNames,
+      same_statuses: sameStatuses,
+      retained: failed,
+    }));
     process.exitCode = failed ? 1 : 0;
   } catch {
     // A CLI boundary must not print diagnostics containing private paths, output or recipient data.
