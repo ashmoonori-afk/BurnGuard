@@ -2,7 +2,7 @@
 
 ## 1. Runtime Topology
 
-Reviewed for v0.5.33 on 2026-10-18. BurnGuard runs as one Bun backend process paired with a React frontend:
+Reviewed for v0.5.34 on 2026-10-24. BurnGuard runs as one Bun backend process paired with a React frontend:
 
 ```text
 burnguard-design.exe or bun run src/index.ts
