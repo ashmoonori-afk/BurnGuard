@@ -14,7 +14,7 @@
     "@napi-rs/canvas": "0.1.100",
     "drizzle-orm": "^0.45.2",
     "fontkit": "2.0.4",
-    "hono": "^4.13.7",
+    "hono": "^4.13.13",
     "jszip": "^3.10.1",
     "node-html-parser": "^7.1.0",
     "pdf-lib": "1.17.1",
