@@ -545,7 +545,7 @@ export { logoSvgSource, validateLogoSvg } from "./logo-svg-validation";
 import { logoSvgSource, validateLogoSvg } from "./logo-svg-validation";
 
 /** Verifies a candidate is a complete, decodable, square PNG and returns its bytes identity. */
-async function assertCandidatePng(dir: string, candidate: LogoCandidateV1): Promise<{ readonly sha256: string; readonly bytes: Buffer }> {
+export async function assertCandidatePng(dir: string, candidate: LogoCandidateV1): Promise<{ readonly sha256: string; readonly bytes: Buffer }> {
   const file = safePath(dir, candidate.file, `candidate_path_unsafe:${candidate.id}`);
   const info = await lstat(file).catch((error: unknown) => {
     if (isMissing(error)) return null;

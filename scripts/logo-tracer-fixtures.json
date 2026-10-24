@@ -1,0 +1,20 @@
+[
+  {"name":"dori-idea-1","sha256":"fd5e430ea77e79d27300f03985186d24a7125b9a1f9774acb678b529dd1878dc"},
+  {"name":"dori-idea-2","sha256":"0e973ceed8c80dd48298e97af5edfccacec25213dcd109cee9091fdea8b02bc7"},
+  {"name":"dori-idea-3","sha256":"e71b017014780488504a38ac4349678f5ed05470ef8dbcf7e0601329b2604f9f"},
+  {"name":"dori-v2-candidate-1","sha256":"52f11d83c2637c8efde1e22e3773c2058585093a61d387815aa8ca8a577569f0"},
+  {"name":"dori-v2-candidate-2","sha256":"e5436dadc3025459a59ad8161845d00b31b88e5f3cb7309c8379d4c6841345ef"},
+  {"name":"dori-v2-candidate-3","sha256":"43bc35c54e2d4299c7ecc59d3ab5403edc9d890ca26fa0aea7d2d957a264c41c"},
+  {"name":"dori-v2-candidate-4","sha256":"dc31a3411c4ee5b5c481ac5e1e5bb0a98ac2d6a89fb1943a5aabc625a666e258"},
+  {"name":"dori-candidate-4","sha256":"e79920bda9587b7b87d1b75ff01c8878214dbe6569e6679b7aee82316abbda1a"},
+  {"name":"sisyphus-1","sha256":"3f90d3843259931188a516d18f87be2c5512154c7f23724043ce622b51132fed"},
+  {"name":"sisyphus-2","sha256":"70f4b1194de4a57ca1e7ff9afe2e229043651500a4fa1716ae2583a3f5e5cfcf"},
+  {"name":"sisyphus-3","sha256":"59dd590bfce7e010e2953675991fb3a46fbe642e4247a7445d7ef72b18815642"},
+  {"name":"sisyphus-4","sha256":"5839d487794fc095e862ecb2d2bdc6afcdf5f632ac0fe4be7448b3c64b61744d"},
+  {"name":"rectangle","sha256":"3a4f2cc5037705dcd595391a60b347b20f8ef3bc6df90288214614d70379357c"},
+  {"name":"ring","sha256":"1c898873c872c4741c9948e31429b37fae9b01b7456d9bf0ce3b839f7afb45d6"},
+  {"name":"diagonal","sha256":"a2523fd082b14d5acb8c0b0176aecd32a6cca0d01cf4aa388ef41efa0b8494bc"},
+  {"name":"thin-cross","sha256":"13845291ca0ac65e595a897bd24c3905ec9dc3746a5f5a092b04006a3c5d5b8f"},
+  {"name":"three-color","sha256":"107700c59df17da53400181f48088c085a3fcdc1417007a60fac0d29e9b363f7"},
+  {"name":"transparent-disk","sha256":"2ab645b4523e3ca6a464870adb0f0417c60e252eaed83e8d3c3873867c0cd68d"}
+]

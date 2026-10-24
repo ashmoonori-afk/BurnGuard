@@ -1,3 +1,10 @@
+Logo tracer: modified adaptation of vtracer (Copyright (c) 2024 TSANG, Hao Fung,
+MIT) and visioncortex (Copyright (c) 2026 TSANG, Hao Fung, Apache-2.0).
+No upstream visioncortex NOTICE file was present. BurnGuard replaces the
+hierarchical clustering and spline fitting with a bounded TypeScript engine.
+Full terms, revisions and simplify-js attribution: THIRD_PARTY_NOTICES.md.
+Apache License, Version 2.0: LICENSE.
+
 lucide-icons/lucide - ISC License - 38 bundled icons (full license: packages/backend/src/harness/assets/lucide/LICENSE).
 
 BurnGuard's taste guidance is adapted, with changes, from StyleGallery by
