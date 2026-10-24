@@ -162,7 +162,7 @@ function DesignSystemEditor({ id }: { id: string }) {
         value: draftColorValue.trim(),
       });
     },
-    onSuccess: (tokens) => {
+    onSuccess: async (tokens) => {
       queryClient.setQueryData(["design-systems", "tokens", id], tokens);
       setEditingColor(null);
       setColorEditorOpen(false);
@@ -170,6 +170,7 @@ function DesignSystemEditor({ id }: { id: string }) {
       setDraftColorValue("#000000");
       setPreviewRefreshKey((key) => key + 1);
       pushToast({ title: t("system.colorSaved"), tone: "success" });
+      await queryClient.invalidateQueries({ queryKey: ["design-systems", "project-pin"] });
     },
     onError: (err) => {
       pushToast({
@@ -189,7 +190,7 @@ function DesignSystemEditor({ id }: { id: string }) {
         role: fontRole,
       });
     },
-    onSuccess: (font) => {
+    onSuccess: async (font) => {
       setFontFile(null);
       setFontFamily("");
       if (fontInputRef.current) {
@@ -201,6 +202,9 @@ function DesignSystemEditor({ id }: { id: string }) {
         body: t("system.fontAvailable", { name: font.family }),
         tone: "success",
       });
+      if (font.role && system?.tokens_css_path) {
+        await queryClient.invalidateQueries({ queryKey: ["design-systems", "project-pin"] });
+      }
     },
     onError: (err) => {
       pushToast({
