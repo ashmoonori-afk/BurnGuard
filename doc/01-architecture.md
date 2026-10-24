@@ -2,7 +2,7 @@
 
 ## 1. Runtime Topology
 
-Reviewed for v0.5.32 on 2026-10-18. BurnGuard runs as one Bun backend process paired with a React frontend:
+Reviewed for v0.5.33 on 2026-10-18. BurnGuard runs as one Bun backend process paired with a React frontend:
 
 ```text
 burnguard-design.exe or bun run src/index.ts
@@ -32,7 +32,7 @@ Current startup flow:
 
 1. Acquire profile ownership (one process per `BG_APP_ROOT`; desktop mode checks the port first)
 2. Create local app directories and ensure the config file exists
-3. Seed the bundled sample and theme design systems when missing
+3. Seed the bundled sample and theme design systems when missing, and replace any existing built-in theme folder that is unchanged from a shipped release with the current bundle (edited folders are kept)
 4. Run SQLite migrations, seed core records, tutorials, and original samples, and reconcile recovery state
 5. Prune expired snapshots and start the scheduled purge for deleted projects
 6. Start the Hono server on `127.0.0.1` (default port 14070) and print the readiness line

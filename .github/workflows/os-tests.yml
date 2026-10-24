@@ -154,6 +154,7 @@ jobs:
           packages/backend/tests/export-failure-message.test.ts
           packages/backend/tests/route-unexpected-error-bodies.test.ts
           packages/backend/tests/chromium-capability.test.ts
+          packages/backend/tests/bundled-theme-refresh.test.ts
           packages/backend/tests/chromium-bridge-probe.test.ts
           packages/backend/tests/chromium-browser-paths.test.ts
           packages/backend/tests/export-render-launch.test.ts

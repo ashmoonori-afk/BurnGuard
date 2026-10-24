@@ -170,6 +170,7 @@ jobs:
           packages/backend/tests/vercel-publish.test.ts
           packages/backend/tests/chromium-node-launch.test.ts
           packages/backend/tests/chromium-capability.test.ts
+          packages/backend/tests/bundled-theme-refresh.test.ts
           packages/backend/tests/chromium-bridge-probe.test.ts
           packages/backend/tests/chromium-browser-paths.test.ts
           packages/backend/tests/export-render-launch.test.ts

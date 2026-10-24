@@ -395,4 +395,17 @@ function namedIndexes(db: Database, tableName: string) {
       else sqlite.query("UPDATE meta_schema SET value=? WHERE key='app_version'").run(original);
     }
   });
+
+  test("Given a profile whose seeded systems store mock fixture thumbnails When seeding core data Then no stored thumbnail points at a fixture URL", async () => {
+    // Given
+    await seedCoreData();
+    const sqlite = getSqlite();
+    sqlite.query("UPDATE design_systems SET thumbnail_path='/fixtures/thumbnails/' || id || '.png' WHERE id IN ('northvale-capital','splash')").run();
+
+    // When
+    await seedCoreData();
+
+    // Then
+    expect(sqlite.query("SELECT id FROM design_systems WHERE thumbnail_path LIKE '/fixtures/%'").all()).toEqual([]);
+  });
 });

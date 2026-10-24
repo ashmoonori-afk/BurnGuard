@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 import path from "node:path";
-import type { CatalogDesignSystemDetail } from "@bg/shared";
+import type { CatalogDesignSystemDetail, ProjectType } from "@bg/shared";
 import {
   getCatalogRow, getCatalogTags, getCatalogUsage, getCatalogPreviewProjects, getContentReceipt, getLineageReceipt, listCatalogRows,
   type CatalogReceiptRow, type CatalogRow,
@@ -58,6 +58,11 @@ async function catalogResult(db: Database, root: string, row: CatalogRow): Promi
   const lineage = parseLineage(lineageReceipt);
   if (lineageReceipt !== null && lineage === null && warning === null) warning = { code: "corrupt_receipt" };
   const contentIdentity = receipt ?? lineageReceipt;
+  const bundledThumbnail = bundledPreview ? `/api/design-systems/${encodeURIComponent(row.id)}/files/${BUNDLED_WEBSITE_THUMBNAIL}` : null;
+  const projectThumbnails: Record<string, string> = Object.fromEntries(getCatalogPreviewProjects(db, row.id).flatMap((project) => {
+    const url = projectThumbnailUrl(project);
+    return url === null ? [] : [[project.type, url]];
+  }));
   return {
     id: row.id,
     name: row.name,
@@ -82,11 +87,8 @@ async function catalogResult(db: Database, root: string, row: CatalogRow): Promi
     created_at: row.createdAt,
     updated_at: row.updatedAt,
     is_template: row.isTemplate === 1,
-    thumbnail_path: row.thumbnailPath ?? (bundledPreview ? `/api/design-systems/${encodeURIComponent(row.id)}/files/${BUNDLED_WEBSITE_THUMBNAIL}` : null),
-    thumbnail_paths: { ...(bundledPreview ? { prototype: `/api/design-systems/${encodeURIComponent(row.id)}/files/${BUNDLED_WEBSITE_THUMBNAIL}`, slide_deck: `/api/design-systems/${encodeURIComponent(row.id)}/files/preview/slides-thumbnail.webp` } : {}), ...Object.fromEntries(getCatalogPreviewProjects(db, row.id).flatMap((project) => {
-      const url = projectThumbnailUrl(project);
-      return url === null ? [] : [[project.type, url]];
-    })) },
+    thumbnail_path: row.thumbnailPath ?? bundledThumbnail ?? representativeProjectThumbnail(projectThumbnails),
+    thumbnail_paths: { ...(bundledThumbnail === null ? {} : { prototype: bundledThumbnail, slide_deck: `/api/design-systems/${encodeURIComponent(row.id)}/files/preview/slides-thumbnail.webp` }), ...projectThumbnails },
     source_type: row.sourceType,
     source_uri: row.sourceUri,
     dir_path: row.lifecycle === "trashed" ? path.join(root, ".catalog-trash", row.id) : row.dirPath,
@@ -115,6 +117,13 @@ function parseLineage(receipt: CatalogReceiptRow | null): CatalogResult["lineage
     if (error instanceof CatalogPayloadError) return null;
     throw error;
   }
+}
+
+const REPRESENTATIVE_PROJECT_TYPES: readonly ProjectType[] = ["prototype", "from_template", "slide_deck", "graphic", "logo", "other"];
+
+/** A system without its own image shows the latest rendered project made with it, website first. */
+function representativeProjectThumbnail(thumbnails: Readonly<Record<string, string>>): string | null {
+  return REPRESENTATIVE_PROJECT_TYPES.map((type) => thumbnails[type]).find((url) => url !== undefined) ?? null;
 }
 
 function fallbackManifestPreview(manifest: Readonly<Record<string, unknown>> | null): string | null {

@@ -100,7 +100,7 @@ export async function seedCoreData() {
           ? path.join(dirPath, "colors_and_type.css")
           : null,
         readmeMdPath: hasBundledFiles ? path.join(dirPath, "README.md") : null,
-        thumbnailPath: system.thumbnail_path,
+        thumbnailPath: null,
         createdAt: system.updated_at,
         updatedAt: system.updated_at,
         archivedAt: null,
@@ -117,7 +117,8 @@ export async function seedCoreData() {
             ? path.join(dirPath, "colors_and_type.css")
             : null,
           readmeMdPath: hasBundledFiles ? path.join(dirPath, "README.md") : null,
-          thumbnailPath: system.thumbnail_path,
+          // Fixture thumbnails are mock-only URLs; a stored one never resolves and hides the real preview.
+          thumbnailPath: null,
           updatedAt: system.updated_at,
         },
       });
