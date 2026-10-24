@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { constants, createDecipheriv, generateKeyPairSync, privateDecrypt } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { captureOutput, sealEvidence, testRecords } from "./frontend-failure-evidence";
+import { captureOutput, failedTestDigests, sealEvidence, testRecords } from "./frontend-failure-evidence";
 
 const { publicKey, privateKey } = generateKeyPairSync("rsa", { modulusLength: 3072 });
 const recipient = publicKey.export({ type: "spki", format: "pem" }).toString();
@@ -113,6 +113,16 @@ test("Given POSIX and Windows runner headers When reading results Then names ret
   ]);
 });
 
+test("Given failed test records When publishing diagnostics Then only stable identity digests leave the runner", () => {
+  const records = [
+    { file: "packages/frontend/tests/one.test.ts", status: "fail", name: "private failure name" },
+    { file: "packages/frontend/tests/two.test.ts", status: "pass", name: "passing name" },
+  ];
+  const digests = failedTestDigests(records);
+  expect(digests).toEqual(["f49310e7d69e3848baa5eb18ce120e435cf8ab94925422ad1d2313ba3281d19c"]);
+  expect(JSON.stringify(digests)).not.toContain("private failure name");
+});
+
 test("Given private failure diagnostics When sealing Then only the owner key recovers authenticated plaintext", () => {
   const plaintext = JSON.stringify({ first_failure: "PRIVATE_FAILURE_SENTINEL", path: "/private/fixture" });
   const sealed = sealEvidence(plaintext, recipient);
@@ -202,6 +212,7 @@ test(`Given ${scenario.name} When the real CLI compares Then execution statuses 
     }));
     expect(summary).toEqual({
       event: "frontend_evidence_summary", counts: expectedCounts,
+      failed_test_ids: ["fresh", "warm"].map(phase => ({ phase, ids: [] })),
       same_names: true, same_statuses: !changed, retained: scenario.retain,
     });
     if (!scenario.retain) {
