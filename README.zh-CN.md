@@ -172,6 +172,12 @@ bun scripts/burnguard-read.ts project <id> --json
 
 ## 更新日志
 
+### 0.5.34
+
+- 在设计系统中保存颜色令牌，或在包含令牌样式表的系统中上传指定了字体角色的字体后，已打开项目的基准候选检查会立即刷新；在你明确应用新基准之前，项目已固定的基准保持不变。
+- **实验性确定性 PNG 标志矢量化追踪**会在确认所选标志候选方案时先于 AI 轮次生成最多 8 色的精简 `logo.svg`，并在图像超出追踪预算时自动回退至原有 AI 矢量化流程。
+- 将后端 `hono` 更新至 `4.13.13`、前端 `vite` 更新至 `6.4.5`，消除了 `hono`、`vite` 和 `launch-editor` 的 6 项安全审计通告。
+
 ### 0.5.33
 
 - 每次启动时，若本地配置目录中的内置主题文件夹与此前发布版本附带的文件逐字节一致（忽略换行符差异），BurnGuard 会将其替换为当前内置版本，使从 v0.5.31 或更早版本升级且未修改过经典主题的安装也能获得 v0.5.32 引入的 BurnGuard 调色板；用户修改过的主题文件夹、添加到主题 `fonts/` 文件夹中的字体文件以及现有项目中已生成的文件均保持不变（中途中断的替换会在下次启动时恢复，单个主题更新失败时会保留旧副本并记录警告后继续启动）。
@@ -315,4 +321,4 @@ bun scripts/burnguard-read.ts project <id> --json
 
 BurnGuard 采用 **Apache-2.0** 许可证。详见 [LICENSE](LICENSE)、[NOTICE](NOTICE) 和[图片来源说明](doc/images/README.md)。
 
-*Synced with README.md at v0.5.33.*
+*Synced with README.md at v0.5.34.*

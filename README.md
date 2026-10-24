@@ -172,6 +172,12 @@ The command opens the profile database at `BG_APP_ROOT` (default `~/.burnguard`)
 
 ## Changelog
 
+### 0.5.34
+
+- Saving a color token in a design system or uploading a role-assigned font on a system with a token stylesheet now refreshes an open project's baseline candidate check immediately, while the project's pinned baseline stays unchanged until you explicitly apply the new baseline.
+- **Experimental deterministic PNG logo tracing** runs before the AI turn when you finalize a selected logo candidate, producing a compact `logo.svg` with an up-to-8-color palette and falling back to the existing AI vectorization path when the image exceeds tracer budgets.
+- Updated backend `hono` to `4.13.13` and frontend `vite` to `6.4.5`, removing six security audit advisories in `hono`, `vite`, and `launch-editor`.
+
 ### 0.5.33
 
 - On every start, BurnGuard replaces any built-in theme folder in your local profile that is byte-for-byte identical to an earlier shipped release (line endings ignored) with the current bundled version, so installs updated from v0.5.31 or earlier receive the v0.5.32 classic theme palettes while edited theme folders, user-added files in `fonts/`, and files already generated in existing projects stay untouched (an interrupted swap is restored on the next start, and a failed update keeps the previous copy).

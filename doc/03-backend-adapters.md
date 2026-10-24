@@ -1,6 +1,6 @@
 # LLM Harness and Backend Adapters
 
-This document describes the **current** adapter implementation, reviewed for v0.5.33 on 2026-10-18.
+This document describes the **current** adapter implementation, reviewed for v0.5.34 on 2026-10-24.
 
 ## 1. Current Design Principles
 
