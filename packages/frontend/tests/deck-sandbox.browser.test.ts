@@ -187,6 +187,38 @@ test("local authored scripts run in the opaque sandbox in parser/defer order, wi
   });
 }, 30000);
 
+async function dismissPresentationWithEscape(page: Page): Promise<void> {
+  // Escape removes its renderer; release the key only after owned teardown.
+  // Keep the original five-second action budget and three-second dismissal bound.
+  const escape = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      const error = new Error("presentation_escape_deadline");
+      escape.abort(error);
+      reject(error);
+    }, 5000);
+  });
+  try {
+    await Promise.race([
+      (async () => {
+        await page.frameLocator("main iframe").locator("body").focus();
+        escape.signal.throwIfAborted();
+        const renderer = page.frames().find(candidate => candidate.parentFrame() === page.mainFrame());
+        if (!renderer) throw new Error("presentation_frame_missing");
+        const detached = page.waitForEvent("framedetached", { predicate: candidate => candidate === renderer, timeout: 3000 });
+        detached.catch(() => undefined);
+        await page.keyboard.down("Escape");
+        escape.signal.throwIfAborted();
+        await detached;
+        escape.signal.throwIfAborted();
+        await page.keyboard.up("Escape");
+      })(),
+      deadline,
+    ]);
+  } finally { clearTimeout(timer); }
+}
+
 test("presentation remounts after its owned fullscreen exit and forwards focused page Escape", async () => {
   await withBrowser(async (page) => {
     const entered = fullscreenState(page, true);
@@ -200,7 +232,7 @@ test("presentation remounts after its owned fullscreen exit and forwards focused
     await entered;
     // Subscribe before dismissal: fullscreen exit belongs to this overlay.
     const exited = fullscreenState(page, false);
-    await frame.locator("body").press("Escape");
+    await dismissPresentationWithEscape(page);
     await dialog.waitFor({ state: "hidden", timeout: 3000 });
     await exited;
     const reentered = fullscreenState(page, true);
@@ -210,7 +242,7 @@ test("presentation remounts after its owned fullscreen exit and forwards focused
     await reentered;
     expect(await frame.locator(".deck-notes").isVisible()).toBe(true);
     const finalExit = fullscreenState(page, false);
-    await frame.locator("body").press("Escape");
+    await dismissPresentationWithEscape(page);
     await dialog.waitFor({ state: "hidden", timeout: 3000 });
     await finalExit;
   });
@@ -271,35 +303,7 @@ test("presentation fullscreen fallback preserves authored input, composition and
     await settleFrameMessages(page);
     expect(await dialog.count()).toBe(1);
     await frame.locator("body").evaluate(() => Reflect.set(window, "cancelEscape", false));
-    // Escape removes its renderer; release the key only after owned teardown.
-    // Keep the original five-second action budget and three-second dismissal bound.
-    const escape = new AbortController();
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const deadline = new Promise<never>((_, reject) => {
-      timer = setTimeout(() => {
-        const error = new Error("presentation_escape_deadline");
-        escape.abort(error);
-        reject(error);
-      }, 5000);
-    });
-    try {
-      await Promise.race([
-        (async () => {
-          await frame.locator("body").focus();
-          escape.signal.throwIfAborted();
-          const renderer = page.frames().find(candidate => candidate.parentFrame() === page.mainFrame());
-          if (!renderer) throw new Error("presentation_frame_missing");
-          const detached = page.waitForEvent("framedetached", { predicate: candidate => candidate === renderer, timeout: 3000 });
-          detached.catch(() => undefined);
-          await page.keyboard.down("Escape");
-          escape.signal.throwIfAborted();
-          await detached;
-          escape.signal.throwIfAborted();
-          await page.keyboard.up("Escape");
-        })(),
-        deadline,
-      ]);
-    } finally { clearTimeout(timer); }
+    await dismissPresentationWithEscape(page);
     await dialog.waitFor({ state: "hidden", timeout: 3000 });
   }, false);
 }, 30000);
