@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { Browser, Page } from "../../backend/node_modules/playwright-core";
+import type { Browser, Page, Request as PwRequest, Response as PwResponse } from "../../backend/node_modules/playwright-core";
 import { launchChromiumViaNode } from "../../backend/src/services/chromium-node-launch";
 
 declare global { var canvasCssTest: {
@@ -205,28 +205,145 @@ test("imported project styles render nested CSS inside the real opaque canvas sa
 }, 30_000);
 
 /**
+ * Passive, bounded diagnostic trace for the real shared-fonts case. It never reads or clones a body and
+ * records only fixed enums, safe public font basenames, small net::ERR_* codes, statuses and relative
+ * milliseconds: no URLs, paths, queries, headers, capability, content or data URLs.
+ */
+const FONT_TRACE_CAP = 64;
+const FONT_TRACE_RESERVE = 16;
+const FONT_TRACE_MIMES = ["text/css", "font/woff2", "text/html", "application/json", "text/plain"] as const;
+type TraceMime = (typeof FONT_TRACE_MIMES)[number] | "other" | "none";
+type TracePathClass = "page" | "bootstrap" | "stylesheet" | "font" | "other" | "external" | "data";
+type TracePhase = "bundle_start" | "bundle_done" | "launch_done" | "goto_done" | "bootstrap_done" | "action_start" | "action_done" | "action_failed";
+type TraceTarget = { pathClass: TracePathClass; font: string | null };
+type TraceEvent =
+  | { kind: "phase"; t: number; phase: TracePhase }
+  | ({ kind: "fixture"; t: number; id: number; matched: boolean; status: number; mime: TraceMime } & TraceTarget)
+  | ({ kind: "browser_request"; t: number; id: number } & TraceTarget)
+  | ({ kind: "browser_response"; t: number; id: number; status: number; mime: TraceMime } & TraceTarget)
+  | ({ kind: "browser_finished"; t: number; id: number } & TraceTarget)
+  | ({ kind: "browser_failed"; t: number; id: number; error: string } & TraceTarget);
+type TraceOutcome = { result: "urls" | "error"; ms: number; urls: number; dataUrls: number; errorKind: "none" | "failed_to_fetch" | "artifact_code" | "other"; artifactCode: string | null };
+
+function traceTarget(pathname: string): TraceTarget {
+  if (pathname === "/") return { pathClass: "page", font: null };
+  if (pathname === "/api/bootstrap") return { pathClass: "bootstrap", font: null };
+  if (pathname === "/api/projects/fonts/fs/fonts/fonts.css") return { pathClass: "stylesheet", font: null };
+  const font = /^\/runtime\/fonts\/b{64}\/([A-Za-z0-9_.-]{1,64}\.woff2)$/.exec(pathname)?.[1];
+  return font === undefined ? { pathClass: "other", font: null } : { pathClass: "font", font };
+}
+
+function traceUrlTarget(url: string, origin: string): TraceTarget {
+  if (url.startsWith("data:")) return { pathClass: "data", font: null };
+  if (!URL.canParse(url)) return { pathClass: "other", font: null };
+  const parsed = new URL(url);
+  return parsed.origin === origin ? traceTarget(parsed.pathname) : { pathClass: "external", font: null };
+}
+
+function traceMime(value: string | null | undefined): TraceMime {
+  const base = value?.split(";")[0]?.trim().toLowerCase();
+  return FONT_TRACE_MIMES.find(mime => mime === base) ?? (base ? "other" : "none");
+}
+
+function createFontTrace(expected: { fonts: { name: string; bytes: number }[]; dataUrls: number; stylesheetBytes: number }) {
+  const started = performance.now();
+  const events: TraceEvent[] = [];
+  const ids = new WeakMap<PwRequest, number>();
+  let dropped = 0;
+  let nextBrowserId = 0;
+  let nextFixtureId = 0;
+  let outcome: TraceOutcome | null = null;
+  const now = () => Math.round(performance.now() - started);
+  // Failures and phases may use a small reserve past the cap so a full trace still shows how it ended.
+  const push = (event: TraceEvent) => {
+    const important = event.kind === "phase" || event.kind === "browser_failed";
+    if (events.length < (important ? FONT_TRACE_CAP + FONT_TRACE_RESERVE : FONT_TRACE_CAP)) events.push(event);
+    else dropped += 1;
+  };
+  const idOf = (request: PwRequest) => {
+    const known = ids.get(request);
+    if (known !== undefined) return known;
+    if (nextBrowserId >= FONT_TRACE_CAP) { dropped += 1; return 0; }
+    nextBrowserId += 1;
+    ids.set(request, nextBrowserId);
+    return nextBrowserId;
+  };
+  return {
+    mark(phase: TracePhase) { push({ kind: "phase", t: now(), phase }); },
+    arrive(pathname: string) {
+      nextFixtureId += 1;
+      const id = nextFixtureId;
+      const t = now();
+      const target = traceTarget(pathname);
+      return (matched: boolean, response: Response) => push({ kind: "fixture", t, id, matched, status: response.status, mime: traceMime(response.headers.get("content-type")), ...target });
+    },
+    attach(page: Page, origin: string) {
+      page.on("request", (request: PwRequest) => push({ kind: "browser_request", t: now(), id: idOf(request), ...traceUrlTarget(request.url(), origin) }));
+      page.on("response", (response: PwResponse) => {
+        const request = response.request();
+        push({ kind: "browser_response", t: now(), id: idOf(request), status: response.status(), mime: traceMime(response.headers()["content-type"]), ...traceUrlTarget(request.url(), origin) });
+      });
+      page.on("requestfinished", (request: PwRequest) => push({ kind: "browser_finished", t: now(), id: idOf(request), ...traceUrlTarget(request.url(), origin) }));
+      page.on("requestfailed", (request: PwRequest) => {
+        const code = request.failure()?.errorText ?? "";
+        push({ kind: "browser_failed", t: now(), id: idOf(request), error: /^net::ERR_[A-Z0-9_]{1,48}$/.test(code) ? code : "unmapped", ...traceUrlTarget(request.url(), origin) });
+      });
+    },
+    settle(result: { urls: string[] } | { error: string }, ms: number) {
+      if ("urls" in result) { outcome = { result: "urls", ms, urls: result.urls.length, dataUrls: result.urls.filter(url => url.startsWith("data:font/woff2;base64,")).length, errorKind: "none", artifactCode: null }; return; }
+      const artifactCode = /^artifact_[a-z_]{1,40}$/.test(result.error) ? result.error : null;
+      outcome = { result: "error", ms, urls: 0, dataUrls: 0, errorKind: result.error === "Failed to fetch" ? "failed_to_fetch" : artifactCode !== null ? "artifact_code" : "other", artifactCode };
+    },
+    emit() {
+      console.error(JSON.stringify({ event: "font_http_transfer_trace", schema: "font-http-transfer-trace/1", cap: FONT_TRACE_CAP, reserve: FONT_TRACE_RESERVE, unknownRequestId: 0, truncated: dropped > 0, dropped, elapsedMs: now(), expected, outcome, events }));
+    },
+  };
+}
+type FontTrace = ReturnType<typeof createFontTrace>;
+
+/**
  * Serve one page of the Playwright-matched browser with the canvas bundle and an authorized API.
  * Launch through the Node bridge: an in-process launch under Bun stalls a later server's large bodies.
+ * An optional passive trace is emitted before cleanup, whether the action passed or failed.
  */
-async function withCanvasPage<T>(serve: (pathname: string) => Response | undefined, action: (page: Page, origin: string) => Promise<T>): Promise<T> {
+async function withCanvasPage<T>(serve: (pathname: string) => Response | undefined, action: (page: Page, origin: string) => Promise<T>, trace?: FontTrace): Promise<T> {
   const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch(request) {
     const pathname = new URL(request.url).pathname;
-    if (pathname === "/") return new Response("<!doctype html><html><body></body></html>", { headers: { "content-type": "text/html" } });
-    if (pathname === "/api/bootstrap") return Response.json({ data: { capability: "css-import-test" } });
-    return serve(pathname) ?? new Response("not found", { status: 404 });
+    const arrived = trace?.arrive(pathname);
+    const served = pathname === "/" ? new Response("<!doctype html><html><body></body></html>", { headers: { "content-type": "text/html" } })
+      : pathname === "/api/bootstrap" ? Response.json({ data: { capability: "css-import-test" } })
+      : serve(pathname);
+    const response = served ?? new Response("not found", { status: 404 });
+    arrived?.(served !== undefined, response);
+    return response;
   } });
   let browser: Browser | undefined;
   try {
+    trace?.mark("bundle_start");
     const compiler = Bun.spawn([process.execPath, "build", `${import.meta.dir}/fixtures/canvas-css-browser.ts`, "--target=browser", "--format=iife"], { stdout: "pipe", stderr: "pipe" });
     const [exitCode, script, errors] = await Promise.all([compiler.exited, new Response(compiler.stdout).text(), new Response(compiler.stderr).text()]);
     if (exitCode !== 0) throw new Error(`Browser test bundle failed (${exitCode}): ${errors}`);
+    trace?.mark("bundle_done");
     browser = await launchChromiumViaNode({}, AbortSignal.timeout(30_000));
+    trace?.mark("launch_done");
     const page = await browser.newPage();
+    trace?.attach(page, server.url.origin);
     await page.goto(server.url.origin, { waitUntil: "load" });
+    trace?.mark("goto_done");
     await page.addScriptTag({ content: script });
     await page.evaluate(() => globalThis.canvasCssTest.bootstrapApiAuthority());
-    return await action(page, server.url.origin);
+    trace?.mark("bootstrap_done");
+    trace?.mark("action_start");
+    try {
+      const result = await action(page, server.url.origin);
+      trace?.mark("action_done");
+      return result;
+    } catch (error) {
+      trace?.mark("action_failed");
+      throw error;
+    }
   } finally {
+    trace?.emit();
     try { await browser?.close(); }
     finally { await server.stop(true); }
   }
@@ -245,17 +362,26 @@ test("Given a project document linking the real shared fonts.css and using two f
   const files = used.flatMap(block => Array.from(block.matchAll(/\/b{64}\/([A-Za-z0-9_.-]+\.woff2)/g), match => match[1]!));
   const expected = await Promise.all(files.map(async file => `data:font/woff2;base64,${Buffer.from(await Bun.file(`${fonts}/${file}`).arrayBuffer()).toString("base64")}`));
   const fetchedFonts: string[] = [];
+  const trace = createFontTrace({
+    fonts: [...new Set(files)].sort().map(name => ({ name, bytes: Bun.file(`${fonts}/${name}`).size })),
+    dataUrls: expected.length, stylesheetBytes: Buffer.byteLength(stylesheet),
+  });
   const result = await withCanvasPage(pathname => {
     if (pathname === "/api/projects/fonts/fs/fonts/fonts.css") return new Response(stylesheet, { headers: { "content-type": "text/css" } });
     const font = /^\/runtime\/fonts\/b{64}\/([A-Za-z0-9_.-]+\.woff2)$/.exec(pathname)?.[1];
     if (font !== undefined) fetchedFonts.push(font);
     return font === undefined ? undefined : new Response(Bun.file(`${fonts}/${font}`), { headers: { "content-type": "font/woff2" } });
-  }, (page, origin) => page.evaluate(async ({ url, families }) => {
+  }, async (page, origin) => {
+    const evaluateStarted = performance.now();
+    const outcome = await page.evaluate(async ({ url, families }) => {
     try {
       const html = await globalThis.canvasCssTest.embedCanvasImages(`<link rel="stylesheet" href="fonts/fonts.css"><style>:root{--font-body:"${families[0]}",sans-serif}body{font-family:var(--font-body)}</style><svg><text font-family="${families[1]}">x</text></svg>`, url, new AbortController().signal);
       return { urls: Array.from(html.matchAll(/url\("?([^"')]*)/g), match => match[1]!) };
     } catch (error) { return { error: error instanceof Error ? error.message : String(error) }; }
-  }, { url: `${origin}/api/projects/fonts/fs/index.html`, families }));
+  }, { url: `${origin}/api/projects/fonts/fs/index.html`, families });
+    trace.settle(outcome, Math.round(performance.now() - evaluateStarted));
+    return outcome;
+  }, trace);
   expect(new Set(families).size).toBe(2);
   expect(blocks.indexOf(used.at(-1)!)).toBeGreaterThanOrEqual(10);
   expect(files.length).toBeLessThan(stylesheet.match(/url\(/g)?.length ?? 0);

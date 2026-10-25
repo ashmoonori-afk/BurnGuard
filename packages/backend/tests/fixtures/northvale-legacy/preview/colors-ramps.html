@@ -1,0 +1,33 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Colors · Accent ramps</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body { margin: 0; padding: 20px; background:#fff; font-family: var(--font-sans); }
+  .label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.12em; color: var(--fg-3); margin-bottom: 10px; }
+  .ramp { display:grid; grid-template-columns: 90px repeat(10, 1fr); align-items:center; gap: 0; margin-bottom: 6px; }
+  .name { font-size: 12px; font-weight: 600; color: var(--fg-1); }
+  .sw { height: 28px; }
+  .sw:first-of-type { border-top-left-radius: 4px; border-bottom-left-radius: 4px; }
+  .sw:last-of-type { border-top-right-radius: 4px; border-bottom-right-radius: 4px; }
+</style></head>
+<body>
+  <div class="label">Accent ramps · key stops only</div>
+  <div id="ramps"></div>
+<script>
+const ramps = {
+  Red:        ['#FCF3F2','#FADCD9','#FABBB4','#FC9086','#FA5343','#D91F11','#A1160A','#75160C','#4F150F','#24120C'],
+  Orange:     ['#FCF2EB','#FCDDC7','#FCBC97','#FC9162','#E86427','#BF4815','#8F3415','#632B17','#402117','#1F1410'],
+  Yellow:     ['#FAF6CF','#F7E379','#F5C518','#D9A514','#B3870E','#946613','#70491C','#54341F','#38251B','#1C1613'],
+  Green:      ['#EBF7ED','#C7EBD1','#88DBA8','#43C478','#16A163','#077D55','#075E45','#094536','#092E25','#081A15'],
+  Teal:       ['#EBF5F4','#BEEBE7','#86D9D4','#4EBFB9','#279C9C','#167B7D','#155C5E','#124241','#102E2D','#0C1A19'],
+  Aqua:       ['#EBF3F7','#C9E7F5','#8BD3F7','#48B8F0','#1195D6','#0073BA','#08548A','#0E3D66','#0C2B45','#0B1724'],
+  Blue:       ['#F0F4FA','#D4E4FA','#ADCCF7','#75B1FF','#3D8DF5','#186ADE','#0D4EA6','#103A75','#11294D','#0D1826'],
+  Ultramarine:['#F2F3FA','#DEE0FA','#C2C7FC','#A0A7FA','#7681FC','#545FE8','#3A45B0','#2F337D','#23254D','#141429'],
+  Purple:     ['#F7F2FC','#EADCFC','#DABEFA','#C89AFC','#AC71F0','#8F49DE','#6B30AB','#4C277D','#331F4D','#1C1229'],
+  Pink:       ['#FCF0F8','#F7DAED','#F7B7E2','#FA87D4','#ED4CB7','#CC1D92','#961574','#6B155A','#47153F','#241020'],
+};
+document.getElementById('ramps').innerHTML = Object.entries(ramps).map(([name, stops]) =>
+  `<div class="ramp"><div class="name">${name}</div>${stops.map(c=>`<div class="sw" style="background:${c}"></div>`).join('')}</div>`
+).join('');
+</script>
+</body></html>

@@ -82,6 +82,7 @@ jobs:
           packages/frontend/tests/settings-sections.test.ts
           packages/frontend/tests/layout-notes.test.ts
           packages/backend/tests/bundled-seed-themes.test.ts
+          packages/backend/tests/northvale-preview-repair.test.ts
           packages/backend/tests/theme-previews.test.ts
           packages/backend/tests/catalog.test.ts
           packages/backend/tests/artifact-anchor-routes.test.ts
@@ -261,6 +262,7 @@ jobs:
           packages/frontend/tests/project-first-message.browser.test.ts
           packages/frontend/tests/launch-authority.browser.test.ts
           packages/frontend/tests/design-system-pin.browser.test.ts
+          packages/frontend/tests/northvale-previews.browser.test.ts
           packages/backend/tests/exports.test.ts
       # Every baseline suite (scripts/qa/os-matrix-baseline.txt) that an explicit list above does not already run, one
       # `bun test` process per file, after the browser install because most of them drive a real Chromium. The

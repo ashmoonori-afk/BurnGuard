@@ -24,38 +24,116 @@
   --primary-blue:  #7399C6;   /* Wordmark "Northvale Blue" */
   --action-blue:   #186ADE;   /* blue-60 — interactive */
 
-  /* ---------- COLOR · ACCENT SCALES (key stops) ---------- */
-  --red-60:        #D91F11;
-  --red-50:        #FA5343;
-  --red-10:        #FCF3F2;
+  /* ---------- COLOR · ACCENT SCALES (10 stops each) ---------- */
+  --red-10: #FCF3F2;
+  --red-20: #FADCD9;
+  --red-30: #FABBB4;
+  --red-40: #FC9086;
+  --red-50: #FA5343;
+  --red-60: #D91F11;
+  --red-70: #A1160A;
+  --red-80: #75160C;
+  --red-90: #4F150F;
+  --red-100: #24120C;
 
-  --orange-50:     #E86427;
-  --orange-10:     #FCF2EB;
+  --orange-10: #FCF2EB;
+  --orange-20: #FCDDC7;
+  --orange-30: #FCBC97;
+  --orange-40: #FC9162;
+  --orange-50: #E86427;
+  --orange-60: #BF4815;
+  --orange-70: #8F3415;
+  --orange-80: #632B17;
+  --orange-90: #402117;
+  --orange-100: #1F1410;
 
-  --yellow-30:     #F5C518;
-  --yellow-10:     #FAF6CF;
+  --yellow-10: #FAF6CF;
+  --yellow-20: #F7E379;
+  --yellow-30: #F5C518;
+  --yellow-40: #D9A514;
+  --yellow-50: #B3870E;
+  --yellow-60: #946613;
+  --yellow-70: #70491C;
+  --yellow-80: #54341F;
+  --yellow-90: #38251B;
+  --yellow-100: #1C1613;
 
-  --green-60:      #077D55;
-  --green-50:      #16A163;
-  --green-10:      #EBF7ED;
+  --green-10: #EBF7ED;
+  --green-20: #C7EBD1;
+  --green-30: #88DBA8;
+  --green-40: #43C478;
+  --green-50: #16A163;
+  --green-60: #077D55;
+  --green-70: #075E45;
+  --green-80: #094536;
+  --green-90: #092E25;
+  --green-100: #081A15;
 
-  --teal-50:       #279C9C;
-  --teal-10:       #EBF5F4;
+  --teal-10: #EBF5F4;
+  --teal-20: #BEEBE7;
+  --teal-30: #86D9D4;
+  --teal-40: #4EBFB9;
+  --teal-50: #279C9C;
+  --teal-60: #167B7D;
+  --teal-70: #155C5E;
+  --teal-80: #124241;
+  --teal-90: #102E2D;
+  --teal-100: #0C1A19;
 
-  --aqua-60:       #0073BA;
-  --aqua-10:       #EBF3F7;
+  --aqua-10: #EBF3F7;
+  --aqua-20: #C9E7F5;
+  --aqua-30: #8BD3F7;
+  --aqua-40: #48B8F0;
+  --aqua-50: #1195D6;
+  --aqua-60: #0073BA;
+  --aqua-70: #08548A;
+  --aqua-80: #0E3D66;
+  --aqua-90: #0C2B45;
+  --aqua-100: #0B1724;
 
-  --blue-90:       #11294D;
-  --blue-80:       #103A75;
-  --blue-70:       #0D4EA6;
-  --blue-60:       #186ADE;
-  --blue-50:       #3D8DF5;
-  --blue-30:       #ADCCF7;
-  --blue-10:       #F0F4FA;
+  --blue-10: #F0F4FA;
+  --blue-20: #D4E4FA;
+  --blue-30: #ADCCF7;
+  --blue-40: #75B1FF;
+  --blue-50: #3D8DF5;
+  --blue-60: #186ADE;
+  --blue-70: #0D4EA6;
+  --blue-80: #103A75;
+  --blue-90: #11294D;
+  --blue-100: #0D1826;
 
+  --ultramarine-10: #F2F3FA;
+  --ultramarine-20: #DEE0FA;
+  --ultramarine-30: #C2C7FC;
+  --ultramarine-40: #A0A7FA;
+  --ultramarine-50: #7681FC;
   --ultramarine-60: #545FE8;
-  --purple-60:      #8F49DE;
-  --pink-60:        #CC1D92;
+  --ultramarine-70: #3A45B0;
+  --ultramarine-80: #2F337D;
+  --ultramarine-90: #23254D;
+  --ultramarine-100: #141429;
+
+  --purple-10: #F7F2FC;
+  --purple-20: #EADCFC;
+  --purple-30: #DABEFA;
+  --purple-40: #C89AFC;
+  --purple-50: #AC71F0;
+  --purple-60: #8F49DE;
+  --purple-70: #6B30AB;
+  --purple-80: #4C277D;
+  --purple-90: #331F4D;
+  --purple-100: #1C1229;
+
+  --pink-10: #FCF0F8;
+  --pink-20: #F7DAED;
+  --pink-30: #F7B7E2;
+  --pink-40: #FA87D4;
+  --pink-50: #ED4CB7;
+  --pink-60: #CC1D92;
+  --pink-70: #961574;
+  --pink-80: #6B155A;
+  --pink-90: #47153F;
+  --pink-100: #241020;
 
   /* ---------- COLOR · SEMANTIC (Functional) ---------- */
   --success:       var(--green-60);

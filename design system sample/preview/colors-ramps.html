@@ -1,33 +1,137 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><title>Colors · Accent ramps</title>
+<html lang="en"><head><meta name="viewport" content="width=device-width, initial-scale=1"><meta charset="utf-8"><title>Colors · Accent ramps</title>
 <link rel="stylesheet" href="../colors_and_type.css">
 <style>
-  body { margin: 0; padding: 20px; background:#fff; font-family: var(--font-sans); }
+  body { margin: 0; padding: 20px; background:var(--bg); font-family: var(--font-sans); }
   .label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.12em; color: var(--fg-3); margin-bottom: 10px; }
-  .ramp { display:grid; grid-template-columns: 90px repeat(10, 1fr); align-items:center; gap: 0; margin-bottom: 6px; }
+  .ramp { display:grid; grid-template-columns: 90px repeat(10, minmax(0, 1fr)); align-items:center; gap: 0; margin-bottom: 6px; }
   .name { font-size: 12px; font-weight: 600; color: var(--fg-1); }
   .sw { height: 28px; }
-  .sw:first-of-type { border-top-left-radius: 4px; border-bottom-left-radius: 4px; }
+  .name + .sw { border-top-left-radius: 4px; border-bottom-left-radius: 4px; }
   .sw:last-of-type { border-top-right-radius: 4px; border-bottom-right-radius: 4px; }
 </style></head>
 <body>
-  <div class="label">Accent ramps · key stops only</div>
-  <div id="ramps"></div>
-<script>
-const ramps = {
-  Red:        ['#FCF3F2','#FADCD9','#FABBB4','#FC9086','#FA5343','#D91F11','#A1160A','#75160C','#4F150F','#24120C'],
-  Orange:     ['#FCF2EB','#FCDDC7','#FCBC97','#FC9162','#E86427','#BF4815','#8F3415','#632B17','#402117','#1F1410'],
-  Yellow:     ['#FAF6CF','#F7E379','#F5C518','#D9A514','#B3870E','#946613','#70491C','#54341F','#38251B','#1C1613'],
-  Green:      ['#EBF7ED','#C7EBD1','#88DBA8','#43C478','#16A163','#077D55','#075E45','#094536','#092E25','#081A15'],
-  Teal:       ['#EBF5F4','#BEEBE7','#86D9D4','#4EBFB9','#279C9C','#167B7D','#155C5E','#124241','#102E2D','#0C1A19'],
-  Aqua:       ['#EBF3F7','#C9E7F5','#8BD3F7','#48B8F0','#1195D6','#0073BA','#08548A','#0E3D66','#0C2B45','#0B1724'],
-  Blue:       ['#F0F4FA','#D4E4FA','#ADCCF7','#75B1FF','#3D8DF5','#186ADE','#0D4EA6','#103A75','#11294D','#0D1826'],
-  Ultramarine:['#F2F3FA','#DEE0FA','#C2C7FC','#A0A7FA','#7681FC','#545FE8','#3A45B0','#2F337D','#23254D','#141429'],
-  Purple:     ['#F7F2FC','#EADCFC','#DABEFA','#C89AFC','#AC71F0','#8F49DE','#6B30AB','#4C277D','#331F4D','#1C1229'],
-  Pink:       ['#FCF0F8','#F7DAED','#F7B7E2','#FA87D4','#ED4CB7','#CC1D92','#961574','#6B155A','#47153F','#241020'],
-};
-document.getElementById('ramps').innerHTML = Object.entries(ramps).map(([name, stops]) =>
-  `<div class="ramp"><div class="name">${name}</div>${stops.map(c=>`<div class="sw" style="background:${c}"></div>`).join('')}</div>`
-).join('');
-</script>
+  <div class="label">Accent ramps · 10 stops</div>
+  <div id="ramps">
+    <div class="ramp"><div class="name">Red</div>
+      <div class="sw" data-swatch="red-10" style="background:var(--red-10)" title="Red 10"></div>
+      <div class="sw" data-swatch="red-20" style="background:var(--red-20)" title="Red 20"></div>
+      <div class="sw" data-swatch="red-30" style="background:var(--red-30)" title="Red 30"></div>
+      <div class="sw" data-swatch="red-40" style="background:var(--red-40)" title="Red 40"></div>
+      <div class="sw" data-swatch="red-50" style="background:var(--red-50)" title="Red 50"></div>
+      <div class="sw" data-swatch="red-60" style="background:var(--red-60)" title="Red 60"></div>
+      <div class="sw" data-swatch="red-70" style="background:var(--red-70)" title="Red 70"></div>
+      <div class="sw" data-swatch="red-80" style="background:var(--red-80)" title="Red 80"></div>
+      <div class="sw" data-swatch="red-90" style="background:var(--red-90)" title="Red 90"></div>
+      <div class="sw" data-swatch="red-100" style="background:var(--red-100)" title="Red 100"></div>
+    </div>
+    <div class="ramp"><div class="name">Orange</div>
+      <div class="sw" data-swatch="orange-10" style="background:var(--orange-10)" title="Orange 10"></div>
+      <div class="sw" data-swatch="orange-20" style="background:var(--orange-20)" title="Orange 20"></div>
+      <div class="sw" data-swatch="orange-30" style="background:var(--orange-30)" title="Orange 30"></div>
+      <div class="sw" data-swatch="orange-40" style="background:var(--orange-40)" title="Orange 40"></div>
+      <div class="sw" data-swatch="orange-50" style="background:var(--orange-50)" title="Orange 50"></div>
+      <div class="sw" data-swatch="orange-60" style="background:var(--orange-60)" title="Orange 60"></div>
+      <div class="sw" data-swatch="orange-70" style="background:var(--orange-70)" title="Orange 70"></div>
+      <div class="sw" data-swatch="orange-80" style="background:var(--orange-80)" title="Orange 80"></div>
+      <div class="sw" data-swatch="orange-90" style="background:var(--orange-90)" title="Orange 90"></div>
+      <div class="sw" data-swatch="orange-100" style="background:var(--orange-100)" title="Orange 100"></div>
+    </div>
+    <div class="ramp"><div class="name">Yellow</div>
+      <div class="sw" data-swatch="yellow-10" style="background:var(--yellow-10)" title="Yellow 10"></div>
+      <div class="sw" data-swatch="yellow-20" style="background:var(--yellow-20)" title="Yellow 20"></div>
+      <div class="sw" data-swatch="yellow-30" style="background:var(--yellow-30)" title="Yellow 30"></div>
+      <div class="sw" data-swatch="yellow-40" style="background:var(--yellow-40)" title="Yellow 40"></div>
+      <div class="sw" data-swatch="yellow-50" style="background:var(--yellow-50)" title="Yellow 50"></div>
+      <div class="sw" data-swatch="yellow-60" style="background:var(--yellow-60)" title="Yellow 60"></div>
+      <div class="sw" data-swatch="yellow-70" style="background:var(--yellow-70)" title="Yellow 70"></div>
+      <div class="sw" data-swatch="yellow-80" style="background:var(--yellow-80)" title="Yellow 80"></div>
+      <div class="sw" data-swatch="yellow-90" style="background:var(--yellow-90)" title="Yellow 90"></div>
+      <div class="sw" data-swatch="yellow-100" style="background:var(--yellow-100)" title="Yellow 100"></div>
+    </div>
+    <div class="ramp"><div class="name">Green</div>
+      <div class="sw" data-swatch="green-10" style="background:var(--green-10)" title="Green 10"></div>
+      <div class="sw" data-swatch="green-20" style="background:var(--green-20)" title="Green 20"></div>
+      <div class="sw" data-swatch="green-30" style="background:var(--green-30)" title="Green 30"></div>
+      <div class="sw" data-swatch="green-40" style="background:var(--green-40)" title="Green 40"></div>
+      <div class="sw" data-swatch="green-50" style="background:var(--green-50)" title="Green 50"></div>
+      <div class="sw" data-swatch="green-60" style="background:var(--green-60)" title="Green 60"></div>
+      <div class="sw" data-swatch="green-70" style="background:var(--green-70)" title="Green 70"></div>
+      <div class="sw" data-swatch="green-80" style="background:var(--green-80)" title="Green 80"></div>
+      <div class="sw" data-swatch="green-90" style="background:var(--green-90)" title="Green 90"></div>
+      <div class="sw" data-swatch="green-100" style="background:var(--green-100)" title="Green 100"></div>
+    </div>
+    <div class="ramp"><div class="name">Teal</div>
+      <div class="sw" data-swatch="teal-10" style="background:var(--teal-10)" title="Teal 10"></div>
+      <div class="sw" data-swatch="teal-20" style="background:var(--teal-20)" title="Teal 20"></div>
+      <div class="sw" data-swatch="teal-30" style="background:var(--teal-30)" title="Teal 30"></div>
+      <div class="sw" data-swatch="teal-40" style="background:var(--teal-40)" title="Teal 40"></div>
+      <div class="sw" data-swatch="teal-50" style="background:var(--teal-50)" title="Teal 50"></div>
+      <div class="sw" data-swatch="teal-60" style="background:var(--teal-60)" title="Teal 60"></div>
+      <div class="sw" data-swatch="teal-70" style="background:var(--teal-70)" title="Teal 70"></div>
+      <div class="sw" data-swatch="teal-80" style="background:var(--teal-80)" title="Teal 80"></div>
+      <div class="sw" data-swatch="teal-90" style="background:var(--teal-90)" title="Teal 90"></div>
+      <div class="sw" data-swatch="teal-100" style="background:var(--teal-100)" title="Teal 100"></div>
+    </div>
+    <div class="ramp"><div class="name">Aqua</div>
+      <div class="sw" data-swatch="aqua-10" style="background:var(--aqua-10)" title="Aqua 10"></div>
+      <div class="sw" data-swatch="aqua-20" style="background:var(--aqua-20)" title="Aqua 20"></div>
+      <div class="sw" data-swatch="aqua-30" style="background:var(--aqua-30)" title="Aqua 30"></div>
+      <div class="sw" data-swatch="aqua-40" style="background:var(--aqua-40)" title="Aqua 40"></div>
+      <div class="sw" data-swatch="aqua-50" style="background:var(--aqua-50)" title="Aqua 50"></div>
+      <div class="sw" data-swatch="aqua-60" style="background:var(--aqua-60)" title="Aqua 60"></div>
+      <div class="sw" data-swatch="aqua-70" style="background:var(--aqua-70)" title="Aqua 70"></div>
+      <div class="sw" data-swatch="aqua-80" style="background:var(--aqua-80)" title="Aqua 80"></div>
+      <div class="sw" data-swatch="aqua-90" style="background:var(--aqua-90)" title="Aqua 90"></div>
+      <div class="sw" data-swatch="aqua-100" style="background:var(--aqua-100)" title="Aqua 100"></div>
+    </div>
+    <div class="ramp"><div class="name">Blue</div>
+      <div class="sw" data-swatch="blue-10" style="background:var(--blue-10)" title="Blue 10"></div>
+      <div class="sw" data-swatch="blue-20" style="background:var(--blue-20)" title="Blue 20"></div>
+      <div class="sw" data-swatch="blue-30" style="background:var(--blue-30)" title="Blue 30"></div>
+      <div class="sw" data-swatch="blue-40" style="background:var(--blue-40)" title="Blue 40"></div>
+      <div class="sw" data-swatch="blue-50" style="background:var(--blue-50)" title="Blue 50"></div>
+      <div class="sw" data-swatch="blue-60" style="background:var(--blue-60)" title="Blue 60"></div>
+      <div class="sw" data-swatch="blue-70" style="background:var(--blue-70)" title="Blue 70"></div>
+      <div class="sw" data-swatch="blue-80" style="background:var(--blue-80)" title="Blue 80"></div>
+      <div class="sw" data-swatch="blue-90" style="background:var(--blue-90)" title="Blue 90"></div>
+      <div class="sw" data-swatch="blue-100" style="background:var(--blue-100)" title="Blue 100"></div>
+    </div>
+    <div class="ramp"><div class="name">Ultramarine</div>
+      <div class="sw" data-swatch="ultramarine-10" style="background:var(--ultramarine-10)" title="Ultramarine 10"></div>
+      <div class="sw" data-swatch="ultramarine-20" style="background:var(--ultramarine-20)" title="Ultramarine 20"></div>
+      <div class="sw" data-swatch="ultramarine-30" style="background:var(--ultramarine-30)" title="Ultramarine 30"></div>
+      <div class="sw" data-swatch="ultramarine-40" style="background:var(--ultramarine-40)" title="Ultramarine 40"></div>
+      <div class="sw" data-swatch="ultramarine-50" style="background:var(--ultramarine-50)" title="Ultramarine 50"></div>
+      <div class="sw" data-swatch="ultramarine-60" style="background:var(--ultramarine-60)" title="Ultramarine 60"></div>
+      <div class="sw" data-swatch="ultramarine-70" style="background:var(--ultramarine-70)" title="Ultramarine 70"></div>
+      <div class="sw" data-swatch="ultramarine-80" style="background:var(--ultramarine-80)" title="Ultramarine 80"></div>
+      <div class="sw" data-swatch="ultramarine-90" style="background:var(--ultramarine-90)" title="Ultramarine 90"></div>
+      <div class="sw" data-swatch="ultramarine-100" style="background:var(--ultramarine-100)" title="Ultramarine 100"></div>
+    </div>
+    <div class="ramp"><div class="name">Purple</div>
+      <div class="sw" data-swatch="purple-10" style="background:var(--purple-10)" title="Purple 10"></div>
+      <div class="sw" data-swatch="purple-20" style="background:var(--purple-20)" title="Purple 20"></div>
+      <div class="sw" data-swatch="purple-30" style="background:var(--purple-30)" title="Purple 30"></div>
+      <div class="sw" data-swatch="purple-40" style="background:var(--purple-40)" title="Purple 40"></div>
+      <div class="sw" data-swatch="purple-50" style="background:var(--purple-50)" title="Purple 50"></div>
+      <div class="sw" data-swatch="purple-60" style="background:var(--purple-60)" title="Purple 60"></div>
+      <div class="sw" data-swatch="purple-70" style="background:var(--purple-70)" title="Purple 70"></div>
+      <div class="sw" data-swatch="purple-80" style="background:var(--purple-80)" title="Purple 80"></div>
+      <div class="sw" data-swatch="purple-90" style="background:var(--purple-90)" title="Purple 90"></div>
+      <div class="sw" data-swatch="purple-100" style="background:var(--purple-100)" title="Purple 100"></div>
+    </div>
+    <div class="ramp"><div class="name">Pink</div>
+      <div class="sw" data-swatch="pink-10" style="background:var(--pink-10)" title="Pink 10"></div>
+      <div class="sw" data-swatch="pink-20" style="background:var(--pink-20)" title="Pink 20"></div>
+      <div class="sw" data-swatch="pink-30" style="background:var(--pink-30)" title="Pink 30"></div>
+      <div class="sw" data-swatch="pink-40" style="background:var(--pink-40)" title="Pink 40"></div>
+      <div class="sw" data-swatch="pink-50" style="background:var(--pink-50)" title="Pink 50"></div>
+      <div class="sw" data-swatch="pink-60" style="background:var(--pink-60)" title="Pink 60"></div>
+      <div class="sw" data-swatch="pink-70" style="background:var(--pink-70)" title="Pink 70"></div>
+      <div class="sw" data-swatch="pink-80" style="background:var(--pink-80)" title="Pink 80"></div>
+      <div class="sw" data-swatch="pink-90" style="background:var(--pink-90)" title="Pink 90"></div>
+      <div class="sw" data-swatch="pink-100" style="background:var(--pink-100)" title="Pink 100"></div>
+    </div>
+  </div>
 </body></html>

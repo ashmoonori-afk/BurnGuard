@@ -1,0 +1,273 @@
+/* ============================================================
+   NORTHVALE CAPITAL — COLORS & TYPE
+   Tokens distilled from northvale-design-system-scss (_colors.scss).
+   Brand serif substituted with Playfair Display (Didone family);
+   UI face is Inter; numerals/code use IBM Plex Mono.
+   ============================================================ */
+
+@import url('./fonts/fonts.css');
+
+:root {
+  /* ---------- COLOR · NEUTRALS (Gray) ---------- */
+  --gray-100: #FFFFFF;
+  --gray-90:  #1C2B36;
+  --gray-80:  #2A3F4D;
+  --gray-70:  #3E5463;
+  --gray-60:  #5B7282;
+  --gray-50:  #7A909E;
+  --gray-40:  #9FB1BD;
+  --gray-30:  #C1CCD6;
+  --gray-20:  #DCE3E8;
+  --gray-10:  #F2F5F7;
+
+  /* ---------- COLOR · BRAND ---------- */
+  --primary-blue:  #7399C6;   /* Wordmark "Northvale Blue" */
+  --action-blue:   #186ADE;   /* blue-60 — interactive */
+
+  /* ---------- COLOR · ACCENT SCALES (key stops) ---------- */
+  --red-60:        #D91F11;
+  --red-50:        #FA5343;
+  --red-10:        #FCF3F2;
+
+  --orange-50:     #E86427;
+  --orange-10:     #FCF2EB;
+
+  --yellow-30:     #F5C518;
+  --yellow-10:     #FAF6CF;
+
+  --green-60:      #077D55;
+  --green-50:      #16A163;
+  --green-10:      #EBF7ED;
+
+  --teal-50:       #279C9C;
+  --teal-10:       #EBF5F4;
+
+  --aqua-60:       #0073BA;
+  --aqua-10:       #EBF3F7;
+
+  --blue-90:       #11294D;
+  --blue-80:       #103A75;
+  --blue-70:       #0D4EA6;
+  --blue-60:       #186ADE;
+  --blue-50:       #3D8DF5;
+  --blue-30:       #ADCCF7;
+  --blue-10:       #F0F4FA;
+
+  --ultramarine-60: #545FE8;
+  --purple-60:      #8F49DE;
+  --pink-60:        #CC1D92;
+
+  /* ---------- COLOR · SEMANTIC (Functional) ---------- */
+  --success:       var(--green-60);
+  --warning-yellow:var(--yellow-30);
+  --warning-orange:var(--orange-50);
+  --error:         var(--red-60);
+  --info:          var(--action-blue);
+
+  /* ---------- COLOR · SURFACE & TEXT ---------- */
+  --bg:            var(--gray-100);   /* page background */
+  --bg-subtle:     var(--gray-10);    /* zebra / panels */
+  --bg-muted:      var(--gray-20);    /* dividers / chips */
+  --surface:       #FFFFFF;
+  --surface-inverse: var(--gray-90);
+
+  --fg-1:          var(--gray-90);    /* primary text */
+  --fg-2:          var(--gray-70);    /* body / secondary */
+  --fg-3:          var(--gray-50);    /* tertiary / meta */
+  --fg-4:          var(--gray-40);    /* placeholder */
+  --fg-on-dark:    var(--gray-100);
+  --fg-on-brand:   #FFFFFF;
+
+  --border:        var(--gray-20);
+  --border-strong: var(--gray-30);
+  --focus-ring:    rgba(24, 106, 222, 0.35);
+
+  /* ---------- COLOR · CHARTS (data viz) ---------- */
+  --chart-1: #0D4EA6;  /* blue-70 */
+  --chart-2: #E86427;  /* orange-50 */
+  --chart-3: #279C9C;  /* teal-50 */
+  --chart-4: #D9A514;  /* yellow-40 */
+  --chart-5: #AC71F0;  /* purple-50 */
+  --chart-6: #23254D;  /* ultramarine-90 */
+  --chart-7: #52A31D;  /* lime-50 */
+  --chart-8: #CC1D92;  /* pink-60 */
+  --chart-9: #45BCD1;  /* aqua-40 */
+  --chart-10:#077D55;  /* green-60 */
+
+  /* ---------- TYPE · FAMILIES (brand-supplied) ---------- */
+  --font-display: 'Zen Serif', 'KoPub Batang', 'Bodoni 72', 'Didot', Georgia, serif;
+  --font-serif:   'KoPub Batang', 'Bodoni 72', Georgia, serif;
+  --font-sans:    'Pretendard', 'KoPub Dotum', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono:    'IBM Plex Mono', 'SF Mono', Menlo, Consolas, monospace;
+
+  /* ---------- TYPE · SCALE (16px base) ---------- */
+  --fs-12: 0.75rem;
+  --fs-13: 0.8125rem;
+  --fs-14: 0.875rem;
+  --fs-16: 1rem;
+  --fs-18: 1.125rem;
+  --fs-20: 1.25rem;
+  --fs-24: 1.5rem;
+  --fs-28: 1.75rem;
+  --fs-32: 2rem;
+  --fs-40: 2.5rem;
+  --fs-48: 3rem;
+  --fs-64: 4rem;
+  --fs-80: 5rem;
+
+  /* ---------- TYPE · WEIGHT / LEADING / TRACKING ---------- */
+  --fw-light:    300;
+  --fw-regular:  400;
+  --fw-medium:   500;
+  --fw-semibold: 600;
+  --fw-bold:     700;
+  --fw-black:    900;
+
+  --lh-tight:   1.1;
+  --lh-snug:    1.25;
+  --lh-normal:  1.45;
+  --lh-relaxed: 1.6;
+
+  --ls-tight:   -0.02em;
+  --ls-normal:   0em;
+  --ls-wide:     0.02em;
+  --ls-eyebrow:  0.14em;   /* uppercase eyebrows */
+
+  /* ---------- SPACING (4px grid) ---------- */
+  --sp-1:  4px;
+  --sp-2:  8px;
+  --sp-3:  12px;
+  --sp-4:  16px;
+  --sp-5:  20px;
+  --sp-6:  24px;
+  --sp-8:  32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+  --sp-20: 80px;
+
+  /* ---------- RADII ---------- */
+  --r-0:   0px;
+  --r-2:   2px;
+  --r-4:   4px;
+  --r-8:   8px;
+  --r-pill: 999px;
+
+  /* ---------- ELEVATION ---------- */
+  --shadow-1: 0 1px 2px rgba(28, 43, 54, 0.06), 0 1px 1px rgba(28, 43, 54, 0.04);
+  --shadow-2: 0 2px 4px rgba(28, 43, 54, 0.08), 0 1px 2px rgba(28, 43, 54, 0.04);
+  --shadow-3: 0 6px 16px rgba(28, 43, 54, 0.10), 0 2px 4px rgba(28, 43, 54, 0.05);
+  --shadow-4: 0 16px 32px rgba(28, 43, 54, 0.14), 0 4px 8px rgba(28, 43, 54, 0.06);
+
+  /* ---------- MOTION ---------- */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasis: cubic-bezier(0.2, 0, 0.2, 1);
+  --dur-fast:  120ms;
+  --dur-base:  200ms;
+  --dur-slow:  320ms;
+}
+
+/* ============================================================
+   SEMANTIC TYPE STYLES
+   ============================================================ */
+html { font-size: 16px; }
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--fs-16);
+  line-height: var(--lh-normal);
+  color: var(--fg-1);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: 'ss01', 'cv11', 'tnum' 0;
+}
+
+.display-1 {
+  font-family: var(--font-display);
+  font-weight: var(--fw-bold);
+  font-size: clamp(56px, 8vw, var(--fs-80));
+  line-height: var(--lh-tight);
+  letter-spacing: var(--ls-tight);
+  color: var(--fg-1);
+}
+.display-2 {
+  font-family: var(--font-display);
+  font-weight: var(--fw-bold);
+  font-size: var(--fs-64);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--ls-tight);
+}
+
+h1, .h1 {
+  font-family: var(--font-display);
+  font-weight: var(--fw-bold);
+  font-size: var(--fs-48);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--ls-tight);
+  color: var(--fg-1);
+}
+h2, .h2 {
+  font-family: var(--font-display);
+  font-weight: var(--fw-semibold);
+  font-size: var(--fs-32);
+  line-height: var(--lh-snug);
+  letter-spacing: -0.01em;
+  color: var(--fg-1);
+}
+h3, .h3 {
+  font-family: var(--font-sans);
+  font-weight: var(--fw-semibold);
+  font-size: var(--fs-24);
+  line-height: var(--lh-snug);
+  color: var(--fg-1);
+}
+h4, .h4 {
+  font-family: var(--font-sans);
+  font-weight: var(--fw-semibold);
+  font-size: var(--fs-20);
+  line-height: var(--lh-snug);
+}
+h5, .h5 {
+  font-family: var(--font-sans);
+  font-weight: var(--fw-semibold);
+  font-size: var(--fs-16);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-wide);
+}
+
+p, .body {
+  font-size: var(--fs-16);
+  line-height: var(--lh-relaxed);
+  color: var(--fg-2);
+}
+.body-lg { font-size: var(--fs-18); line-height: var(--lh-relaxed); color: var(--fg-2); }
+.body-sm { font-size: var(--fs-14); line-height: var(--lh-normal); color: var(--fg-2); }
+
+.eyebrow {
+  font-family: var(--font-sans);
+  font-weight: var(--fw-semibold);
+  font-size: var(--fs-12);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-eyebrow);
+  color: var(--action-blue);
+}
+
+.caption {
+  font-size: var(--fs-12);
+  line-height: var(--lh-normal);
+  color: var(--fg-3);
+}
+
+.numeric, .mono, code {
+  font-family: var(--font-mono);
+  font-feature-settings: 'tnum';
+}
+
+a, .link {
+  color: var(--action-blue);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color var(--dur-fast) var(--ease-standard);
+}
+a:hover, .link:hover { border-bottom-color: var(--action-blue); }
