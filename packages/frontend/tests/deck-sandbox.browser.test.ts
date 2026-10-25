@@ -262,8 +262,21 @@ async function settleFrameMessages(page: Page): Promise<void> {
 
 test("presentation fullscreen fallback preserves authored input, composition and untrusted source isolation", async () => {
   await withBrowser(async (page) => {
+    await page.evaluate(() => {
+      let focusReturned = false;
+      const focus = HTMLIFrameElement.prototype.focus;
+      HTMLIFrameElement.prototype.focus = function(options) {
+        focus.call(this, options);
+        if (this.matches("main iframe") && this.srcdoc) focusReturned = true;
+      };
+      const present = globalThis.deckTest.present;
+      globalThis.deckTest.present = src => present(src).then(() => {
+        document.documentElement.dataset.qaPresentationFocusReady = String(focusReturned);
+      });
+    });
     await page.getByRole("button", { name: "Present test fixture" }).click();
     await page.evaluate(() => globalThis.presentationLoad);
+    expect(await page.locator("html").getAttribute("data-qa-presentation-focus-ready")).toBe("true");
     const dialog = page.getByRole("dialog");
     await dialog.waitFor();
     const frame = page.frameLocator("main iframe");
