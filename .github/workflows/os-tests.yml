@@ -53,6 +53,13 @@ jobs:
       - name: Typecheck the native macOS shell
         if: runner.os == 'macOS'
         run: swiftc -typecheck -swift-version 5 -target arm64-apple-macos14.0 -sdk "$(xcrun --sdk macosx --show-sdk-path)" packages/desktop-mac/main.swift
+      - name: Compare isolated logo and fixed large-reference prefix
+        shell: bash
+        run: |
+          printf 'LOGO_MEMORY_ISOLATED\n'
+          bun test packages/backend/tests/logo-completion-gate.test.ts --test-name-pattern 'history-appended|candidate-mutated' --timeout 30000
+          printf 'LOGO_MEMORY_PREFIX\n'
+          bun test ./packages/backend/tests/fixtures/logo-memory-order.ts --test-name-pattern 'very long srcset|a million CSS url|history-appended|candidate-mutated' --timeout 30000
       # Suites that need no Chromium, Python or provider CLI. Platform-impossible cases skip themselves; see
       # doc/os-matrix.md for what each suite pins per OS.
       - name: Platform-sensitive suites
