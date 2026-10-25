@@ -24,11 +24,20 @@ Object.assign(globalThis, { deckTest: {
   },
   present(src: string) {
     return new Promise<void>((resolve, reject) => {
+      let frame: HTMLIFrameElement | undefined;
+      const afterLoad = () => { clearTimeout(timer); resolve(); };
       const loaded = (event: Event) => {
         if (!(event.target instanceof HTMLIFrameElement) || !event.target.srcdoc) return;
-        clearTimeout(timer); document.removeEventListener("load", loaded, true); resolve();
+        document.removeEventListener("load", loaded, true);
+        frame = event.target;
+        // React's target listener was registered first; let its focus handler finish.
+        frame.addEventListener("load", afterLoad, { once: true });
       };
-      const timer = setTimeout(() => { document.removeEventListener("load", loaded, true); reject(new Error("presentation_load_timeout")); }, 10000);
+      const timer = setTimeout(() => {
+        document.removeEventListener("load", loaded, true);
+        frame?.removeEventListener("load", afterLoad);
+        reject(new Error("presentation_load_timeout"));
+      }, 10000);
       document.addEventListener("load", loaded, true);
       root.render(<PresentOverlay src={src} onClose={() => root.render(null)} />);
     });
