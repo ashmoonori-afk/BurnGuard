@@ -3,6 +3,11 @@ import type { Browser, BrowserContext, Page } from "../../../backend/node_module
 import type {} from "../fixtures/workspace-controls-browser";
 import { appFontResponse } from "./app-font";
 
+type ExportObservationPhase = "close-arm" | "state-mutation" | "close-deadline";
+declare global {
+  var workspaceExportObservation: (phase: ExportObservationPhase, boundary: boolean, observed: Element, oldState?: string | null) => void;
+}
+
 export async function compileWorkspaceControls(): Promise<{ script: string; css: string }> {
   const frontend = path.resolve(import.meta.dir, "../..");
   const commands = [
@@ -49,9 +54,58 @@ export async function withWorkspaceControls(
     },
   });
   let context: BrowserContext | undefined;
+  const observations: string[] = [];
   try {
     context = await browser.newContext({ viewport: { width: assets.width, height: 900 } });
+    await context.addInitScript(() => {
+      if (window !== window.top) return;
+      let sequence = 0;
+      let count = 0;
+      const state = (element: Element | null) => {
+        if (!element) return "missing";
+        const value = element.getAttribute("data-state");
+        return value === "open" || value === "closed" ? value : "other";
+      };
+      const classify = (target: EventTarget | null) => {
+        if (!(target instanceof Element)) return "other";
+        if (target.closest('[aria-haspopup="menu"]')) return "trigger";
+        if (target.closest("[data-export-menu-content]")) return "menu";
+        if (target.closest('[role="dialog"]')) return "dialog";
+        return target.closest("[data-outside-target]") ? "outside" : "other";
+      };
+      const record = (phase: string, event: Event | null, boundary?: boolean, observed?: Element, oldState?: string | null) => {
+        if (count >= 64) return;
+        count += 1;
+        console.info(`QA_EXPORT_CLOSE ${JSON.stringify({
+          phase, sequence, ms: Math.round(performance.timeOrigin + performance.now()),
+          menuCount: document.querySelectorAll("[data-export-menu-content]").length,
+          menuState: state(document.querySelector("[data-export-menu-content]")),
+          active: classify(document.activeElement), target: classify(event?.target ?? null),
+          focused: document.hasFocus(), trusted: event?.isTrusted ?? false, prevented: event?.defaultPrevented ?? false,
+          boundary: boundary ?? null, observedState: observed ? state(observed) : "none",
+          observedConnected: observed?.isConnected ?? null,
+          oldState: oldState === "open" || oldState === "closed" ? oldState : "other",
+        })}`);
+      };
+      globalThis.workspaceExportObservation = (phase, boundary, observed, oldState) => {
+        if (phase === "close-arm") sequence += 1;
+        record(phase, null, boundary, observed, oldState);
+      };
+      for (const type of ["pointerdown", "pointerup", "focusin", "focusout"] as const) {
+        window.addEventListener(type, event => record(type, event), true);
+      }
+      window.addEventListener("keydown", event => {
+        if (event.key === "Escape") record("escape-capture", event);
+      }, true);
+      window.addEventListener("keydown", event => {
+        if (event.key === "Escape") record("escape-bubble", event);
+      });
+    });
     const page = await context.newPage();
+    page.on("console", message => {
+      const text = message.text();
+      if (text.startsWith("QA_EXPORT_CLOSE ") && observations.length < 64) observations.push(text.slice("QA_EXPORT_CLOSE ".length, "QA_EXPORT_CLOSE ".length + 1024));
+    });
     page.setDefaultTimeout(5000);
     const errors: string[] = [];
     page.on("pageerror", error => errors.push(error.message));
@@ -61,6 +115,7 @@ export async function withWorkspaceControls(
     await action(page, mutations);
     if (errors.length > 0) throw new Error(`workspace_browser_errors: ${errors.join("; ")}`);
   } finally {
+    console.error(JSON.stringify({ event: "export_close_trace", width: assets.width, browser: browser.version(), records: observations, truncated: observations.length === 64 }));
     try { await context?.close(); }
     finally { await server.stop(true); }
   }

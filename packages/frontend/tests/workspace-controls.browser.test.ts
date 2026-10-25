@@ -45,15 +45,20 @@ async function closeExport(page: Page, boundary: boolean): Promise<void> {
   await page.evaluate(boundary => {
     const content = document.querySelector("[data-export-menu-content]");
     if (!content) throw new Error("export_content_missing");
+    globalThis.workspaceExportObservation("close-arm", boundary, content);
     const closed = new Promise<number>((resolve, reject) => {
-      const timer = window.setTimeout(() => { observer.disconnect(); reject(new Error("export_close_timeout")); }, 5000);
-      const observer = new MutationObserver(() => {
+      const timer = window.setTimeout(() => {
+        globalThis.workspaceExportObservation("close-deadline", boundary, content);
+        observer.disconnect(); reject(new Error("export_close_timeout"));
+      }, 5000);
+      const observer = new MutationObserver(records => {
+        for (const record of records.slice(0, 8)) globalThis.workspaceExportObservation("state-mutation", boundary, content, record.oldValue);
         if (content.getAttribute("data-state") !== "closed") return;
         const animations = content.getAnimations();
         if (boundary) for (const animation of animations) { animation.pause(); animation.currentTime = 0; }
         clearTimeout(timer); observer.disconnect(); resolve(animations.length);
       });
-      observer.observe(content, { attributes: true, attributeFilter: ["data-state"] });
+      observer.observe(content, { attributes: true, attributeFilter: ["data-state"], attributeOldValue: true });
     });
     closed.catch(() => undefined);
     Reflect.set(window, "workspaceClosed", closed);
