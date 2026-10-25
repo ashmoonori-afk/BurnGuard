@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeAll, beforeEach, expect, spyOn, test } from "bun:test";
 import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -21,6 +21,7 @@ import { readLogoAdoptionState, writeLogoAdoption } from "../src/services/logo-p
 import { captureLogoTurnExpectation } from "../src/services/logo-deliverables";
 import { withLogoMoodboardInputs } from "../src/services/logo-moodboard-inputs";
 import { interruptUserTurn, startUserTurn } from "../src/services/turns";
+import * as logoTrace from "../src/services/logo-trace-finalize";
 
 /**
  * The finalize completion gate and its one bounded repair
@@ -78,6 +79,7 @@ let projectDir: string;
 // Cleanup joins the case's turn before deleting the rows and files that turn still writes to: a case that
 // times out would otherwise leave its turn running into a deleted project and fail every later case.
 let ownedTurn: Promise<unknown> | null = null;
+let recordCasePhase: ((phase: string) => void) | undefined;
 const ownTurn = (turn: { readonly prepared: Promise<unknown>; readonly promise: Promise<unknown> }): void => {
   ownedTurn = Promise.allSettled([turn.prepared, turn.promise]);
 };
@@ -95,11 +97,18 @@ beforeEach(async () => {
   getSqlite().prepare("INSERT INTO sessions(id,project_id,backend_id,status,created_at,updated_at,last_active_at) VALUES (?,?,'codex','idle',1,1,1)").run(sessionId, projectId);
 });
 afterEach(async () => {
+  const observe = recordCasePhase;
+  observe?.("cleanup_start");
   interruptUserTurn(sessionId);
   await ownedTurn;
+  observe?.("cleanup_turn_settled");
   ownedTurn = null;
+  observe?.("cleanup_before_delete");
   getSqlite().prepare("DELETE FROM projects WHERE id=?").run(projectId);
+  observe?.("cleanup_after_delete");
   await rm(projectDir, { recursive: true, force: true });
+  observe?.("cleanup_end");
+  recordCasePhase = undefined;
 });
 
 type Scenario =
@@ -137,11 +146,35 @@ const cases = [
 ] as const satisfies readonly (readonly [Scenario, Expected])[];
 
 test.each(cases)("Given %s in a finalize logo turn Then the gate, the repair budget and the project tree agree", async (scenario, expected) => {
+  const caseProjectId = projectId, caseSessionId = sessionId;
+  const started = performance.now();
+  const events: NormalizedEvent[] = [];
+  let observations = 0;
+  const record = (phase: string): void => {
+    if (++observations > 32) return;
+    const stored = getSqlite().query<{ count: number }, [string]>("SELECT COUNT(*) count FROM events WHERE session_id=? AND type='status.error'").get(caseSessionId)?.count ?? 0;
+    const current = getSqlite().query<{ count: number }, [string]>("SELECT COUNT(*) count FROM events WHERE session_id=? AND type='status.error'").get(sessionId)?.count ?? 0;
+    const projectExists = getSqlite().prepare("SELECT 1 FROM projects WHERE id=?").get(caseProjectId) !== null;
+    console.error(JSON.stringify({ event: "logo_gate_phase", scenario, phase, elapsed_ms: Math.round(performance.now() - started),
+      stored_errors: stored, current_errors: current, live_errors: events.filter(event => event.type === "status.error").length,
+      project_exists: projectExists, session_identity_matches: sessionId === caseSessionId }));
+  };
+  recordCasePhase = record;
   const candidateImages = scenario === "trace-fallback" ? images.map((image, i) => i === 1 ? png(2, true) : image) : images;
   if (scenario === "trace-fallback") await writeFile(path.join(projectDir, SELECTED_FILE), candidateImages[1]);
+  record("initialize_start");
   const before = await new ArtifactCoordinator(getSqlite()).initialize(projectId, projectDir);
-  const events: NormalizedEvent[] = [];
-  const unsubscribe = broker.subscribe(sessionId, event => { events.push(event); });
+  record("initialize_end");
+  const unsubscribe = broker.subscribe(sessionId, event => {
+    events.push(event);
+    if (event.type === "status.error" || event.type === "status.idle" || event.type === "artifact.operation") record(event.type);
+  });
+  const prepareTrace = logoTrace.prepareLogoTrace;
+  const traceObservation = spyOn(logoTrace, "prepareLogoTrace").mockImplementation(async (...args) => {
+    record("trace_start");
+    try { return await prepareTrace(...args); }
+    finally { record("trace_end"); }
+  });
   let generations = 0, repairs = 0;
   let generationPrompt = "";
   let traceState: unknown = null;
@@ -149,6 +182,7 @@ test.each(cases)("Given %s in a finalize logo turn Then the gate, the repair bud
     const turn = startUserTurn(sessionId, { type: "user.message", text: REQUEST }, undefined, {
       detectBackends: async () => ({ backends: [{ id: "codex", found: true, binary_path: "unused", version: "fixture", authenticated: true, image_generation: true }] }),
       runAdapter: async (_backend, input) => {
+        record(input.turnId.endsWith("-logo-repair") ? "repair_adapter_start" : "adapter_start");
         if (input.turnId.endsWith("-logo-repair")) {
           repairs++;
           const contextMatch = /<burnguard-logo-repair-v1>\n([\s\S]*?)\n<\/burnguard-logo-repair-v1>/.exec(input.prompt);
@@ -189,6 +223,7 @@ test.each(cases)("Given %s in a finalize logo turn Then the gate, the repair bud
           if (scenario === "repair-error-event") await input.onEvent({ id: crypto.randomUUID(), ts: 5, type: "status.error", code: "turn_failed", message: PRIVATE_DIAGNOSTIC, recoverable: true });
           await input.onEvent({ id: crypto.randomUUID(), ts: 5, type: "chat.message_end", turnId: input.turnId });
           await input.onEvent({ id: crypto.randomUUID(), ts: 6, type: "status.idle", stopReason: "end_turn" });
+          record("repair_adapter_end");
           return { exitCode: scenario === "repair-exit" ? 1 : 0 };
         }
         generations++;
@@ -212,6 +247,7 @@ test.each(cases)("Given %s in a finalize logo turn Then the gate, the repair bud
         if (scenario === "revision-conflict") getSqlite().prepare("UPDATE projects SET current_revision=current_revision+1 WHERE id=?").run(projectId);
         await input.onEvent({ id: crypto.randomUUID(), ts: 3, type: "chat.message_end", turnId: input.turnId });
         await input.onEvent({ id: crypto.randomUUID(), ts: 4, type: "status.idle", stopReason: "end_turn" });
+        record("adapter_end");
         return { exitCode: 0 };
       },
       reviewDesign: async (input): Promise<{ status: "checked"; repairs: number; result: DesignAuditResult }> => ({
@@ -221,7 +257,9 @@ test.each(cases)("Given %s in a finalize logo turn Then the gate, the repair bud
     });
     if (turn === null) throw new Error("turn reservation unavailable");
     ownTurn(turn);
+    void turn.prepared.then(() => record("prepared"), () => record("prepare_rejected"));
     await Promise.all([turn.prepared, turn.promise]);
+    record("turn_settled");
 
     if (scenario === "trace-only" || scenario === "trace-fallback") expect(traceState).toEqual({
       schema_version: 1, status: scenario === "trace-only" ? "ready" : "fallback", file: "logo.svg", source: SELECTED_FILE,
@@ -246,6 +284,7 @@ test.each(cases)("Given %s in a finalize logo turn Then the gate, the repair bud
     // interrupted turn never releases the buffered terminal events at all.
     expect(events.filter(event => event.type === "chat.message_end")).toHaveLength(expected.stopReason === "end_turn" ? 1 : 0);
 
+    record("replay_before");
     const replay = listSequencedSessionEvents(getSqlite(), sessionId, 0).map(item => item.event);
     expect(replay.filter(event => event.type === "status.error")).toEqual(errors);
     expect(JSON.stringify({ events, replay })).not.toContain(PRIVATE_DIAGNOSTIC);
@@ -281,6 +320,8 @@ test.each(cases)("Given %s in a finalize logo turn Then the gate, the repair bud
         .toEqual({ round: 1, candidate_id: SELECTED });
     }
   } finally {
+    record("test_finally");
+    traceObservation.mockRestore();
     unsubscribe();
     interruptUserTurn(sessionId);
   }
