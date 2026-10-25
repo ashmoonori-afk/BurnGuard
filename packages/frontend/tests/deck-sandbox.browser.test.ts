@@ -5,6 +5,7 @@ import { createRequestAuthority } from "../../backend/src/security/request-autho
 import { DECK_STAGE_JS } from "../../backend/src/runtime/deck-stage";
 import { launchChromiumViaNode } from "../../backend/src/services/chromium-node-launch";
 import { observeDeckEvents } from "./helpers/deck-event-trace";
+import { beginInputWidgetTrace } from "./helpers/input-widget-trace";
 
 declare global { var deckTest: {
   bootstrapApiAuthority(): Promise<void>;
@@ -38,7 +39,7 @@ beforeAll(async () => {
   if (code !== 0) throw new Error(errors);
   fixtureScript = script;
   // The launch has its own deadline; the shared browser lives until suite teardown.
-  suiteBrowser = await launchChromiumViaNode({}, lifetime.signal);
+  suiteBrowser = await launchChromiumViaNode({ channel: "chrome" }, lifetime.signal);
 });
 
 afterAll(async () => {
@@ -76,6 +77,7 @@ async function withBrowser(action: (page: Page, base: string, requests: { path: 
   let context: BrowserContext | undefined;
   let trace: readonly string[] = [];
   const routing: string[] = [];
+  let widgetTrace: Awaited<ReturnType<typeof beginInputWidgetTrace>> | undefined;
   try {
     // Use the shipped Node browser path for iframe/fullscreen lifecycle coverage.
     context = await browser.newContext();
@@ -120,12 +122,14 @@ async function withBrowser(action: (page: Page, base: string, requests: { path: 
       launch.addEventListener("click", () => { globalThis.presentationLoad = globalThis.deckTest.present("/api/projects/deck-test/fs/deck.html"); });
       document.body.appendChild(launch);
     });
+    if (!allowFullscreen) widgetTrace = await beginInputWidgetTrace(page);
     await action(page, base, requests, server);
     expect(browserErrors).toEqual([]);
   } catch (error) {
     console.error(JSON.stringify({ event: "deck_failure_trace", browser: browser.version(), trace }));
     throw error;
   } finally {
+    if (widgetTrace) console.error(JSON.stringify({ event: "input_widget_trace_schema", report: await widgetTrace.finish() }));
     console.error(JSON.stringify({ event: "input_focus_call_trace", browser: browser.version(), records: routing, truncated: routing.length === 64 }));
     try { await context?.close(); }
     finally { await server.stop(true); }
@@ -290,8 +294,21 @@ async function settleFrameMessages(page: Page): Promise<void> {
 
 test("presentation fullscreen fallback preserves authored input, composition and untrusted source isolation", async () => {
   await withBrowser(async (page) => {
+    await page.evaluate(() => {
+      let focusReturned = false;
+      const focus = HTMLIFrameElement.prototype.focus;
+      HTMLIFrameElement.prototype.focus = function(options) {
+        focus.call(this, options);
+        if (this.matches("main iframe") && this.srcdoc) focusReturned = true;
+      };
+      const present = globalThis.deckTest.present;
+      globalThis.deckTest.present = src => present(src).then(() => {
+        document.documentElement.dataset.qaPresentationFocusReady = String(focusReturned);
+      });
+    });
     await page.getByRole("button", { name: "Present test fixture" }).click();
     await page.evaluate(() => globalThis.presentationLoad);
+    expect(await page.locator("html").getAttribute("data-qa-presentation-focus-ready")).toBe("true");
     const dialog = page.getByRole("dialog");
     await dialog.waitFor();
     const frame = page.frameLocator("main iframe");
