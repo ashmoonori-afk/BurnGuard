@@ -36,7 +36,7 @@ jobs:
     # Explicit opt-in is needed because artifacts in a public repository are not private.
     if: vars.BG_FRONTEND_EVIDENCE_PUBLIC_KEY != ''
     runs-on: ubuntu-latest
-    # Enclose the collector's three bounded 15-minute phases and setup/upload.
+    # Enclose three 15-minute phases, one two-minute frontend build and setup/upload.
     timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4

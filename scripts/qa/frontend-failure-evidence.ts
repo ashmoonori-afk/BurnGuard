@@ -7,6 +7,7 @@ import path from "node:path";
 
 const OUTPUT_LIMIT = 4 * 1024 * 1024;
 const RUN_TIMEOUT = 15 * 60 * 1000;
+const BUILD_TIMEOUT = 2 * 60 * 1000;
 
 export interface CapturedOutput {
   readonly text: string;
@@ -123,6 +124,7 @@ if (import.meta.main) {
     const results: { phase: string; command: string[]; exit: number; signal: string | null; timed_out: boolean; stdout: CapturedOutput; stderr: CapturedOutput }[] = [];
     for (const [phase, invocation] of [
       ["install", [process.execPath, "install", "--frozen-lockfile"]],
+      ["build", [process.execPath, "run", "build:frontend"]],
       ["fresh", command],
       ["warm", command],
     ] satisfies [string, string[]][]) {
@@ -133,20 +135,20 @@ if (import.meta.main) {
       const timer = setTimeout(() => {
         if (child.exitCode === null) child.kill("SIGKILL");
         deadline.abort();
-      }, RUN_TIMEOUT);
+      }, phase === "build" ? BUILD_TIMEOUT : RUN_TIMEOUT);
       try {
         const [stdout, stderr, exit] = await Promise.all([
           captureOutput(child.stdout, deadline.signal), captureOutput(child.stderr, deadline.signal), child.exited,
         ]);
         results.push({ phase, command: invocation, exit, signal: child.signalCode, timed_out: deadline.signal.aborted, stdout, stderr });
         console.log(`frontend evidence: ${phase} exit=${exit} timed_out=${deadline.signal.aborted}`);
-        if ((phase === "install" && exit !== 0) || deadline.signal.aborted) break;
+        if (((phase === "install" || phase === "build") && exit !== 0) || deadline.signal.aborted) break;
       } finally {
         clearTimeout(timer);
       }
       if (digest(await readFile(path.join(root, "bun.lock"))) !== receipt.lock_sha256) throw new Error("evidence_lock_changed");
     }
-    const tests = results.filter(result => result.phase !== "install").map(result => ({
+    const tests = results.filter(result => result.phase === "fresh" || result.phase === "warm").map(result => ({
       phase: result.phase, records: testRecords(`${result.stdout.text}\n${result.stderr.text}`),
     }));
     const names = tests.map(run => run.records.map(record => `${record.file}\t${record.name}`).sort());

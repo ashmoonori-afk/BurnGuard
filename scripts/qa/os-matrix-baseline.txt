@@ -130,7 +130,6 @@ packages/backend/tests/multi-provider-backends.test.ts
 packages/backend/tests/original-samples.test.ts
 packages/backend/tests/package-node-runtime.test.ts
 packages/backend/tests/package-permissions.test.ts
-packages/backend/tests/package-resources.test.ts
 packages/backend/tests/pinterest-mood.test.ts
 packages/backend/tests/platform-findings.test.ts
 packages/backend/tests/platform-lint.test.ts

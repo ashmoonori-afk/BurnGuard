@@ -141,6 +141,7 @@ test("Given an unsuitable recipient When sealing Then plaintext publication is r
 });
 
 for (const scenario of [
+  { kind: "build", name: "a build failure before test registration", retain: true },
   { kind: "import", name: "an import failure before three registrations", retain: true },
   { kind: "skip", name: "a pass-to-skip transition", retain: true },
   { kind: "todo", name: "a pass-to-todo transition", retain: true },
@@ -164,7 +165,11 @@ test(`Given ${scenario.name} When the real CLI compares Then execution statuses 
     await writeFile(path.join(fixture, "scripts/qa/frontend-failure-evidence.ts"), await readFile(path.join(import.meta.dir, "frontend-failure-evidence.ts")));
     await writeFile(path.join(fixture, "package.json"), JSON.stringify({
       name: "evidence-fixture", workspaces: ["packages/dependency"], dependencies: { "evidence-dependency": "workspace:*" },
+      scripts: { "build:frontend": "bun scripts/build-fixture.ts" },
     }));
+    await writeFile(path.join(fixture, "scripts/build-fixture.ts"), scenario.kind === "build"
+      ? 'throw new Error("F04_PRIVATE_BUILD_FAILURE");'
+      : 'await Bun.write("build-ready", "prepared");');
     await writeFile(path.join(fixture, "packages/dependency/package.json"), JSON.stringify({ name: "evidence-dependency" }));
     await writeFile(path.join(fixture, "bun.lock"), JSON.stringify({
       lockfileVersion: 1, configVersion: 1,
@@ -190,7 +195,8 @@ test(`Given ${scenario.name} When the real CLI compares Then execution statuses 
     ]).join("\n"));
     await writeFile(path.join(fixture, "packages/frontend/tests/survives.test.ts"), [
       'import { expect, test } from "bun:test";',
-      'test("survives", () => expect(process.env.BG_FRONTEND_EVIDENCE_PUBLIC_KEY).toBeUndefined());',
+      'import { readFileSync } from "node:fs";',
+      'test("survives", () => { expect(process.env.BG_FRONTEND_EVIDENCE_PUBLIC_KEY).toBeUndefined(); expect(readFileSync("build-ready", "utf8")).toBe("prepared"); });',
     ].join("\n"));
     const git = await run(["git", "rev-parse", "--absolute-git-dir"], source);
     expect(git.exit).toBe(0);
@@ -201,9 +207,10 @@ test(`Given ${scenario.name} When the real CLI compares Then execution statuses 
     });
     expect(result.exit).toBe(scenario.retain ? 1 : 0);
     expect(result.stdout + result.stderr).not.toContain("F06_PRIVATE_IMPORT_FAILURE");
+    expect(result.stdout + result.stderr).not.toContain("F04_PRIVATE_BUILD_FAILURE");
     const summary = JSON.parse(result.stdout.split("\n").find(line => line.startsWith("{")) ?? "null");
     const changed = scenario.kind === "skip" || scenario.kind === "todo";
-    const expectedCounts = ["fresh", "warm"].map(phase => ({
+    const expectedCounts = scenario.kind === "build" ? [] : ["fresh", "warm"].map(phase => ({
       phase,
       passed: changed && phase === "fresh" ? 2 : 1,
       failed: 0,
@@ -212,8 +219,8 @@ test(`Given ${scenario.name} When the real CLI compares Then execution statuses 
     }));
     expect(summary).toEqual({
       event: "frontend_evidence_summary", counts: expectedCounts,
-      failed_test_ids: ["fresh", "warm"].map(phase => ({ phase, ids: [] })),
-      same_names: true, same_statuses: !changed, retained: scenario.retain,
+      failed_test_ids: scenario.kind === "build" ? [] : ["fresh", "warm"].map(phase => ({ phase, ids: [] })),
+      same_names: scenario.kind !== "build", same_statuses: scenario.kind !== "build" && !changed, retained: scenario.retain,
     });
     if (!scenario.retain) {
       expect(await Bun.file(path.join(output, "frontend-failure.encrypted.json")).exists()).toBe(false);
@@ -221,16 +228,20 @@ test(`Given ${scenario.name} When the real CLI compares Then execution statuses 
     }
     const envelope = await readFile(path.join(output, "frontend-failure.encrypted.json"), "utf8");
     const retained = JSON.parse(unseal(envelope));
-    expect(retained.results.map((item: { phase: string; exit: number }) => [item.phase, item.exit])).toEqual([
-      ["install", 0], ["fresh", scenario.kind === "import" ? 1 : 0], ["warm", scenario.kind === "import" ? 1 : 0],
-    ]);
-    expect(retained.tests.map((item: { records: unknown[] }) => item.records.length)).toEqual(scenario.kind === "import" ? [1, 1] : [2, 2]);
+    expect(retained.results.map((item: { phase: string; exit: number }) => [item.phase, item.exit])).toEqual(scenario.kind === "build"
+      ? [["install", 0], ["build", 1]]
+      : [["install", 0], ["build", 0], ["fresh", scenario.kind === "import" ? 1 : 0], ["warm", scenario.kind === "import" ? 1 : 0]]);
+    expect(retained.tests.map((item: { records: unknown[] }) => item.records.length)).toEqual(scenario.kind === "build" ? [] : scenario.kind === "import" ? [1, 1] : [2, 2]);
     expect(retained.receipt.manifest).toHaveLength(2);
-    expect(retained.same_names).toBe(true);
-    expect(retained.same_statuses).toBe(!changed);
+    expect(retained.same_names).toBe(scenario.kind !== "build");
+    expect(retained.same_statuses).toBe(scenario.kind !== "build" && !changed);
     expect(retained.counts).toEqual(expectedCounts);
-    expect(retained.first_failure).toBe(scenario.kind === "import" ? "fresh" : null);
-    if (scenario.kind === "import") expect(retained.results[1].stderr.text).toContain("F06_PRIVATE_IMPORT_FAILURE");
+    expect(retained.first_failure).toBe(scenario.kind === "build" ? "build" : scenario.kind === "import" ? "fresh" : null);
+    if (scenario.kind === "build") {
+      expect(retained.results[1].stderr.text).toContain("F04_PRIVATE_BUILD_FAILURE");
+      expect(await Bun.file(path.join(fixture, "phase-marker")).exists()).toBe(false);
+    }
+    if (scenario.kind === "import") expect(retained.results[2].stderr.text).toContain("F06_PRIVATE_IMPORT_FAILURE");
     const proofDirectory = process.env.BG_FRONTEND_EVIDENCE_PROOF_DIRECTORY;
     if (proofDirectory && scenario.kind === "import") {
       const ownerRecipient = process.env.BG_FRONTEND_EVIDENCE_PUBLIC_KEY;

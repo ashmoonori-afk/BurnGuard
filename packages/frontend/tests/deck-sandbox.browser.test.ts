@@ -75,11 +75,38 @@ async function withBrowser(action: (page: Page, base: string, requests: { path: 
   server.reload({ fetch: async request => { const response = await app.fetch(request); if (new URL(request.url).pathname !== "/api/bootstrap") requests.push({ path: new URL(request.url).pathname, capability: request.headers.get("x-burnguard-capability"), status: response.status }); return response; } });
   let context: BrowserContext | undefined;
   let trace: readonly string[] = [];
+  const routing: string[] = [];
   try {
     // Use the shipped Node browser path for iframe/fullscreen lifecycle coverage.
     context = await browser.newContext();
     trace = await observeDeckEvents(context);
+    await context.addInitScript(() => {
+      const record = (phase: string, values: Record<string, string | number | boolean> = {}) => {
+        console.info(`QA_INPUT_ROUTING ${JSON.stringify({ phase, surface: window === window.top ? "parent" : "child", ms: Math.round(performance.timeOrigin + performance.now()), ...values })}`);
+      };
+      window.addEventListener("keydown", event => {
+        if (event.key !== "Escape") return;
+        record("escape-received", { trusted: event.isTrusted, target: event.target instanceof Element ? event.target.tagName.toLowerCase() : "other" });
+      }, true);
+      if (window !== window.top) return;
+      const focus = HTMLIFrameElement.prototype.focus;
+      HTMLIFrameElement.prototype.focus = function(options) {
+        if (!this.matches("main iframe")) return focus.call(this, options);
+        record("iframe-focus-before", { srcdoc: Boolean(this.srcdoc) });
+        focus.call(this, options);
+        record("iframe-focus-after", { srcdoc: Boolean(this.srcdoc) });
+      };
+      document.addEventListener("load", event => {
+        if (!(event.target instanceof HTMLIFrameElement) || !event.target.matches("main iframe") || !event.target.srcdoc) return;
+        record("iframe-load-capture");
+        queueMicrotask(() => record("iframe-load-capture-microtask"));
+      }, true);
+    });
     const page = await context.newPage();
+    page.on("console", message => {
+      const text = message.text();
+      if (text.startsWith("QA_INPUT_ROUTING ") && routing.length < 64) routing.push(text.slice(17, 1041));
+    });
     page.setDefaultTimeout(5000);
     const browserErrors: string[] = [];
     page.on("pageerror", error => browserErrors.push(String(error)));
@@ -99,6 +126,7 @@ async function withBrowser(action: (page: Page, base: string, requests: { path: 
     console.error(JSON.stringify({ event: "deck_failure_trace", browser: browser.version(), trace }));
     throw error;
   } finally {
+    console.error(JSON.stringify({ event: "input_focus_call_trace", browser: browser.version(), records: routing, truncated: routing.length === 64 }));
     try { await context?.close(); }
     finally { await server.stop(true); }
   }
