@@ -22,9 +22,24 @@ beforeAll(async () => {
     ["f09-fixture.css", [process.execPath, "run", "--cwd", "packages/frontend", "tailwindcss", "-i", "src/index.css", "-c", "tailwind.config.ts"]],
   ] as const) {
     const child = Bun.spawn([...command], { stdout: "pipe", stderr: "pipe" });
-    const [code, output, errors] = await Promise.all([child.exited, new Response(child.stdout).text(), new Response(child.stderr).text()]);
-    if (code !== 0) throw new Error(`Recovery fixture compilation failed (${code}): ${errors}`);
-    await Bun.write(join(appRoot, file), output);
+    let finished = false;
+    const exited = child.exited.then(code => { finished = true; return code; });
+    const completion = Promise.all([exited, new Response(child.stdout).text(), new Response(child.stderr).text()]);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const [code, output, errors] = await Promise.race([
+        completion,
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error("Recovery fixture compilation deadline")), 4000);
+        }),
+      ]);
+      if (code !== 0) throw new Error(`Recovery fixture compilation failed (${code}): ${errors}`);
+      await Bun.write(join(appRoot, file), output);
+    } finally {
+      clearTimeout(timer);
+      if (!finished) child.kill("SIGKILL");
+      await completion;
+    }
   }
   const controller = new AbortController();
   const deadline = setTimeout(() => controller.abort(), 30_000);
@@ -112,8 +127,15 @@ test("Given a backend killed after its real commit When relaunched Then interrup
     await page.locator('[data-qa="composer"] textarea').fill("Update the page");
     // Exit is subscribed at spawn, before the real UI callback starts the turn.
     const crashed = server.exited;
-    await page.locator('[data-qa="composer"] textarea').press("Control+Enter");
-    expect(await crashed).not.toBe(0);
+    let crashTimer: ReturnType<typeof setTimeout> | undefined;
+    const crashDeadline = new Promise<never>((_, reject) => {
+      crashTimer = setTimeout(() => reject(new Error("Recovery turn did not crash at its committed operation")), 4000);
+    });
+    crashDeadline.catch(() => undefined);
+    try {
+      await page.locator('[data-qa="composer"] textarea').press("Control+Enter");
+      expect(await Promise.race([crashed, crashDeadline])).not.toBe(0);
+    } finally { clearTimeout(crashTimer); }
     const committed = await readFile(join(root, "index.html"), "utf8");
     expect(committed).toContain('data-recovery-result="first"');
     expect(db.query("SELECT status FROM sessions WHERE id=?").get(sessionId)).toEqual({ status: "running" });
@@ -165,9 +187,13 @@ test("Given a backend killed after its real commit When relaunched Then interrup
     expect(replay.filter(item => item.event.type === "status.idle").at(-1)?.event).toMatchObject({ type: "status.idle", stopReason: "end_turn" });
     expect(await card.count()).toBe(1);
   } finally {
-    await context.close();
-    await server?.stop();
-    db.prepare("DELETE FROM projects WHERE id=?").run(projectId);
-    await rm(root, { recursive: true, force: true });
+    try { await context.close(); }
+    finally {
+      try { await server?.stop(); }
+      finally {
+        db.prepare("DELETE FROM projects WHERE id=?").run(projectId);
+        await rm(root, { recursive: true, force: true });
+      }
+    }
   }
 });
