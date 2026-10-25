@@ -148,6 +148,7 @@ const cases = [
 test.each(cases)("Given %s in a finalize logo turn Then the gate, the repair budget and the project tree agree", async (scenario, expected) => {
   const caseProjectId = projectId, caseSessionId = sessionId;
   const started = performance.now();
+  const cpuStarted = process.cpuUsage();
   const events: NormalizedEvent[] = [];
   let observations = 0;
   const record = (phase: string): void => {
@@ -155,7 +156,9 @@ test.each(cases)("Given %s in a finalize logo turn Then the gate, the repair bud
     const stored = getSqlite().query<{ count: number }, [string]>("SELECT COUNT(*) count FROM events WHERE session_id=? AND type='status.error'").get(caseSessionId)?.count ?? 0;
     const current = getSqlite().query<{ count: number }, [string]>("SELECT COUNT(*) count FROM events WHERE session_id=? AND type='status.error'").get(sessionId)?.count ?? 0;
     const projectExists = getSqlite().prepare("SELECT 1 FROM projects WHERE id=?").get(caseProjectId) !== null;
+    const cpu = process.cpuUsage(cpuStarted);
     console.error(JSON.stringify({ event: "logo_gate_phase", scenario, phase, elapsed_ms: Math.round(performance.now() - started),
+      cpu_user_us: cpu.user, cpu_system_us: cpu.system, rss_bytes: process.memoryUsage().rss,
       stored_errors: stored, current_errors: current, live_errors: events.filter(event => event.type === "status.error").length,
       project_exists: projectExists, session_identity_matches: sessionId === caseSessionId }));
   };
