@@ -1,28 +1,40 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><title>Colors · Data viz</title>
+<html lang="en"><head><meta name="viewport" content="width=device-width, initial-scale=1"><meta charset="utf-8"><title>Colors · Data viz</title>
 <link rel="stylesheet" href="../colors_and_type.css">
 <style>
-  body { margin: 0; padding: 20px; background:#fff; font-family: var(--font-sans); }
+  body { margin: 0; padding: 20px; background:var(--bg); font-family: var(--font-sans); }
   .label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.12em; color: var(--fg-3); margin-bottom: 14px; }
-  .row { display:flex; gap: 0; align-items:flex-end; height: 90px; }
-  .bar { flex: 1; border-right: 1px solid #fff; position: relative; color: #fff; font-family: var(--font-mono); font-size: 10px; padding: 6px 4px; }
+  .row { display:flex; gap: 0; align-items:flex-end; height: 90px; padding-top: 12px; }
+  .bar { flex: 1; border-right: 1px solid var(--bg); position: relative; color: var(--fg-on-dark); font-family: var(--font-mono); font-size: 10px; padding: 6px 4px; }
   .legend { display:grid; grid-template-columns: repeat(5, 1fr); gap: 6px 12px; margin-top: 14px; }
   .lg { display:flex; align-items:center; gap: 6px; font-size: 11px; color: var(--fg-2); }
+  @media (max-width: 480px) { .legend { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   .sq { width: 12px; height: 12px; border-radius: 2px; }
 </style></head>
 <body>
   <div class="label">Chart palette · 1 → 10</div>
-  <div class="row" id="bars"></div>
-  <div class="legend" id="lg"></div>
-<script>
-const c = [
-  ['1','#0D4EA6','Blue 70'],['2','#E86427','Orange 50'],['3','#279C9C','Teal 50'],['4','#D9A514','Yellow 40'],['5','#AC71F0','Purple 50'],
-  ['6','#23254D','Ultra 90'],['7','#52A31D','Lime 50'],['8','#CC1D92','Pink 60'],['9','#45BCD1','Aqua 40'],['10','#077D55','Green 60']
-];
-const heights = [90,76,82,55,68,90,48,72,60,84];
-document.getElementById('bars').innerHTML = c.map(([n,h],i)=>
-  `<div class="bar" style="background:${h};height:${heights[i]}%">${n}</div>`).join('');
-document.getElementById('lg').innerHTML = c.map(([n,h,name])=>
-  `<div class="lg"><span class="sq" style="background:${h}"></span>${name}</div>`).join('');
-</script>
+  <div class="row" id="bars">
+    <div class="bar" data-token="chart-1" style="background:var(--chart-1);height:90%">1</div>
+    <div class="bar" data-token="chart-2" style="background:var(--chart-2);height:76%">2</div>
+    <div class="bar" data-token="chart-3" style="background:var(--chart-3);height:82%">3</div>
+    <div class="bar" data-token="chart-4" style="background:var(--chart-4);height:55%">4</div>
+    <div class="bar" data-token="chart-5" style="background:var(--chart-5);height:68%">5</div>
+    <div class="bar" data-token="chart-6" style="background:var(--chart-6);height:90%">6</div>
+    <div class="bar" data-token="chart-7" style="background:var(--chart-7);height:48%">7</div>
+    <div class="bar" data-token="chart-8" style="background:var(--chart-8);height:72%">8</div>
+    <div class="bar" data-token="chart-9" style="background:var(--chart-9);height:60%">9</div>
+    <div class="bar" data-token="chart-10" style="background:var(--chart-10);height:84%">10</div>
+  </div>
+  <div class="legend" id="lg">
+    <div class="lg"><span class="sq" data-token="chart-1" style="background:var(--chart-1)"></span>Blue 70</div>
+    <div class="lg"><span class="sq" data-token="chart-2" style="background:var(--chart-2)"></span>Orange 50</div>
+    <div class="lg"><span class="sq" data-token="chart-3" style="background:var(--chart-3)"></span>Teal 50</div>
+    <div class="lg"><span class="sq" data-token="chart-4" style="background:var(--chart-4)"></span>Yellow 40</div>
+    <div class="lg"><span class="sq" data-token="chart-5" style="background:var(--chart-5)"></span>Purple 50</div>
+    <div class="lg"><span class="sq" data-token="chart-6" style="background:var(--chart-6)"></span>Ultra 90</div>
+    <div class="lg"><span class="sq" data-token="chart-7" style="background:var(--chart-7)"></span>Lime 50</div>
+    <div class="lg"><span class="sq" data-token="chart-8" style="background:var(--chart-8)"></span>Pink 60</div>
+    <div class="lg"><span class="sq" data-token="chart-9" style="background:var(--chart-9)"></span>Aqua 40</div>
+    <div class="lg"><span class="sq" data-token="chart-10" style="background:var(--chart-10)"></span>Green 60</div>
+  </div>
 </body></html>

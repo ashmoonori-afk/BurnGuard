@@ -1,36 +1,53 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><title>Iconography</title>
+<html lang="en"><head><meta name="viewport" content="width=device-width, initial-scale=1"><meta charset="utf-8"><title>Iconography</title>
 <link rel="stylesheet" href="../colors_and_type.css">
-<script src="https://unpkg.com/lucide@latest"></script>
+<!--
+Lucide v0.468.0: https://github.com/lucide-icons/lucide/tree/0.468.0/icons
+ISC License
+
+Copyright (c) for portions of Lucide are held by Cole Bemis 2013-2022 as part of Feather (MIT). All other copyright (c) for Lucide are held by Lucide Contributors 2022.
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted, provided that the above
+copyright notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+-->
 <style>
-  body { margin: 0; padding: 22px; background:#fff; font-family: var(--font-sans); }
+  body { margin: 0; padding: 22px; background:var(--bg); font-family: var(--font-sans); }
   .label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.12em; color: var(--fg-3); margin-bottom: 14px; }
   .grid { display:grid; grid-template-columns: repeat(8, 1fr); gap: 14px; }
+  @media (max-width: 480px) { .grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
   .ic { display:flex; flex-direction:column; align-items:center; gap: 6px; }
   .ic svg { width: 22px; height: 22px; color: var(--fg-1); stroke-width: 1.5; }
   .nm { font-family: var(--font-mono); font-size: 9px; color: var(--fg-3); }
   .note { font-size: 11px; color: var(--fg-3); margin-top: 14px; line-height: 1.5; }
 </style></head>
 <body>
-  <div class="label">Lucide · 1.5 stroke (CDN substitute)</div>
+  <div class="label">Lucide · 1.5 stroke</div>
   <div class="grid">
-    <div class="ic"><i data-lucide="trending-up"></i><span class="nm">trend-up</span></div>
-    <div class="ic"><i data-lucide="trending-down"></i><span class="nm">trend-dn</span></div>
-    <div class="ic"><i data-lucide="line-chart"></i><span class="nm">chart</span></div>
-    <div class="ic"><i data-lucide="briefcase"></i><span class="nm">portfolio</span></div>
-    <div class="ic"><i data-lucide="building-2"></i><span class="nm">firm</span></div>
-    <div class="ic"><i data-lucide="globe"></i><span class="nm">global</span></div>
-    <div class="ic"><i data-lucide="search"></i><span class="nm">search</span></div>
-    <div class="ic"><i data-lucide="user"></i><span class="nm">user</span></div>
-    <div class="ic"><i data-lucide="bell"></i><span class="nm">alerts</span></div>
-    <div class="ic"><i data-lucide="lock"></i><span class="nm">secure</span></div>
-    <div class="ic"><i data-lucide="file-text"></i><span class="nm">report</span></div>
-    <div class="ic"><i data-lucide="download"></i><span class="nm">download</span></div>
-    <div class="ic"><i data-lucide="arrow-right"></i><span class="nm">next</span></div>
-    <div class="ic"><i data-lucide="external-link"></i><span class="nm">external</span></div>
-    <div class="ic"><i data-lucide="calendar"></i><span class="nm">date</span></div>
-    <div class="ic"><i data-lucide="filter"></i><span class="nm">filter</span></div>
+    <div class="ic"><svg data-icon="trending-up" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />  <polyline points="16 7 22 7 22 13" /></svg><span class="nm">trend-up</span></div>
+    <div class="ic"><svg data-icon="trending-down" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7" />  <polyline points="16 17 22 17 22 11" /></svg><span class="nm">trend-dn</span></div>
+    <div class="ic"><svg data-icon="chart-no-axes-combined" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16v5" />  <path d="M16 14v7" />  <path d="M20 10v11" />  <path d="m22 3-8.646 8.646a.5.5 0 0 1-.708 0L9.354 8.354a.5.5 0 0 0-.707 0L2 15" />  <path d="M4 18v3" />  <path d="M8 14v7" /></svg><span class="nm">chart</span></div>
+    <div class="ic"><svg data-icon="briefcase-business" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 12h.01" />  <path d="M16 6V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />  <path d="M22 13a18.15 18.15 0 0 1-20 0" />  <rect width="20" height="14" x="2" y="6" rx="2" /></svg><span class="nm">portfolio</span></div>
+    <div class="ic"><svg data-icon="building-2" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z" />  <path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2" />  <path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2" />  <path d="M10 6h4" />  <path d="M10 10h4" />  <path d="M10 14h4" />  <path d="M10 18h4" /></svg><span class="nm">firm</span></div>
+    <div class="ic"><svg data-icon="globe" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" /><path d="M2 12h20" /></svg><span class="nm">global</span></div>
+    <div class="ic"><svg data-icon="search" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg><span class="nm">search</span></div>
+    <div class="ic"><svg data-icon="user" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />  <circle cx="12" cy="7" r="4" /></svg><span class="nm">user</span></div>
+    <div class="ic"><svg data-icon="bell" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.268 21a2 2 0 0 0 3.464 0" /><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326" /></svg><span class="nm">alerts</span></div>
+    <div class="ic"><svg data-icon="lock" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg><span class="nm">secure</span></div>
+    <div class="ic"><svg data-icon="file-text" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />  <path d="M14 2v4a2 2 0 0 0 2 2h4" />  <path d="M10 9H8" />  <path d="M16 13H8" />  <path d="M16 17H8" /></svg><span class="nm">report</span></div>
+    <div class="ic"><svg data-icon="download" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" x2="12" y1="15" y2="3" /></svg><span class="nm">download</span></div>
+    <div class="ic"><svg data-icon="arrow-right" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg><span class="nm">next</span></div>
+    <div class="ic"><svg data-icon="external-link" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6" /><path d="M10 14 21 3" /><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /></svg><span class="nm">external</span></div>
+    <div class="ic"><svg data-icon="calendar" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4" />  <path d="M16 2v4" />  <rect width="18" height="18" x="3" y="4" rx="2" />  <path d="M3 10h18" /></svg><span class="nm">date</span></div>
+    <div class="ic"><svg data-icon="filter" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" /></svg><span class="nm">filter</span></div>
   </div>
-  <div class="note">Substitute · The repo ships no icon set. Lucide's 1.5px stroke matches Northvale restraint.</div>
-  <script>lucide.createIcons();</script>
-</body></html>
+  <div class="note">Local inline Lucide icons, version 0.468.0. ISC license included in this document.</div>
+  </body></html>

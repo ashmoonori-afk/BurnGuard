@@ -103,8 +103,8 @@ The Northvale brand uses **photography** and **typography** as its primary visua
   - `Northvale_Secondary` — combined mark + wordmark lockup
 
   These are deliberately simple monograms so a real fork can swap them out without touching layout. None of them carry real-world trademark.
-- **UI icons.** The repo does not ship an icon set. We standardize on **[Lucide](https://lucide.dev)** loaded from CDN — a thin, geometric, 1.5px-stroke open-source set that matches the editorial restraint of this system. Lucide's stroke weight and squared terminals fit the editorial tone better than thicker rounded sets.
-  - **Substitution flagged.** If a real brand is forking this and ships its own icon set, swap the CDN reference in `ui_kits/website/index.html`.
+- **UI icons.** `preview/brand-icons.html` contains 16 local inline Lucide SVGs at 1.5px stroke. The document includes the ISC license. Copy the SVG markup and license when reusing these icons; the preview needs neither scripts nor a network connection.
+  - **Website kit.** The separate React website demonstration still loads its runtime externally. The four static color and icon preview cards do not use that runtime.
 - **No emoji.** Anywhere.
 - **No unicode pictographs as icons** (★, ✓, →) except the en-dash and bullet (·) used as typographic separators in eyebrows: `INSIGHTS · MARKETS · Q1 2026`.
 - **No hand-drawn SVG illustration.** Where a visual is needed, use photography.
@@ -113,7 +113,7 @@ The Northvale brand uses **photography** and **typography** as its primary visua
 
 ## Caveats & substitutions to flag
 
-1. **Icon set → Lucide.** The repo ships no icons. Replace the Lucide CDN if a real brand fork has its own icon library.
+1. **Icon set: Lucide.** The local preview embeds Lucide 0.468.0 icons with licensing. A real-brand fork may replace them with its own licensed library.
 2. **Tokens are sample defaults.** Spacing, type scale, radii, shadows, and motion are reasonable defaults consistent with editorial-finance peers — they are starting points, not a real institution's authoritative tokens.
 3. **Mono → IBM Plex Mono.** No brand mono is supplied. Swap if a fork has one.
 4. **Logos are placeholders.** The six SVGs in `assets/logos/` are simple monograms; replace before shipping any real-brand artifact.

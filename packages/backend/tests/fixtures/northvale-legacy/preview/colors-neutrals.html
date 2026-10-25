@@ -1,0 +1,27 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Colors · Neutrals</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body { margin: 0; padding: 20px; background: #fff; }
+  .row { display: grid; grid-template-columns: repeat(10, 1fr); gap: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .sw { aspect-ratio: 1.4 / 1; display:flex; flex-direction:column; justify-content:flex-end; padding: 10px; font-family: var(--font-mono); font-size: 10px; line-height: 1.2; }
+  .sw .n { font-weight: 600; }
+  .sw .h { opacity: 0.75; font-size: 9px; }
+  .label { font-family: var(--font-sans); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.12em; color: var(--fg-3); margin-bottom: 10px; }
+</style></head>
+<body>
+  <div class="label">Gray · 10 → 100</div>
+  <div class="row" id="grays"></div>
+<script>
+const stops = [
+  ['10','#F2F5F7'],['20','#DCE3E8'],['30','#C1CCD6'],['40','#9FB1BD'],['50','#7A909E'],
+  ['60','#5B7282'],['70','#3E5463'],['80','#2A3F4D'],['90','#1C2B36'],['100','#FFFFFF']
+];
+document.getElementById('grays').innerHTML = stops.map(([n,h],i)=>{
+  const dark = parseInt(n) >= 50 && n !== '100';
+  const fg = dark ? '#fff' : '#1C2B36';
+  return `<div class="sw" style="background:${h};color:${fg}">
+    <div class="n">${n}</div><div class="h">${h}</div></div>`;
+}).join('');
+</script>
+</body></html>
