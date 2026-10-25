@@ -1,9 +1,12 @@
 import { afterAll, beforeAll, expect, spyOn, test } from "bun:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import type { Browser, BrowserContext, Page } from "../../backend/node_modules/playwright-core";
 import { Hono } from "../../backend/node_modules/hono";
 import { createRequestAuthority } from "../../backend/src/security/request-authority";
 import { DECK_STAGE_JS } from "../../backend/src/runtime/deck-stage";
-import { launchChromiumViaNode } from "../../backend/src/services/chromium-node-launch";
+import { chromiumNodeCommand, launchChromiumViaNode } from "../../backend/src/services/chromium-node-launch";
 import { observeDeckEvents } from "./helpers/deck-event-trace";
 
 declare global { var deckTest: {
@@ -30,6 +33,7 @@ URL.revokeObjectURL=u=>{revoked.push(u);revoke(u)};</script>
 
 let suiteBrowser: Browser | undefined;
 let fixtureScript: string;
+let protocolDirectory: string | undefined;
 const lifetime = new AbortController();
 
 beforeAll(async () => {
@@ -37,14 +41,93 @@ beforeAll(async () => {
   const [code, script, errors] = await Promise.all([compiler.exited, new Response(compiler.stdout).text(), new Response(compiler.stderr).text()]);
   if (code !== 0) throw new Error(errors);
   fixtureScript = script;
+  const appRoot = process.env.BG_APP_ROOT;
+  if (!appRoot) throw new Error("deck_test_profile_missing");
+  const directory = await mkdtemp(path.join(appRoot, "deck-protocol-"));
+  protocolDirectory = directory;
+  const command = chromiumNodeCommand();
   // The launch has its own deadline; the shared browser lives until suite teardown.
-  suiteBrowser = await launchChromiumViaNode({}, lifetime.signal);
+  suiteBrowser = await launchChromiumViaNode({}, lifetime.signal, command === null ? null : {
+    ...command,
+    script: fileURLToPath(new URL("../../backend/tests/fixtures/deck-node-protocol.mjs", import.meta.url)),
+    cwd: directory,
+  });
 });
 
 afterAll(async () => {
   try { await suiteBrowser?.close(); }
-  finally { lifetime.abort(); }
+  finally {
+    lifetime.abort();
+    if (protocolDirectory !== undefined) await rm(protocolDirectory, { recursive: true, force: true });
+  }
 });
+
+const protocolEvents = new Set([
+  "Page.frameAttached", "Page.frameDetached", "Page.frameNavigated",
+  "Page.frameStartedLoading", "Page.frameStoppedLoading", "Page.lifecycleEvent",
+  "Target.attachedToTarget", "Target.detachedFromTarget",
+]);
+const protocolKeyTypes = new Set(["keyDown", "keyUp", "rawKeyDown", "char"]);
+const protocolCounter = (value: unknown): value is number =>
+  typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+
+/** Project fields again at the file boundary; never print an arbitrary parsed object. */
+function protocolRecord(value: unknown): object | null {
+  if (value === null || typeof value !== "object"
+    || !("seq" in value) || !protocolCounter(value.seq)
+    || !("elapsed_ms" in value) || !protocolCounter(value.elapsed_ms)
+    || !("launch" in value) || !protocolCounter(value.launch)
+    || !("kind" in value) || !("method" in value) || typeof value.method !== "string") return null;
+  const common = { seq: value.seq, elapsed_ms: value.elapsed_ms, launch: value.launch };
+  switch (value.kind) {
+    case "event":
+      return protocolEvents.has(value.method) ? { ...common, kind: "event", method: value.method } : null;
+    case "send":
+    case "receive": {
+      if (!("id" in value) || !protocolCounter(value.id) || value.id === 0) return null;
+      let input: { readonly type: string; readonly isEscape: boolean } | undefined;
+      switch (value.method) {
+        case "Input.dispatchKeyEvent":
+          if (!("type" in value) || typeof value.type !== "string" || !protocolKeyTypes.has(value.type)
+            || !("isEscape" in value) || typeof value.isEscape !== "boolean") return null;
+          input = { type: value.type, isEscape: value.isEscape };
+          break;
+        case "Page.enable":
+          break;
+        default:
+          return null;
+      }
+      const command = { ...common, kind: value.kind, id: value.id, method: value.method, ...input };
+      if (value.kind === "send") return command;
+      return "error" in value && typeof value.error === "boolean" ? { ...command, error: value.error } : null;
+    }
+    default:
+      return null;
+  }
+}
+
+async function readDeckProtocolTrace() {
+  const unavailable = { state: "unavailable" } as const;
+  if (protocolDirectory === undefined) return unavailable;
+  try {
+    // A bounded disk read still works when the browser action/transport is stuck.
+    const text = await Bun.file(path.join(protocolDirectory, "deck-node-protocol.json")).slice(0, 262_145).text();
+    if (text.length > 262_144) return unavailable;
+    const value: unknown = JSON.parse(text);
+    if (value === null || typeof value !== "object"
+      || !("records" in value) || !Array.isArray(value.records) || value.records.length > 256
+      || !("pending" in value) || !Array.isArray(value.pending) || value.pending.length > 256
+      || !("pendingOverflow" in value) || !protocolCounter(value.pendingOverflow)
+      || !("oversizedMessages" in value) || !protocolCounter(value.oversizedMessages)) return unavailable;
+    const records = value.records.map(protocolRecord);
+    const pending = value.pending.map(protocolRecord);
+    if (records.includes(null) || pending.includes(null)) return unavailable;
+    return { state: "read", records, pending, pendingOverflow: value.pendingOverflow, oversizedMessages: value.oversizedMessages };
+  } catch {
+    // Missing, partial or unreadable diagnostics never replace the original failure or its cleanup.
+    return unavailable;
+  }
+}
 
 async function withBrowser(action: (page: Page, base: string, requests: { path: string; capability: string | null; status: number }[], server: { stop(closeActiveConnections?: boolean): void | Promise<void> }) => Promise<void>, allowFullscreen = true) {
   const browser = suiteBrowser;
@@ -96,7 +179,8 @@ async function withBrowser(action: (page: Page, base: string, requests: { path: 
     await action(page, base, requests, server);
     expect(browserErrors).toEqual([]);
   } catch (error) {
-    console.error(JSON.stringify({ event: "deck_failure_trace", browser: browser.version(), trace }));
+    const protocol = await readDeckProtocolTrace();
+    console.error(JSON.stringify({ event: "deck_failure_trace", browser: browser.version(), trace, protocol }));
     throw error;
   } finally {
     try { await context?.close(); }

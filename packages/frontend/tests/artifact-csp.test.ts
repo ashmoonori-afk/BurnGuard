@@ -29,20 +29,47 @@ test("Given the Canvas browser fixture When bundled as a classic IIFE script The
 });
 
 for (const action of ["popup", "navigation"] as const) test.skipIf(!systemChromeAvailable)(`system Chrome Canvas ${action} policy blocks popups and preserves project links`, async () => {
+  const started = performance.now();
+  const mark = (
+    phase: "source_read" | "browser_launch" | "page_create" | "page_goto" | "message_listener" | "frame_mount"
+      | "popup_click" | "popup_result" | "link_click" | "link_event" | "assertions"
+      | "cleanup" | "browser_close" | "server_stop" | "lifetime_abort" | "browser_disconnected" | "page_closed" | "popup_observed",
+    edge: "before" | "after" | "done" | "called" | "completed" | "observed",
+    link?: "normal" | "blank",
+  ) => console.error(JSON.stringify({ event: "artifact_csp_phase", variant: action, phase, edge, elapsed_ms: Math.round(performance.now() - started), ...(link === undefined ? {} : { link }) }));
+  mark("source_read", "before");
   const source = await readFile(new URL("../src/components/canvas/Canvas.tsx", import.meta.url), "utf8");
+  mark("source_read", "after");
   const sandbox = /sandbox="([^"]+)"/.exec(source)?.[1];
   if (sandbox === undefined) throw new Error("Canvas sandbox attribute missing");
   const requests: string[] = [];
   const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch(request) { requests.push(new URL(request.url).pathname); return new Response("<!doctype html><body></body>", { headers: { "content-type": "text/html" } }); } });
-  const browser = await launchChromiumViaNode({ channel: "chrome" }, AbortSignal.timeout(20000));
+  mark("browser_launch", "before");
+  const lifetime = AbortSignal.timeout(20000);
+  const launched = launchChromiumViaNode({ channel: "chrome" }, lifetime);
+  // The existing launch has already armed this signal; observing it adds no deadline.
+  const aborted = () => mark("lifetime_abort", "observed");
+  lifetime.addEventListener("abort", aborted, { once: true });
+  const browser = await launched;
+  mark("browser_launch", "after");
+  browser.once("disconnected", () => mark("browser_disconnected", "observed"));
   try {
+    mark("page_create", "before");
     const page = await browser.newPage();
+    mark("page_create", "after");
+    page.once("close", () => mark("page_closed", "observed"));
+    page.once("popup", () => mark("popup_observed", "observed"));
     const base = `${server.url.origin}/api/projects/p/fs/index.html`;
+    mark("page_goto", "before");
     await page.goto(server.url.origin);
+    mark("page_goto", "after");
+    mark("message_listener", "before");
     await page.evaluate(() => window.addEventListener("message", event => {
       if (event.source === document.querySelector("iframe")?.contentWindow && event.data?.event === "navigate") console.log(`NAVIGATE:${event.data.payload.href}`);
     }));
+    mark("message_listener", "after");
     const html = buildSandboxedArtifactSrcDoc(`<html><head></head><body><button id="open" onclick="document.querySelector('output').textContent = window.open('${server.url.origin}/unexpected') === null ? 'blocked' : 'opened'">Open</button><output></output><a href="next.html">Normal link</a><a target="_blank" href="other.html">Blank link</a></body></html>`, base);
+    mark("frame_mount", "before");
     await page.evaluate(({ html, sandbox }) => new Promise<void>((resolve, reject) => {
       const frame = document.createElement("iframe");
       frame.setAttribute("sandbox", sandbox);
@@ -51,19 +78,41 @@ for (const action of ["popup", "navigation"] as const) test.skipIf(!systemChrome
       frame.srcdoc = html;
       document.body.append(frame);
     }), { html, sandbox });
+    mark("frame_mount", "after");
     const frame = page.frameLocator("iframe");
     if (action === "popup") {
+      mark("popup_click", "before");
       await frame.locator("#open").click();
-      expect(await frame.locator("output").textContent()).toBe("blocked");
+      mark("popup_click", "after");
+      mark("popup_result", "before");
+      const result = await frame.locator("output").textContent();
+      mark("popup_result", "after");
+      expect(result).toBe("blocked");
     } else for (const [name, file] of [["Normal link", "next.html"], ["Blank link", "other.html"]] as const) {
+      const link = name === "Normal link" ? "normal" : "blank";
       const navigation = page.waitForEvent("console", { predicate: message => message.text() === `NAVIGATE:${new URL(file, base).href}`, timeout: 3000 });
       navigation.catch(() => {});
+      mark("link_click", "before", link);
       await frame.getByRole("link", { name, exact: true }).click();
+      mark("link_click", "after", link);
+      mark("link_event", "before", link);
       await navigation;
+      mark("link_event", "after", link);
       expect(page.context().pages()).toEqual([page]);
     }
     expect(requests).not.toContain("/unexpected");
-  } finally { await browser.close(); await server.stop(true); }
+    mark("assertions", "done");
+  } finally {
+    mark("cleanup", "called");
+    mark("browser_close", "before");
+    await browser.close();
+    mark("browser_close", "after");
+    mark("server_stop", "before");
+    await server.stop(true);
+    mark("server_stop", "after");
+    mark("cleanup", "completed");
+    lifetime.removeEventListener("abort", aborted);
+  }
 }, 20000);
 
 test.skipIf(!systemChromeAvailable)("system Chrome routes trusted external clicks with modifiers and preserves activation across postMessage", async () => {

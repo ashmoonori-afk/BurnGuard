@@ -69,7 +69,7 @@ function headlessEnv(env) {
   return rest;
 }
 
-async function serve() {
+export async function serve() {
   let server;
   let closing = false;
   const close = async () => {
