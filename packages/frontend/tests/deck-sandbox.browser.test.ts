@@ -77,6 +77,7 @@ async function withBrowser(action: (page: Page, base: string, requests: { path: 
   let context: BrowserContext | undefined;
   let trace: readonly string[] = [];
   const routing: string[] = [];
+  const resources: object[] = [];
   let widgetTrace: Awaited<ReturnType<typeof beginInputWidgetTrace>> | undefined;
   try {
     // Use the shipped Node browser path for iframe/fullscreen lifecycle coverage.
@@ -98,13 +99,56 @@ async function withBrowser(action: (page: Page, base: string, requests: { path: 
         focus.call(this, options);
         record("iframe-focus-after", { srcdoc: Boolean(this.srcdoc) });
       };
+      const mounts = new WeakMap<HTMLIFrameElement, number>();
+      let mount = 0;
+      const observeFrame = (phase: string, frame: HTMLIFrameElement) => {
+        if (!mounts.has(frame)) mounts.set(frame, ++mount);
+        record(phase, { mount: mounts.get(frame) ?? 0, srcdoc: Boolean(frame.srcdoc), bytes: frame.srcdoc.length });
+      };
+      new MutationObserver(records => {
+        for (const entry of records) {
+          if (entry.type === "attributes" && entry.target instanceof HTMLIFrameElement) observeFrame("iframe-srcdoc", entry.target);
+          for (const node of entry.addedNodes) {
+            if (!(node instanceof Element)) continue;
+            if (node.matches("main iframe") && node instanceof HTMLIFrameElement) observeFrame("iframe-added", node);
+            for (const frame of node.querySelectorAll("main iframe")) {
+              if (frame instanceof HTMLIFrameElement) observeFrame("iframe-added", frame);
+            }
+          }
+        }
+      }).observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ["srcdoc"] });
       document.addEventListener("load", event => {
-        if (!(event.target instanceof HTMLIFrameElement) || !event.target.matches("main iframe") || !event.target.srcdoc) return;
+        if (!(event.target instanceof HTMLIFrameElement) || !event.target.matches("main iframe")) return;
+        observeFrame("iframe-load-any", event.target);
+        if (!event.target.srcdoc) return;
         record("iframe-load-capture");
         queueMicrotask(() => record("iframe-load-capture-microtask"));
       }, true);
     });
     const page = await context.newPage();
+    const requestIds = new WeakMap<object, number>();
+    let requestId = 0;
+    const resource = (url: string) => {
+      const path = new URL(url).pathname;
+      if (path === `${root}deck.html`) return "deck";
+      if (path === `${root}runtime/first.js`) return "first-script";
+      if (path === `${root}runtime/deferred.js`) return "deferred-script";
+      if (path === `${root}runtime/deck-stage.js`) return "stage-script";
+      return "other";
+    };
+    page.on("request", request => {
+      requestIds.set(request, ++requestId);
+      if (resources.length < 64) resources.push({ phase: "request", id: requestId, resource: resource(request.url()) });
+    });
+    page.on("response", response => {
+      if (resources.length < 64) resources.push({ phase: "response", id: requestIds.get(response.request()), status: response.status() });
+    });
+    page.on("requestfinished", request => {
+      if (resources.length < 64) resources.push({ phase: "finished", id: requestIds.get(request) });
+    });
+    page.on("requestfailed", request => {
+      if (resources.length < 64) resources.push({ phase: "failed", id: requestIds.get(request) });
+    });
     page.on("console", message => {
       const text = message.text();
       if (text.startsWith("QA_INPUT_ROUTING ") && routing.length < 64) routing.push(text.slice(17, 1041));
@@ -129,6 +173,7 @@ async function withBrowser(action: (page: Page, base: string, requests: { path: 
     console.error(JSON.stringify({ event: "deck_failure_trace", browser: browser.version(), trace }));
     throw error;
   } finally {
+    console.error(JSON.stringify({ event: "deck_resource_trace", records: resources, truncated: resources.length === 64 }));
     if (widgetTrace) console.error(JSON.stringify({ event: "input_widget_trace_schema", report: await widgetTrace.finish() }));
     console.error(JSON.stringify({ event: "input_focus_call_trace", browser: browser.version(), records: routing, truncated: routing.length === 64 }));
     try { await context?.close(); }
