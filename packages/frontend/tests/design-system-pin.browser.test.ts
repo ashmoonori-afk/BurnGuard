@@ -4,6 +4,7 @@ import type { CatalogDesignSystemDetail, ProjectDesignSystemPin } from "@bg/shar
 import type { Browser, BrowserContext, Page } from "../../backend/node_modules/playwright-core";
 import { launchChromiumViaNode } from "../../backend/src/services/chromium-node-launch";
 import type {} from "./fixtures/design-system-pin-browser";
+import { appFontResponse } from "./helpers/app-font";
 
 const oldDigest = "a".repeat(64);
 const nextDigest = "b".repeat(64);
@@ -72,6 +73,8 @@ async function withFixture(
     hostname: "127.0.0.1", port: 0,
     async fetch(request) {
       const pathname = new URL(request.url).pathname;
+      const font = appFontResponse(pathname);
+      if (font) return font;
       if (pathname === "/") return new Response(`<!doctype html><html><head><style>${css}</style></head><body><div id="root"></div></body></html>`, { headers: { "content-type": "text/html" } });
       if (pathname === "/api/bootstrap") return Response.json({ data: { capability: "pin-fixture" } });
       if (pathname === systemPath) return Response.json({ data: system });
@@ -109,6 +112,7 @@ async function withFixture(
     await page.goto(server.url.origin);
     await page.addScriptTag({ content: script });
     await page.evaluate(() => globalThis.designSystemPinTest.mount());
+    await page.evaluate(() => document.fonts.ready);
     await page.locator("[data-pin-banner] > div").waitFor();
     await action({ page, applied, pinReads: () => pinReads, releaseRefresh: () => refresh.resolve() });
   } finally {

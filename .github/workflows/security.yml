@@ -262,6 +262,7 @@ jobs:
           packages/frontend/tests/launch-authority.browser.test.ts
           packages/frontend/tests/design-system-pin.browser.test.ts
           packages/frontend/tests/workspace-controls.browser.test.ts
+          packages/frontend/tests/app-font.browser.test.ts
           packages/backend/tests/exports.test.ts
       # Every baseline suite (scripts/qa/os-matrix-baseline.txt) that an explicit list above does not already run, one
       # `bun test` process per file, after the browser install because most of them drive a real Chromium. The

@@ -214,6 +214,10 @@ jobs:
         run: bun scripts/warm-browser.ts
       - name: Install the fixture browser
         run: node packages/backend/node_modules/playwright-core/cli.js install chromium
+      - name: Build app resources
+        run: bun run build:frontend
+      - name: Verify portable app resources
+        run: bun test --timeout 30000 packages/backend/tests/package-resources.test.ts
       - name: Browser-backed suites
         env:
           BG_BROWSER_SMOKE: "1"
@@ -229,6 +233,7 @@ jobs:
           packages/frontend/tests/launch-authority.browser.test.ts
           packages/frontend/tests/design-system-pin.browser.test.ts
           packages/frontend/tests/workspace-controls.browser.test.ts
+          packages/frontend/tests/app-font.browser.test.ts
       - name: Chromium popup and deck runtime
         env:
           BG_BROWSER_SMOKE: "1"
