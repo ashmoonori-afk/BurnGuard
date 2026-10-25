@@ -49,6 +49,10 @@ beforeAll(async () => {
 afterAll(async () => { await browser?.close(); });
 
 async function startServer(sessionId: string, generation: "first" | "second") {
+  const started = performance.now();
+  const phases: { phase: string; ms: number }[] = [];
+  const mark = (phase: string) => { if (phases.length < 48) phases.push({ phase, ms: Math.round(performance.now() - started) }); };
+  mark("spawn");
   const secret = generateLaunchCapability();
   const received: RecoveryServerMessage[] = [];
   const listeners = new Set<() => void>();
@@ -56,6 +60,7 @@ async function startServer(sessionId: string, generation: "first" | "second") {
     env: { ...process.env, F09_SESSION: sessionId, F09_GENERATION: generation, F09_CAPABILITY: generateLaunchCapability(), F09_SECRET: secret },
     stdout: "pipe", stderr: "pipe",
     ipc(message: RecoveryServerMessage) {
+      mark(`ipc-${message.kind}`);
       received.push(message);
       for (const listener of listeners) listener();
     },
@@ -63,11 +68,13 @@ async function startServer(sessionId: string, generation: "first" | "second") {
   const output = Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text()]);
   let stopped = false;
   const exited = child.exited.then(code => {
+    mark("exited");
     stopped = true;
     for (const listener of listeners) listener();
     return code;
   });
   function waitFor(kind: RecoveryServerMessage["kind"]) {
+    mark(`wait-${kind}`);
     return new Promise<RecoveryServerMessage>((resolve, reject) => {
       const cleanup = () => { clearTimeout(timer); listeners.delete(check); };
       const check = () => {
@@ -75,12 +82,13 @@ async function startServer(sessionId: string, generation: "first" | "second") {
         if (message) { cleanup(); resolve(message); }
         else if (stopped) { cleanup(); reject(new Error(`Recovery server exited before ${kind}`)); }
       };
-      const timer = setTimeout(() => { cleanup(); reject(new Error(`Recovery server did not report ${kind}`)); }, 5000);
+      const timer = setTimeout(() => { mark(`deadline-${kind}`); cleanup(); reject(new Error(`Recovery server did not report ${kind}`)); }, 5000);
       listeners.add(check);
       check();
     });
   }
   async function stop() {
+    mark("cleanup-begin");
     if (!stopped) child.send("stop");
     let forced = false;
     const timer = setTimeout(() => { forced = true; child.kill("SIGKILL"); }, 5000);
@@ -91,7 +99,11 @@ async function startServer(sessionId: string, generation: "first" | "second") {
   try {
     const ready = await waitFor("ready");
     if (ready.kind !== "ready") throw new Error("Recovery server readiness missing");
-    return { origin: ready.origin, recovered: ready.recovered, secret, exited, waitFor, stop };
+    return {
+      origin: ready.origin, recovered: ready.recovered, secret, exited, waitFor, stop, mark,
+      phases: () => ({ generation, phases, truncated: phases.length === 48, received: received.map(message => message.kind) }),
+      childPhases: async () => (await output).flatMap(text => text.split("\n").filter(line => line.startsWith("F09_FIXTURE_PHASE "))).slice(0, 49),
+    };
   } catch (error) {
     await stop();
     throw error;
@@ -120,6 +132,8 @@ test("Given a backend killed after its real commit When relaunched Then interrup
   const page = await context.newPage();
   page.setDefaultTimeout(5000);
   let server: Awaited<ReturnType<typeof startServer>> | undefined;
+  let failed = false;
+  let beforeResend = 0;
   try {
     server = await startServer(sessionId, "first");
     expect(server.recovered).toBe(0);
@@ -172,11 +186,19 @@ test("Given a backend killed after its real commit When relaunched Then interrup
     const evidence = process.env.F09_EVIDENCE_DIR;
     if (evidence) await page.screenshot({ path: join(evidence, "recovered-desktop.png") });
 
+    beforeResend = listSequencedSessionEvents(db, sessionId, 0).length;
     const terminal = server.waitFor("terminal");
+    terminal.catch(() => server?.mark("terminal-rejected"));
+    server.mark("fill-begin");
     await page.locator('[data-qa="composer"] textarea').fill("Update the page again");
+    server.mark("fill-end");
     const ready = page.evaluate(() => globalThis.launchAuthorityTest.observe({ disabled: true }));
+    ready.catch(() => server?.mark("disabled-observer-rejected"));
+    server.mark("press-begin");
     await page.locator('[data-qa="composer"] textarea').press("Control+Enter");
+    server.mark("press-end");
     await ready;
+    server.mark("disabled-observed");
     expect(await terminal).toEqual({ kind: "terminal", stopReason: "end_turn" });
     await page.locator('[data-turn-disposition="committed"]').waitFor({ state: "visible" });
     await page.evaluate(() => globalThis.launchAuthorityTest.observe({ disabled: false }));
@@ -186,13 +208,27 @@ test("Given a backend killed after its real commit When relaunched Then interrup
     expect(replay.filter(item => item.event.type === "status.error").map(item => item.event)).toEqual([interruption]);
     expect(replay.filter(item => item.event.type === "status.idle").at(-1)?.event).toMatchObject({ type: "status.idle", stopReason: "end_turn" });
     expect(await card.count()).toBe(1);
+  } catch (error) {
+    failed = true;
+    console.error(JSON.stringify({
+      event: "f09_recovery_failure",
+      parent: server?.phases(),
+      resendEvents: listSequencedSessionEvents(db, sessionId, 0).slice(beforeResend).map(item => item.event.type),
+      session: db.prepare("SELECT status FROM sessions WHERE id=?").get(sessionId),
+      operations: db.prepare("SELECT status,COUNT(*) AS count FROM artifact_operations WHERE project_id=? GROUP BY status").all(projectId),
+    }));
+    throw error;
   } finally {
     try { await context.close(); }
     finally {
       try { await server?.stop(); }
       finally {
-        db.prepare("DELETE FROM projects WHERE id=?").run(projectId);
-        await rm(root, { recursive: true, force: true });
+        try {
+          if (server) console.error(JSON.stringify({ event: "f09_recovery_phases", failed, parent: server.phases(), child: await server.childPhases() }));
+        } finally {
+          db.prepare("DELETE FROM projects WHERE id=?").run(projectId);
+          await rm(root, { recursive: true, force: true });
+        }
       }
     }
   }
