@@ -53,7 +53,7 @@ export default function PresentOverlay({
 
   useEffect(() => subscribeFrameEvent(iframeRef.current, "present-dismiss", payload => {
     if (payload?.documentKey === presentationKey) onClose();
-  }), [presentationKey, onClose]);
+  }), [frameDocument, presentationKey, onClose]);
 
   useEffect(() => {
     // Restore focus to whatever had it before the overlay opened once
@@ -119,16 +119,16 @@ export default function PresentOverlay({
       aria-modal="true"
       aria-label={t("canvas.present.title")}
     >
-      <iframe
+      {frameDocument?.key === presentationKey && <iframe
         key={src}
         ref={iframeRef}
         title={t("canvas.present.title")}
-        srcDoc={frameDocument?.key === presentationKey ? frameDocument.html : ""}
+        srcDoc={frameDocument.html}
         sandbox="allow-scripts"
         referrerPolicy="no-referrer"
         onLoad={() => iframeRef.current?.focus()}
         className="absolute inset-0 h-full w-full border-0 bg-black"
-      />
+      />}
       {loadError && <div role="alert" className="absolute inset-0 grid place-items-center text-sm text-white">{t("workspace.canvas.loadFailed")}</div>}
       <button
         type="button"
