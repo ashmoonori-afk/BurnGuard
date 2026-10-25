@@ -184,7 +184,7 @@ function turnErrorCode(item: Readonly<Record<string, unknown>>, id: string): Tur
     case "commandcode_unavailable": case "unsupported_generation_model_effort": case "agent_control_files_present":
     case "backend_unavailable": case "path_unavailable": case "immutable_reference_mutated": case "immutable_reference_path_unavailable": case "immutable_reference_escaped": case "private_input_unavailable": case "publication_failed": case "operation_conflict": case "operation_cancelled": case "turn_failed":
     case "provider_auth_required": case "provider_usage_limited": case "provider_quota_exhausted": case "provider_model_unavailable":
-    case "deck_source_page_limit": return value;
+    case "deck_source_page_limit": case "interrupted": return value;
     default: throw new PipelineRepositoryError("corrupt_json", id);
   }
 }

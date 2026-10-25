@@ -144,7 +144,7 @@ function recoverPersistedSessions(db: Database): number {
   const sessions = db.query<{ readonly id: string }, []>("SELECT id FROM sessions WHERE status IN ('running','awaiting_tool') ORDER BY id").all();
   for (const session of sessions) {
     const now = Date.now();
-    const errorEvent: NormalizedEvent = { id: ulid(), ts: now, type: "status.error", message: "The previous process stopped before the turn completed.", recoverable: true };
+    const errorEvent: NormalizedEvent = { id: ulid(), ts: now, type: "status.error", code: "interrupted", message: "The previous process stopped before the turn completed.", recoverable: true };
     const idleEvent: NormalizedEvent = { id: ulid(), ts: now, type: "status.idle", stopReason: "error" };
     db.transaction(() => {
       persistRecoveryEvent(db, session.id, errorEvent, nextSequence(db, session.id));

@@ -24,6 +24,7 @@ export type TurnErrorCode =
   | "publication_failed"
   | "operation_conflict"
   | "operation_cancelled"
+  | "interrupted"
   | "turn_failed"
   | "provider_auth_required"
   | "provider_usage_limited"

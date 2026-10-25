@@ -6,6 +6,38 @@ import { LOCALES, useLocaleStore } from "../src/i18n/locale";
 import { t } from "../src/i18n/t";
 import { apiErrorCopy } from "../src/lib/error-copy";
 
+test.each([
+  ["interrupted", "chat.error.interrupted"],
+  ["turn_failed", "chat.error.turnFailed"],
+  ["operation_cancelled", "chat.error.operationCancelled"],
+  [undefined, "chat.error.turnFailed"],
+] as const)("Given error code %s When rendered in every locale Then its shipped cause appears without a rollback claim", (code, key) => {
+  const initial = useLocaleStore.getInitialState();
+  const originalInitial = initial.locale;
+  const original = useLocaleStore.getState().locale;
+  try {
+    for (const locale of LOCALES) {
+      Object.assign(initial, { locale });
+      useLocaleStore.setState({ locale });
+      const message = "fixture-private-diagnostic";
+
+      const html = renderToStaticMarkup(createElement(ErrorCard, { code, message, recoverable: true }));
+
+      const shipped = renderToStaticMarkup(createElement("span", null, t(key))).replace(/^<span>|<\/span>$/g, "");
+      expect(shipped.length).toBeGreaterThan(0);
+      expect(html).toContain(shipped);
+      expect(html).not.toContain(message);
+      expect(html).not.toContain('data-qa="turn-not-applied"');
+      expect(html.match(/<button/g)?.length).toBe(1);
+      expect(t("chat.error.interrupted")).not.toBe(t("chat.error.turnFailed"));
+      expect(t("chat.error.interrupted")).not.toBe(t("chat.error.operationCancelled"));
+    }
+  } finally {
+    Object.assign(initial, { locale: originalInitial });
+    useLocaleStore.setState({ locale: original });
+  }
+});
+
 test("Given a raw provider failure When modeled for UI Then no host path renders and the input recovery action remains available", () => {
   const raw = "/private/Users/alice/project/.attachments/source.pdf";
   const html = renderToStaticMarkup(createElement(ErrorCard, {

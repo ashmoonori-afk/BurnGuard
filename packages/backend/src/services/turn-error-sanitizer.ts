@@ -3,7 +3,10 @@ import { PathBoundaryError } from "../security/path-boundary";
 import { DECK_SOURCE_PAGE_LIMIT } from "./context";
 import { LogoDeliverableError } from "./logo-deliverables";
 
-const COPY: Readonly<Record<TurnErrorCode, string>> = {
+// Startup recovery emits interruption directly; provider text cannot claim that cause.
+type ActiveTurnErrorCode = Exclude<TurnErrorCode, "interrupted">;
+
+const COPY: Readonly<Record<ActiveTurnErrorCode, string>> = {
   edit_scope_violation: "Changes outside the requested edit scope were not applied. Correct the changes or explicitly widen the scope.",
   invalid_edit_scope: "The edit scope is invalid. Check the target pages and nodes.",
   logo_directions_invalid: "Logo directions or adopted choices are invalid. The previous result was preserved.",
@@ -138,7 +141,7 @@ export function sanitizeTurnEvent(event: NormalizedEvent, cause?: unknown): Norm
   };
 }
 
-export function turnErrorCode(error: unknown, fallback?: string): TurnErrorCode {
+export function turnErrorCode(error: unknown, fallback?: string): ActiveTurnErrorCode {
   if (error instanceof PathBoundaryError) return "path_unavailable";
   return knownCode(errorCode(error)) ??
     knownCode(error instanceof Error ? error.message : undefined) ??
@@ -146,7 +149,7 @@ export function turnErrorCode(error: unknown, fallback?: string): TurnErrorCode 
     "turn_failed";
 }
 
-function knownCode(candidate: string | undefined): TurnErrorCode | undefined {
+function knownCode(candidate: string | undefined): ActiveTurnErrorCode | undefined {
   switch (candidate) {
     case "edit_scope_violation":
     case "invalid_edit_scope":

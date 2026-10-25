@@ -267,6 +267,30 @@ test("Given a reloaded conversation When the durable events are merged Then the 
   expect(reloadedStates.get(FIRST)?.disposition).toBe("committed");
 });
 
+test.each([
+  ["interrupted", "chat.error.interrupted"],
+  ["turn_failed", "chat.error.turnFailed"],
+] as const)("Given a replayed %s error after a committed operation When grouped Then its cause survives without claiming Saved or rollback", (code, key) => {
+  const events: NormalizedEvent[] = [
+    { id: id(), ts: 1, type: "chat.user_message", turnId: FIRST, text: "update the page", attachmentCount: 0 },
+    { id: id(), ts: 2, type: "chat.delta", turnId: FIRST, text: "updated content" },
+    { id: id(), ts: 3, type: "artifact.operation", operationId: "operation", revision: 1, digest: "digest", changedPaths: ["index.html"], outcome: "committed" },
+    { id: id(), ts: 4, type: "status.error", code, message: "fixture-private-diagnostic", recoverable: true },
+    { id: id(), ts: 5, type: "status.idle", stopReason: "error" },
+  ];
+  const replay = mergeSessionEvents(null, envelopes(events), snapshot(events.length));
+
+  const html = renderToStaticMarkup(createElement(MessageStream, { events: replay.envelopes.map(item => item.event), session: SESSION }));
+
+  expect(html).toContain(`data-turn-id="${FIRST}" data-turn-disposition="rejected"`);
+  expect(html).toContain(renderToStaticMarkup(createElement("span", null, t(key))).replace(/^<span>|<\/span>$/g, ""));
+  expect(html.match(/data-qa="turn-error"/g)?.length).toBe(1);
+  expect(html).not.toContain('data-turn-disposition="committed"');
+  expect(html).not.toContain('data-turn-disposition="stopped"');
+  expect(html).not.toContain('data-qa="turn-not-applied"');
+  expect(html).not.toContain("fixture-private-diagnostic");
+});
+
 test("Given every disposition When an agent message renders Then its state is machine-readable and localized in all three locales", () => {
   const initial = useLocaleStore.getInitialState();
   const originalInitial = initial.locale;

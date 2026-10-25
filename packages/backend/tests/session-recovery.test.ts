@@ -336,6 +336,28 @@ describe("sequence replay", () => {
     expect(result.sessions).toBe(1);
     expect(db.query("SELECT status,pid FROM sessions WHERE id='s'").get()).toEqual({ status: "idle", pid: null });
     expect(listSequencedSessionEvents(db, "s", 0).map((item) => item.event.type)).toEqual(["status.error", "status.idle"]);
+    const recovered = listSequencedSessionEvents(db, "s", 0);
+    expect(recovered.map(item => item.event)).toMatchObject([
+      { type: "status.error", code: "interrupted", recoverable: true },
+      { type: "status.idle", stopReason: "error" },
+    ]);
+    expect(recovered[0]?.event).not.toHaveProperty("notApplied");
+    expect((await reconcileArtifactState(db)).sessions).toBe(0);
+    expect(listSequencedSessionEvents(db, "s", 0)).toEqual(recovered);
+  });
+
+  test("Given an awaiting-tool session with a historical uncoded error When startup reconciles Then only the new terminal names interruption", async () => {
+    const historical: NormalizedEvent = { id: "historical", ts: 1, type: "status.error", message: "The previous process stopped before the turn completed.", recoverable: true };
+    insert(historical);
+    db.exec("UPDATE sessions SET status='awaiting_tool' WHERE id='s'");
+
+    await reconcileArtifactState(db);
+
+    expect(listSequencedSessionEvents(db, "s", 0).map(item => item.event)).toEqual([
+      historical,
+      expect.objectContaining({ type: "status.error", code: "interrupted", recoverable: true }),
+      expect.objectContaining({ type: "status.idle", stopReason: "error" }),
+    ]);
   });
 
   test("Given abrupt backend death with an owned writer When startup recovers Then the writer stops before partial artifact restoration", async () => {
@@ -419,10 +441,17 @@ describe("sequence replay", () => {
     const result = await inspectCanonicalTree(stagePath);
     const now = Date.now();
     db.prepare("INSERT INTO artifact_operations(id,project_id,status,base_revision,base_digest,result_revision,result_digest,expected_revision,expected_file_hash,node_fingerprint,diff_json,snapshot_json,retention_json,replay_json,created_at,updated_at) VALUES (?,'p','working',0,?,1,?,0,'','',?,?,?,?,?,?)").run(operationId, base.tree_digest, result.tree_digest, JSON.stringify(diffManagedTrees(base, result)), JSON.stringify({ schema_version: 1, snapshot_path: snapshotPath, stage_path: stagePath, base_manifest: base }), operationRetention(now), operationReplay("result"), now, now);
+    db.exec("UPDATE sessions SET status='running' WHERE id='s'");
     await reconcileArtifactState(db);
+    const recovered = listSequencedSessionEvents(db, "s", 0);
     await reconcileArtifactState(db);
     expect(db.query("SELECT current_revision,current_digest FROM projects WHERE id='p'").get()).toEqual({ current_revision: 1, current_digest: result.tree_digest });
     expect(db.query("SELECT status FROM artifact_operations WHERE id=?").get(operationId)).toEqual({ status: "committed" });
+    expect(await readFile(path.join(root, "index.html"), "utf8")).toBe("result");
+    const error = recovered.find(item => item.event.type === "status.error")?.event;
+    expect(error).toMatchObject({ type: "status.error", code: "interrupted" });
+    expect(error).not.toHaveProperty("notApplied");
+    expect(listSequencedSessionEvents(db, "s", 0)).toEqual(recovered);
   });
 
   test("Given partial publication and a persisted operation When startup reconciles Then base bytes restore before recovery terminalizes", async () => {
@@ -437,10 +466,16 @@ describe("sequence replay", () => {
     const now = Date.now();
     db.prepare("INSERT INTO artifact_operations(id,project_id,status,base_revision,base_digest,expected_revision,expected_file_hash,node_fingerprint,diff_json,snapshot_json,retention_json,replay_json,created_at,updated_at) VALUES (?,'p','working',0,?,0,'','','[]',?,?,?,?,?)").run(operationId, base.tree_digest, JSON.stringify({ schema_version: 1, snapshot_path: snapshotPath, stage_path: stagePath, base_manifest: base }), operationRetention(now), operationReplay("base"), now, now);
 
+    db.exec("UPDATE sessions SET status='running' WHERE id='s'");
     await reconcileArtifactState(db);
-
+    const recovered = listSequencedSessionEvents(db, "s", 0);
+    await reconcileArtifactState(db);
     expect((await inspectCanonicalTree(root)).tree_digest).toBe(base.tree_digest);
     expect(db.query("SELECT status FROM artifact_operations WHERE id=?").get(operationId)).toEqual({ status: "recovered" });
+    expect(recovered.find(item => item.event.type === "status.error")?.event).toMatchObject({ code: "interrupted" });
+    expect(recovered.find(item => item.event.type === "status.error")?.event).not.toHaveProperty("notApplied");
+    expect(recovered.at(-1)?.event).toMatchObject({ type: "status.idle", stopReason: "error" });
+    expect(listSequencedSessionEvents(db, "s", 0)).toEqual(recovered);
   });
 
   test("Given a corrupt nonterminal operation When startup reconciles Then the project is unavailable and live bytes are untouched", async () => {
