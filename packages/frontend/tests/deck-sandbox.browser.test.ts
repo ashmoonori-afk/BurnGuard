@@ -239,10 +239,22 @@ test("presentation fullscreen fallback preserves authored input, composition and
     expect(await page.evaluate(() => document.fullscreenEnabled)).toBe(false);
     expect(await page.evaluate(() => document.fullscreenElement === null)).toBe(true);
     expect(await frame.locator(".deck-notes").isVisible()).toBe(true);
-    for (const selector of ["input", "textarea", "select", "#editable"]) {
-      await frame.locator(selector === "#editable" ? "[contenteditable]" : selector).focus();
+    // DOM focus alone does not establish the browser's native frame input owner.
+    await frame.locator("input").click();
+    for (const [index, selector] of ["input", "textarea", "select", "#editable"].entries()) {
+      if (index > 0) await page.keyboard.press("Tab");
+      const field = frame.locator(selector === "#editable" ? "[contenteditable]" : selector);
+      expect(await field.evaluate(element => document.activeElement === element)).toBe(true);
+      await field.evaluate(element => {
+        element.addEventListener("keydown", event => {
+          if (event instanceof KeyboardEvent && event.isTrusted && event.key === "Escape" && event.target === element) {
+            element.setAttribute("data-qa-native-escape", "true");
+          }
+        }, { once: true });
+      });
       await page.keyboard.press("Escape");
       await settleFrameMessages(page);
+      expect(await field.getAttribute("data-qa-native-escape")).toBe("true");
       expect(await dialog.count()).toBe(1);
     }
     await frame.locator("body").evaluate(body => {
