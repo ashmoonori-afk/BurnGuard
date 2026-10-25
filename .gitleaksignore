@@ -1,1 +1,13 @@
 e3996af3816486420576570909bfb509bc367ae3:scripts/qa/har-mask.test.ts:generic-api-key:36
+# Historical static color identifiers ultramarine-10 through ultramarine-100.
+# These exact public HTML attributes are not credentials; current markup uses data-swatch.
+93e79086bfa76bbdd8bf87eac038652da319a084:design system sample/preview/colors-ramps.html:generic-api-key:101
+93e79086bfa76bbdd8bf87eac038652da319a084:design system sample/preview/colors-ramps.html:generic-api-key:102
+93e79086bfa76bbdd8bf87eac038652da319a084:design system sample/preview/colors-ramps.html:generic-api-key:103
+93e79086bfa76bbdd8bf87eac038652da319a084:design system sample/preview/colors-ramps.html:generic-api-key:104
+93e79086bfa76bbdd8bf87eac038652da319a084:design system sample/preview/colors-ramps.html:generic-api-key:105
+93e79086bfa76bbdd8bf87eac038652da319a084:design system sample/preview/colors-ramps.html:generic-api-key:106
+93e79086bfa76bbdd8bf87eac038652da319a084:design system sample/preview/colors-ramps.html:generic-api-key:107
+93e79086bfa76bbdd8bf87eac038652da319a084:design system sample/preview/colors-ramps.html:generic-api-key:108
+93e79086bfa76bbdd8bf87eac038652da319a084:design system sample/preview/colors-ramps.html:generic-api-key:109
+93e79086bfa76bbdd8bf87eac038652da319a084:design system sample/preview/colors-ramps.html:generic-api-key:110

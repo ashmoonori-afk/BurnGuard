@@ -106,9 +106,9 @@ async function measure(page: Page) {
       overflow: child.documentElement.scrollWidth > child.documentElement.clientWidth,
       ramps: [...child.querySelectorAll(".ramp")].map(ramp => ramp.querySelectorAll(".sw").length),
       bars: child.querySelectorAll(".bar").length, legends: child.querySelectorAll(".lg").length,
-      swatches: [...child.querySelectorAll<HTMLElement>("[data-token]")].map(element => {
+      swatches: [...child.querySelectorAll<HTMLElement>("[data-swatch]")].map(element => {
         const bounds = element.getBoundingClientRect();
-        return { token: element.dataset.token, color: view.getComputedStyle(element).backgroundColor, width: bounds.width, height: bounds.height };
+        return { token: element.dataset.swatch, color: view.getComputedStyle(element).backgroundColor, width: bounds.width, height: bounds.height };
       }),
       icons: [...child.querySelectorAll<SVGSVGElement>(".ic svg")].map(icon => {
         const bounds = icon.getBoundingClientRect();
