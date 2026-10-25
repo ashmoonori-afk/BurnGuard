@@ -343,7 +343,35 @@ test("presentation fullscreen fallback preserves authored input, composition and
     await settleFrameMessages(page);
     expect(await dialog.count()).toBe(1);
     await frame.locator("body").evaluate(() => Reflect.set(window, "cancelEscape", false));
-    await frame.locator("body").press("Escape");
+    // Escape removes its renderer; release the key only after owned teardown.
+    // Keep the original five-second action budget and three-second dismissal bound.
+    const escape = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const deadline = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        const error = new Error("presentation_escape_deadline");
+        escape.abort(error);
+        reject(error);
+      }, 5000);
+    });
+    try {
+      await Promise.race([
+        (async () => {
+          await frame.locator("body").focus();
+          escape.signal.throwIfAborted();
+          const renderer = page.frames().find(candidate => candidate.parentFrame() === page.mainFrame());
+          if (!renderer) throw new Error("presentation_frame_missing");
+          const detached = page.waitForEvent("framedetached", { predicate: candidate => candidate === renderer, timeout: 3000 });
+          detached.catch(() => undefined);
+          await page.keyboard.down("Escape");
+          escape.signal.throwIfAborted();
+          await detached;
+          escape.signal.throwIfAborted();
+          await page.keyboard.up("Escape");
+        })(),
+        deadline,
+      ]);
+    } finally { clearTimeout(timer); }
     await dialog.waitFor({ state: "hidden", timeout: 3000 });
   }, false);
 }, 30000);
