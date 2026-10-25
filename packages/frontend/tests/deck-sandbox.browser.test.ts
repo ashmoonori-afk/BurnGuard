@@ -60,6 +60,9 @@ async function withBrowser(action: (page: Page, base: string, requests: { path: 
     return c.html("<!doctype html><html><body></body></html>");
   });
   app.get(`${root}deck.html`, c => c.html(html));
+  app.get("/probe/hold", () => new Response(new ReadableStream({
+    start(controller) { controller.enqueue(new Uint8Array([137, 80, 78, 71])); },
+  }), { headers: { "content-type": "image/png" } }));
   app.get(`${root}runtime/:name`, c => {
     const name = c.req.param("name");
     if (name === "pending.js") return new Response(new ReadableStream({ start(controller) { controller.enqueue(new TextEncoder().encode("/* pending */")); } }), { headers: { "content-type": "application/javascript" } });
@@ -335,6 +338,43 @@ async function settleFrameMessages(page: Page): Promise<void> {
   settled.catch(() => undefined);
   await page.frameLocator("main iframe").locator("body").evaluate(() => parent.postMessage("qa-input-fence", "*"));
   await settled;
+}
+
+for (const ordering of ["same-task", "held-load"] as const) {
+  test(`Given ${ordering} srcdoc replacement When the connected sandbox navigates Then the replacement document announces its own token`, async () => {
+    await withBrowser(async (page, base) => {
+      const completed = await page.evaluate(({ base, ordering }) => new Promise<boolean>((resolve, reject) => {
+        const frame = document.createElement("iframe");
+        frame.setAttribute("sandbox", "allow-scripts");
+        const token = crypto.randomUUID();
+        const populated = `<script>parent.postMessage(${JSON.stringify(`populated:${token}`)}, "*")</script>`;
+        const cleanup = () => {
+          clearTimeout(timer);
+          window.removeEventListener("message", received);
+          frame.remove();
+        };
+        const received = (event: MessageEvent) => {
+          if (event.source !== frame.contentWindow) return;
+          if (event.data === `committed:${token}`) frame.srcdoc = populated;
+          if (event.data !== `populated:${token}`) return;
+          cleanup();
+          resolve(true);
+        };
+        const timer = window.setTimeout(() => {
+          cleanup();
+          reject(new Error("srcdoc_replacement_deadline"));
+        }, 5000);
+        window.addEventListener("message", received);
+        frame.srcdoc = ordering === "same-task" ? ""
+          : `<img src="${base}/probe/hold"><script>parent.postMessage(${JSON.stringify(`committed:${token}`)}, "*")</script>`;
+        const main = document.querySelector("main");
+        if (!main) { cleanup(); reject(new Error("probe_main_missing")); return; }
+        main.append(frame);
+        if (ordering === "same-task") frame.srcdoc = populated;
+      }), { base, ordering });
+      expect(completed).toBe(true);
+    });
+  }, 30000);
 }
 
 test("presentation fullscreen fallback preserves authored input, composition and untrusted source isolation", async () => {
