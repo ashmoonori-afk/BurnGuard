@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import { mkdir, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import type { Browser, Page, Request as BrowserRequest } from "../../backend/node_modules/playwright-core";
@@ -375,6 +376,21 @@ test("Given a backend killed after its real commit When relaunched Then interrup
       resendEvents: listSequencedSessionEvents(db, sessionId, 0).slice(beforeResend).map(item => item.event.type),
       session: db.prepare("SELECT status FROM sessions WHERE id=?").get(sessionId),
       operations: db.prepare("SELECT status,COUNT(*) AS count FROM artifact_operations WHERE project_id=? GROUP BY status").all(projectId),
+      operation_rows: db.query<{
+        readonly id: string;
+        readonly status: string;
+        readonly kind: string;
+        readonly publication: string;
+        readonly base_revision: number;
+        readonly result_revision: number | null;
+        readonly created_at: number;
+        readonly updated_at: number;
+      }, [string]>(
+        "SELECT id,status,json_extract(replay_json,'$.kind') AS kind,json_extract(replay_json,'$.publication') AS publication,base_revision,result_revision,created_at,updated_at FROM artifact_operations WHERE project_id=? ORDER BY created_at,id",
+      ).all(projectId).map(({ id, ...fields }) => ({
+        ...fields, operation_ref: createHash("sha256").update(id).digest("hex"),
+      })),
+      snapshot_epoch_ms: Date.now(),
     }));
     throw error;
   } finally {

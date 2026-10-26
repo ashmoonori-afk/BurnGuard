@@ -1,5 +1,6 @@
 import { mock } from "bun:test";
-import { join } from "node:path";
+import { createHash } from "node:crypto";
+import { basename, dirname, join } from "node:path";
 import { CLAUDE_MODELS } from "@bg/shared";
 import type { AdapterRunInput, AdapterRunResult } from "../../../backend/src/adapters/types";
 import * as registry from "../../../backend/src/adapters/registry";
@@ -9,6 +10,8 @@ import { insertNormalizedEvent } from "../../../backend/src/db/events";
 import { reconcileArtifactState } from "../../../backend/src/services/artifact-recovery";
 import { sequencedBroker } from "../../../backend/src/services/broker";
 import { closeActiveExportBrowsers } from "../../../backend/src/services/export-browser-registry";
+import * as treeStorage from "../../../backend/src/services/artifact-tree-storage";
+import * as operationEvents from "../../../backend/src/services/artifact-operation-events";
 
 export type RecoveryServerMessage =
   | { readonly kind: "ready"; readonly origin: string; readonly recovered: number }
@@ -32,7 +35,54 @@ const mark = (phase: string, values: Record<string, string | number | boolean> =
 };
 mark("started");
 
-// Only the external provider boundary is replaced. Routes, turn callbacks, validation,
+const operationRef = (id: string) => createHash("sha256").update(id).digest("hex");
+const project = getSqlite().query<{ readonly dir_path: string }, [string]>(
+  "SELECT projects.dir_path FROM projects JOIN sessions ON sessions.project_id=projects.id WHERE sessions.id=?",
+).get(sessionId);
+if (!project) throw new Error("Recovery fixture project missing");
+const projectDir = project.dir_path;
+const baseline = join(projectDir, ".meta", "artifact-baseline", "current");
+const materialize = treeStorage.materializeManagedTree;
+const publishOperation = operationEvents.publishArtifactOperationEvent;
+// Diagnostic pass-through wrappers preserve arguments, results, errors and the crash boundary.
+mock.module("../../../backend/src/services/artifact-tree-storage", () => ({
+  ...treeStorage,
+  async materializeManagedTree(...args: Parameters<typeof materialize>) {
+    const [source, destination] = args;
+    if (destination !== baseline) return materialize(...args);
+    const operationId = basename(source) === "stage" && basename(dirname(dirname(source))) === "artifact-operations"
+      ? basename(dirname(source)) : null;
+    const identity: Readonly<Record<string, string>> = operationId === null ? {} : {
+      operation_ref: operationRef(operationId),
+      operation_status: getSqlite().query<{ readonly status: string }, [string]>(
+        "SELECT status FROM artifact_operations WHERE id=?",
+      ).get(operationId)?.status ?? "missing",
+    };
+    mark("baseline-begin", {
+      ...identity,
+      source_kind: operationId !== null ? "stage" : source === projectDir ? "live" : "other",
+      durable: args[2] === treeStorage.defaultManagedTreeIo,
+    });
+    let fulfilled = false;
+    try {
+      const result = await materialize(...args);
+      fulfilled = true;
+      return result;
+    } finally { mark("baseline-end", { ...identity, fulfilled }); }
+  },
+}));
+mock.module("../../../backend/src/services/artifact-operation-events", () => ({
+  ...operationEvents,
+  publishArtifactOperationEvent(...args: Parameters<typeof publishOperation>) {
+    const [, input] = args;
+    mark("operation-publish-begin", {
+      operation_ref: operationRef(input.operationId), outcome: input.outcome, revision: input.revision,
+    });
+    return publishOperation(...args);
+  },
+}));
+
+// Only external provider behavior is replaced. Routes, turn callbacks, validation,
 // publication, recovery, durable replay and request authority are the production implementations.
 mock.module("../../../backend/src/services/backends", () => ({
   ...backends,
@@ -60,7 +110,12 @@ const { interruptAllUserTurns } = await import("../../../backend/src/services/tu
 const recovered = await reconcileArtifactState(getSqlite());
 mark("reconciled", { recovered: recovered.sessions });
 const unsubscribe = sequencedBroker.subscribe(sessionId, ({ event }) => {
-  mark("broker", { type: event.type });
+  mark("broker", {
+    type: event.type,
+    ...(event.type === "artifact.operation" ? {
+      operation_ref: operationRef(event.operationId), outcome: event.outcome, revision: event.revision,
+    } : {}),
+  });
   // This synchronous notification follows the real SQLite commit and baseline publication,
   // but precedes the turn's buffered success terminal. SIGKILL cannot run graceful cleanup.
   if (generation === "first" && event.type === "artifact.operation" && event.outcome === "committed") process.kill(process.pid, "SIGKILL");
