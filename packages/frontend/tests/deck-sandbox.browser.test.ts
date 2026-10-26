@@ -38,7 +38,8 @@ beforeAll(async () => {
   if (code !== 0) throw new Error(errors);
   fixtureScript = script;
   // The launch has its own deadline; the shared browser lives until suite teardown.
-  suiteBrowser = await launchChromiumViaNode({}, lifetime.signal);
+  suiteBrowser = await launchChromiumViaNode({ channel: "chrome" }, lifetime.signal);
+  console.error(JSON.stringify({ event: "f04_comparison_browser", version: suiteBrowser.version() }));
 });
 
 afterAll(async () => {
