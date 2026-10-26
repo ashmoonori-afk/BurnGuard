@@ -12,21 +12,23 @@ const destination = process.env.BG_COMPARE_OUTPUT;
 const recipient = process.env.BG_FRONTEND_EVIDENCE_PUBLIC_KEY;
 if (Bun.version !== "1.3.14" || !before || !after || !destination || !recipient
   || ![before, after, destination].every(value => path.isAbsolute(value))
-  || (kind !== "logo" && kind !== "escape" && kind !== "probe")) {
+  || (kind !== "logo" && kind !== "escape" && kind !== "font" && kind !== "probe")) {
   throw new Error("native_comparison_configuration_invalid");
 }
 sealEvidence("", recipient);
 await mkdir(destination, { recursive: true, mode: 0o700 });
 const file = kind === "logo"
   ? "packages/backend/tests/logo-completion-gate.test.ts"
-  : "packages/frontend/tests/deck-sandbox.browser.test.ts";
+  : kind === "font"
+    ? "packages/frontend/tests/canvas-css-imports.browser.test.ts"
+    : "packages/frontend/tests/deck-sandbox.browser.test.ts";
 const pattern = kind === "logo"
   ? "history-appended|candidate-mutated"
   : "presentation fullscreen fallback preserves authored input";
 const command = kind === "probe"
   ? [process.execPath, "-e", "console.log('capture_stdout');console.error('capture_stderr');process.exit(7)"]
-  : [process.execPath, "test", file, "--test-name-pattern", pattern, "--timeout", "30000"];
-const expected = kind === "logo" ? 2 : 1;
+  : [process.execPath, "test", file, ...(kind === "font" ? [] : ["--test-name-pattern", pattern]), "--timeout", "30000"];
+const expected = kind === "logo" ? 2 : kind === "font" ? 5 : 1;
 const environment: NodeJS.ProcessEnv = { CI: "1", TZ: "Asia/Seoul", NO_COLOR: "1", FORCE_COLOR: "0", BG_BROWSER_SMOKE: "1" };
 for (const key of ["PATH", "HOME", "USERPROFILE", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "TMPDIR", "LOCALAPPDATA", "APPDATA", "COMSPEC", "PATHEXT", "PROGRAMFILES", "PROGRAMFILES(X86)"]) {
   if (process.env[key] !== undefined) environment[key] = process.env[key];

@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   os-tests:
-    if: github.ref != 'refs/heads/diag/f05-native-before-after-1026'
+    if: github.ref != 'refs/heads/diag/f02-native-before-after-1026'
     name: ${{ matrix.name }}
     strategy:
       fail-fast: false
@@ -241,7 +241,7 @@ jobs:
         run: bun test --timeout 120000 packages/backend/tests/exports.test.ts
 
   native-before-after:
-    if: github.ref == 'refs/heads/diag/f05-native-before-after-1026'
+    if: github.ref == 'refs/heads/diag/f02-native-before-after-1026'
     name: Native before-after ${{ matrix.kind }}
     strategy:
       fail-fast: false
@@ -249,11 +249,8 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            kind: logo
-            before: 0c51d8987ff1ecd49e799d7e8f9fc0b3d3a35c39
-          - os: ubuntu-latest
-            kind: escape
-            before: 0ffdf15da238f534061985cdc3a17ae9f14db09d
+            kind: font
+            before: b7787c945eea2f7fa5e68b38e9f6caba1e808840
     runs-on: ${{ matrix.os }}
     timeout-minutes: 35
     defaults:
@@ -269,7 +266,7 @@ jobs:
           path: before
       - uses: actions/checkout@v4
         with:
-          ref: 7a97a3502ac427568673aa9895357eaf21a17677
+          ref: 390c4df5c65f950d0206838107efc36a64d809ce
           path: after
       - uses: oven-sh/setup-bun@v2
         with:
@@ -292,9 +289,9 @@ jobs:
       - name: Typecheck the diagnostic collector
         working-directory: driver
         run: bun node_modules/typescript/bin/tsc -p scripts/qa/native-comparison/tsconfig.json --noEmit
-      - name: Record the installed system browser
-        if: matrix.kind == 'escape'
-        run: google-chrome --version
+      - name: Install the original workflow fixture browser
+        working-directory: after
+        run: node packages/backend/node_modules/playwright-core/cli.js install chromium
       - name: Compare ten original cases per source
         working-directory: driver
         env:
