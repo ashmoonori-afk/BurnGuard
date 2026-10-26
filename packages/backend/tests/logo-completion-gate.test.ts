@@ -80,21 +80,41 @@ let projectDir: string;
 // times out would otherwise leave its turn running into a deleted project and fail every later case.
 let ownedTurn: Promise<unknown> | null = null;
 let recordCasePhase: ((phase: string) => void) | undefined;
+let caseOrdinal = 0;
 const ownTurn = (turn: { readonly prepared: Promise<unknown>; readonly promise: Promise<unknown> }): void => {
   ownedTurn = Promise.allSettled([turn.prepared, turn.promise]);
 };
 
 beforeAll(async () => { await runMigrations(); await mkdir(projectsDir, { recursive: true }); });
 beforeEach(async () => {
+  caseOrdinal++;
+  const started = performance.now();
+  const cpuStarted = process.cpuUsage();
+  let count = 0;
+  const mark = (phase: string): void => {
+    if (++count > 12) return;
+    const cpu = process.cpuUsage(cpuStarted);
+    console.error(JSON.stringify({ event: "logo_gate_setup", case_ordinal: caseOrdinal, phase,
+      epoch_ms: Date.now(), elapsed_ms: Math.round(performance.now() - started),
+      cpu_user_us: cpu.user, cpu_system_us: cpu.system, rss_bytes: process.memoryUsage().rss }));
+  };
+  mark("start");
   projectId = `logo-gate-${crypto.randomUUID()}`;
   sessionId = `${projectId}-session`;
   projectDir = path.join(projectsDir, projectId);
   await mkdir(path.join(projectDir, "explorations/round-1"), { recursive: true });
+  mark("directory_ready");
   await writeFile(path.join(projectDir, "index.html"), INITIAL);
-  for (const [index, bytes] of images.entries()) await writeFile(path.join(projectDir, `explorations/round-1/candidate-${index + 1}.png`), bytes);
+  mark("entry_written");
+  for (const [index, bytes] of images.entries()) {
+    await writeFile(path.join(projectDir, `explorations/round-1/candidate-${index + 1}.png`), bytes);
+    mark(`candidate_${index + 1}_written`);
+  }
   await writeFile(path.join(projectDir, "explorations/manifest.json"), manifestJson(null));
+  mark("manifest_written");
   getSqlite().prepare("INSERT INTO projects(id,name,type,dir_path,entrypoint,backend_id,created_at,updated_at) VALUES (?,?,'logo',?,'index.html','codex',1,1)").run(projectId, projectId, projectDir);
   getSqlite().prepare("INSERT INTO sessions(id,project_id,backend_id,status,created_at,updated_at,last_active_at) VALUES (?,?,'codex','idle',1,1,1)").run(sessionId, projectId);
+  mark("rows_inserted");
 });
 afterEach(async () => {
   const observe = recordCasePhase;
@@ -157,7 +177,7 @@ test.each(cases)("Given %s in a finalize logo turn Then the gate, the repair bud
     const current = getSqlite().query<{ count: number }, [string]>("SELECT COUNT(*) count FROM events WHERE session_id=? AND type='status.error'").get(sessionId)?.count ?? 0;
     const projectExists = getSqlite().prepare("SELECT 1 FROM projects WHERE id=?").get(caseProjectId) !== null;
     const cpu = process.cpuUsage(cpuStarted);
-    console.error(JSON.stringify({ event: "logo_gate_phase", scenario, phase, elapsed_ms: Math.round(performance.now() - started),
+    console.error(JSON.stringify({ event: "logo_gate_phase", scenario, phase, case_ordinal: caseOrdinal, epoch_ms: Date.now(), elapsed_ms: Math.round(performance.now() - started),
       cpu_user_us: cpu.user, cpu_system_us: cpu.system, rss_bytes: process.memoryUsage().rss,
       stored_errors: stored, current_errors: current, live_errors: events.filter(event => event.type === "status.error").length,
       project_exists: projectExists, session_identity_matches: sessionId === caseSessionId }));
