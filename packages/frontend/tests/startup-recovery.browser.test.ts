@@ -118,6 +118,60 @@ async function load(page: Page, entry: string) {
   await page.evaluate(() => globalThis.launchAuthorityTest.settleInitialQueries());
 }
 
+test("Given a recovered workspace connection When it stays quiet beyond the default idle cutoff Then the composer remains connected", async () => {
+  const projectId = `f09-idle-${crypto.randomUUID()}`;
+  const sessionId = `${projectId}-session`;
+  const root = join(projectsDir, projectId);
+  const db = getSqlite();
+  let context: Awaited<ReturnType<Browser["newContext"]>> | undefined;
+  let server: Awaited<ReturnType<typeof startServer>> | undefined;
+  try {
+    await mkdir(root, { recursive: true });
+    await Bun.write(join(root, "index.html"), "<!doctype html><html><body><h1>Saved artifact</h1></body></html>");
+    db.prepare("INSERT INTO projects(id,name,type,dir_path,entrypoint,backend_id,created_at,updated_at) VALUES (?,?,'prototype',?,'index.html','claude-code',1,1)")
+      .run(projectId, "F09 idle recovery", root);
+    db.prepare("INSERT INTO sessions(id,project_id,backend_id,status,created_at,updated_at,last_active_at) VALUES (?,?,'claude-code','idle',1,1,1)")
+      .run(sessionId, projectId);
+    await new ArtifactCoordinator(db).initialize(projectId, root);
+    server = await startServer(sessionId, "second");
+    context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    const page = await context.newPage();
+    page.setDefaultTimeout(5000);
+    await load(page, `${server.origin}/projects/${projectId}#bg-bootstrap:${server.secret}`);
+    const observed = await page.evaluate(() => new Promise<ReturnType<typeof globalThis.launchAuthorityTest.state>>((resolve, reject) => {
+      const cleanup = () => {
+        clearTimeout(timer);
+        document.removeEventListener("f08:state", check);
+      };
+      const check = () => {
+        const state = globalThis.launchAuthorityTest.state();
+        if (state.readyState !== EventSource.OPEN || state.opened !== 1) {
+          cleanup();
+          reject(new Error("recovery_stream_lost_during_quiet_window"));
+        }
+      };
+      // Connection lifetime is the behavior under test, not a delay to settle UI work.
+      // This window crosses the default 10s idle cutoff but precedes the 30s heartbeat.
+      const timer = window.setTimeout(() => {
+        cleanup();
+        resolve(globalThis.launchAuthorityTest.state());
+      }, 15000);
+      document.addEventListener("f08:state", check);
+      check();
+    }));
+    expect(observed).toMatchObject({ readyState: 1, opened: 1, disabled: false, reason: null });
+  } finally {
+    try { await context?.close(); }
+    finally {
+      try { await server?.stop(); }
+      finally {
+        db.prepare("DELETE FROM projects WHERE id=?").run(projectId);
+        await rm(root, { recursive: true, force: true });
+      }
+    }
+  }
+}, 30000);
+
 test("Given a backend killed after its real commit When relaunched Then interruption preserves committed bytes and the actual composer successfully resends", async () => {
   const projectId = `f09-${crypto.randomUUID()}`;
   const sessionId = `${projectId}-session`;

@@ -73,6 +73,8 @@ const unsubscribe = sequencedBroker.subscribe(sessionId, ({ event }) => {
 let app: ReturnType<typeof createApp>;
 const server = Bun.serve({
   hostname: "127.0.0.1", port: 0,
+  // Match the production server's lifetime for quiet SSE connections.
+  idleTimeout: 255,
   async fetch(request) {
     const pathname = new URL(request.url).pathname;
     if (pathname === "/fixture.js") return new Response(Bun.file(join(appRoot, "f09-fixture.js")), { headers: { "content-type": "text/javascript; charset=utf-8" } });
