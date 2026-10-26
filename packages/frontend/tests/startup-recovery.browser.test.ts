@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdir, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
-import type { Browser, Page } from "../../backend/node_modules/playwright-core";
+import type { Browser, Page, Request as BrowserRequest } from "../../backend/node_modules/playwright-core";
 import { getSqlite } from "../../backend/src/db/sqlite-client";
 import { listSequencedSessionEvents } from "../../backend/src/db/event-sequence-repository";
 import { projectsDir } from "../../backend/src/lib/paths";
@@ -11,6 +11,30 @@ import { launchChromiumViaNode } from "../../backend/src/services/chromium-node-
 import { messages } from "../src/i18n/messages";
 import type { RecoveryServerMessage } from "./fixtures/startup-recovery-server";
 import type {} from "./fixtures/launch-authority-browser";
+
+type F09InputRecord = {
+  readonly phase: string;
+  readonly epoch_ms: number;
+  readonly input_id: number | null;
+  readonly target_id: number | null;
+  readonly input_chars: number | null;
+  readonly input_active: boolean;
+  readonly input_disabled: boolean | null;
+  readonly last_button_disabled: boolean | null;
+  readonly last_button_is_send: boolean;
+  readonly no_ai_tool: boolean;
+  readonly key: "Enter" | "Control" | "Meta" | null;
+  readonly ctrl: boolean | null;
+  readonly meta: boolean | null;
+  readonly composing: boolean | null;
+  readonly prevented: boolean | null;
+  readonly trusted: boolean | null;
+  readonly state: Readonly<Pick<ReturnType<typeof globalThis.launchAuthorityTest.state>,
+    "readyState" | "opened" | "closed" | "disabled" | "reason" | "expired">> | null;
+};
+declare global {
+  var f09InputEvidence: { records: F09InputRecord[]; truncated: boolean };
+}
 
 const appRoot = process.env.BG_APP_ROOT;
 if (!appRoot) throw new Error("Missing isolated recovery test profile");
@@ -50,8 +74,8 @@ afterAll(async () => { await browser?.close(); });
 
 async function startServer(sessionId: string, generation: "first" | "second") {
   const started = performance.now();
-  const phases: { phase: string; ms: number }[] = [];
-  const mark = (phase: string) => { if (phases.length < 48) phases.push({ phase, ms: Math.round(performance.now() - started) }); };
+  const phases: { phase: string; ms: number; epoch_ms: number }[] = [];
+  const mark = (phase: string) => { if (phases.length < 48) phases.push({ phase, ms: Math.round(performance.now() - started), epoch_ms: Date.now() }); };
   mark("spawn");
   const secret = generateLaunchCapability();
   const received: RecoveryServerMessage[] = [];
@@ -183,26 +207,105 @@ test("Given a backend killed after its real commit When relaunched Then interrup
   db.prepare("INSERT INTO sessions(id,project_id,backend_id,status,created_at,updated_at,last_active_at) VALUES (?,?,'claude-code','idle',1,1,1)").run(sessionId, projectId);
   await new ArtifactCoordinator(db).initialize(projectId, root);
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+  await context.addInitScript(() => {
+    // Primitive state only: never retain entered text, URLs, headers or authority.
+    globalThis.f09InputEvidence = { records: [], truncated: false };
+    const identities = new WeakMap<Element, number>();
+    let nextIdentity = 0;
+    const identity = (element: Element | null) => {
+      if (!element) return null;
+      const prior = identities.get(element);
+      if (prior !== undefined) return prior;
+      const id = ++nextIdentity;
+      identities.set(element, id);
+      return id;
+    };
+    const capture = (phase: string, event?: Event) => {
+      const evidence = globalThis.f09InputEvidence;
+      if (evidence.records.length >= 128) { evidence.truncated = true; return; }
+      const composer = document.querySelector('[data-qa="composer"]');
+      const input = composer?.querySelector("textarea") ?? null;
+      const buttons = composer?.querySelectorAll("button");
+      const last = buttons?.item(buttons.length - 1);
+      const state = globalThis.launchAuthorityTest?.state();
+      const keyboard = event instanceof KeyboardEvent ? event : null;
+      const key = keyboard?.key;
+      evidence.records.push({
+        phase, epoch_ms: Date.now(),
+        input_id: identity(input),
+        target_id: identity(event?.target instanceof Element ? event.target : null),
+        input_chars: input?.value.length ?? null,
+        input_active: input !== null && input === document.activeElement,
+        input_disabled: input?.disabled ?? null,
+        last_button_disabled: last?.disabled ?? null,
+        last_button_is_send: Boolean(last?.querySelector(".lucide-send")),
+        no_ai_tool: Boolean(composer?.querySelector('[data-bg-send-blocked="no-ai-tool"]')),
+        key: key === "Enter" || key === "Control" || key === "Meta" ? key : null,
+        ctrl: keyboard?.ctrlKey ?? null,
+        meta: keyboard?.metaKey ?? null,
+        composing: keyboard?.isComposing ?? (event instanceof InputEvent ? event.isComposing : null),
+        prevented: event?.defaultPrevented ?? null,
+        trusted: event?.isTrusted ?? null,
+        state: state ? {
+          readyState: state.readyState, opened: state.opened, closed: state.closed,
+          disabled: state.disabled, reason: state.reason, expired: state.expired,
+        } : null,
+      });
+    };
+    document.addEventListener("f08:state", () => capture("state"));
+    document.addEventListener("input", event => {
+      if (event.target instanceof HTMLTextAreaElement) capture("input", event);
+    }, true);
+    for (const capturing of [true, false]) document.addEventListener("keydown", event => {
+      if (event.key === "Enter" || event.key === "Control" || event.key === "Meta") {
+        capture(capturing ? "keydown-capture" : "keydown-bubble", event);
+      }
+    }, capturing);
+  });
   const page = await context.newPage();
   page.setDefaultTimeout(5000);
   let server: Awaited<ReturnType<typeof startServer>> | undefined;
+  const postKind = (request: BrowserRequest) => {
+    if (!server || request.method() !== "POST") return null;
+    const url = new URL(request.url());
+    if (url.origin !== server.origin) return null;
+    return url.pathname.endsWith("/events") ? "events" : url.pathname.endsWith("/documents") ? "documents" : "other";
+  };
+  page.on("request", request => { const kind = postKind(request); if (kind) server?.mark(`${kind}-request`); });
+  page.on("response", response => { const kind = postKind(response.request()); if (kind) server?.mark(`${kind}-response-${response.status()}`); });
+  page.on("requestfailed", request => { const kind = postKind(request); if (kind) server?.mark(`${kind}-request-failed`); });
+  const browserPhases = () => Promise.all(page.frames().map(async (frame, index) => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const snapshot = frame.evaluate(() => globalThis.f09InputEvidence ?? null).catch(() => ({ unavailable: true }));
+    try {
+      return { frame: index, main: frame === page.mainFrame(), evidence: await Promise.race([
+        snapshot,
+        new Promise<{ unavailable: true }>(resolve => { timer = setTimeout(() => resolve({ unavailable: true }), 500); }),
+      ]) };
+    } finally { clearTimeout(timer); }
+  }));
   let failed = false;
   let beforeResend = 0;
   try {
     server = await startServer(sessionId, "first");
     expect(server.recovered).toBe(0);
     await load(page, `${server.origin}/projects/${projectId}#bg-bootstrap:${server.secret}`);
+    server.mark("first-fill-begin");
     await page.locator('[data-qa="composer"] textarea').fill("Update the page");
+    server.mark("first-fill-end");
     // Exit is subscribed at spawn, before the real UI callback starts the turn.
     const crashed = server.exited;
     let crashTimer: ReturnType<typeof setTimeout> | undefined;
     const crashDeadline = new Promise<never>((_, reject) => {
-      crashTimer = setTimeout(() => reject(new Error("Recovery turn did not crash at its committed operation")), 4000);
+      crashTimer = setTimeout(() => { server?.mark("first-crash-deadline"); reject(new Error("Recovery turn did not crash at its committed operation")); }, 4000);
     });
     crashDeadline.catch(() => undefined);
     try {
+      server.mark("first-press-begin");
       await page.locator('[data-qa="composer"] textarea').press("Control+Enter");
+      server.mark("first-press-end");
       expect(await Promise.race([crashed, crashDeadline])).not.toBe(0);
+      server.mark("first-crash-observed");
     } finally { clearTimeout(crashTimer); }
     const committed = await readFile(join(root, "index.html"), "utf8");
     expect(committed).toContain('data-recovery-result="first"');
@@ -213,6 +316,7 @@ test("Given a backend killed after its real commit When relaunched Then interrup
     expect(db.query("SELECT status,result_revision,result_digest FROM artifact_operations WHERE id=?").get(operation.operationId)).toEqual({ status: "committed", result_revision: operation.revision, result_digest: operation.digest });
     expect(before.some(item => item.event.type === "chat.message_end" || item.event.type === "status.idle")).toBe(false);
     await server.stop();
+    console.error(JSON.stringify({ event: "f09_first_turn_phases", parent: server.phases(), child: await server.childPhases(), browser: await browserPhases() }));
     await page.goto("about:blank");
 
     server = await startServer(sessionId, "second");
@@ -266,6 +370,7 @@ test("Given a backend killed after its real commit When relaunched Then interrup
     failed = true;
     console.error(JSON.stringify({
       event: "f09_recovery_failure",
+      browser: await browserPhases(),
       parent: server?.phases(),
       resendEvents: listSequencedSessionEvents(db, sessionId, 0).slice(beforeResend).map(item => item.event.type),
       session: db.prepare("SELECT status FROM sessions WHERE id=?").get(sessionId),
@@ -273,12 +378,13 @@ test("Given a backend killed after its real commit When relaunched Then interrup
     }));
     throw error;
   } finally {
+    const observedBrowser = await browserPhases();
     try { await context.close(); }
     finally {
       try { await server?.stop(); }
       finally {
         try {
-          if (server) console.error(JSON.stringify({ event: "f09_recovery_phases", failed, parent: server.phases(), child: await server.childPhases() }));
+          if (server) console.error(JSON.stringify({ event: "f09_recovery_phases", failed, parent: server.phases(), child: await server.childPhases(), browser: observedBrowser }));
         } finally {
           db.prepare("DELETE FROM projects WHERE id=?").run(projectId);
           await rm(root, { recursive: true, force: true });

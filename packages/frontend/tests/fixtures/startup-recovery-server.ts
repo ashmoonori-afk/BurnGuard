@@ -28,7 +28,7 @@ const mark = (phase: string, values: Record<string, string | number | boolean> =
     if (phaseCount === 49) process.stderr.write('F09_FIXTURE_PHASE {"phase":"truncated"}\n');
     return;
   }
-  process.stderr.write(`F09_FIXTURE_PHASE ${JSON.stringify({ phase, ms: Math.round(performance.now() - started), ...values })}\n`);
+  process.stderr.write(`F09_FIXTURE_PHASE ${JSON.stringify({ phase, ms: Math.round(performance.now() - started), epoch_ms: Date.now(), ...values })}\n`);
 };
 mark("started");
 
@@ -73,8 +73,6 @@ const unsubscribe = sequencedBroker.subscribe(sessionId, ({ event }) => {
 let app: ReturnType<typeof createApp>;
 const server = Bun.serve({
   hostname: "127.0.0.1", port: 0,
-  // Match the production server's lifetime for quiet SSE connections.
-  idleTimeout: 255,
   async fetch(request) {
     const pathname = new URL(request.url).pathname;
     if (pathname === "/fixture.js") return new Response(Bun.file(join(appRoot, "f09-fixture.js")), { headers: { "content-type": "text/javascript; charset=utf-8" } });
@@ -82,7 +80,10 @@ const server = Bun.serve({
     if (!pathname.startsWith("/api/") && !pathname.startsWith("/runtime/")) return new Response('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/fixture.css"></head><body><div id="root" class="flex h-dvh flex-col"></div><script src="/fixture.js"></script></body></html>', { headers: { "content-type": "text/html; charset=utf-8" } });
     const response = await app.fetch(request);
     if (request.method !== "GET" || response.status >= 400 || pathname.endsWith("/stream")) {
-      mark("response", { method: request.method, status: response.status, stream: pathname.endsWith("/stream") });
+      mark("response", {
+        method: request.method, status: response.status, stream: pathname.endsWith("/stream"),
+        route: pathname.endsWith("/events") ? "events" : pathname.endsWith("/documents") ? "documents" : pathname.endsWith("/stream") ? "stream" : "other",
+      });
     }
     if (pathname.endsWith("/stream") && response.status === 200) {
       mark("stream-flush-before");
