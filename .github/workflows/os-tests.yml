@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   os-tests:
-    if: github.ref != 'refs/heads/diag/f09-idle-submission-1026'
+    if: github.ref != 'refs/heads/diag/f09-commit-boundaries-1026'
     name: ${{ matrix.name }}
     strategy:
       fail-fast: false
@@ -241,16 +241,15 @@ jobs:
         run: bun test --timeout 120000 packages/backend/tests/exports.test.ts
 
   native-before-after:
-    if: github.ref == 'refs/heads/diag/f09-idle-submission-1026'
-    name: Native before-after ${{ matrix.kind }}
+    if: github.ref == 'refs/heads/diag/f09-commit-boundaries-1026'
+    name: Native recovery commit-boundary trace
     strategy:
       fail-fast: false
       max-parallel: 1
       matrix:
         include:
           - os: windows-latest
-            kind: resend
-            before: 3e9edf54c8b069bb6ebdf51a0c2ded0009eaf63a
+            kind: resend-trace
     runs-on: ${{ matrix.os }}
     timeout-minutes: 35
     defaults:
@@ -262,11 +261,7 @@ jobs:
           path: driver
       - uses: actions/checkout@v4
         with:
-          ref: ${{ matrix.before }}
-          path: before
-      - uses: actions/checkout@v4
-        with:
-          ref: b7a2d3268b40c49c512742ae1ea9ace1e3b300e3
+          ref: 8ce0ec16a96d786f56a4d878d4093e32961d98fe
           path: after
       - uses: oven-sh/setup-bun@v2
         with:
@@ -274,16 +269,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24.13.0
-      - name: Install the three frozen source trees
+      - name: Install the two frozen source trees
         run: |
-          for tree in driver before after; do
+          for tree in driver after; do
             (cd "$tree" && bun install --frozen-lockfile) || exit
           done
       - name: Build existing Windows process helpers without SDK installation
         if: runner.os == 'Windows'
         run: |
           dotnet --list-sdks
-          for tree in driver before after; do
+          for tree in driver after; do
             (cd "$tree" && bun scripts/build-windows-process-host.ts) || exit
           done
       - name: Typecheck the diagnostic collector
@@ -295,11 +290,11 @@ jobs:
       - name: Install the original workflow fixture browser
         working-directory: after
         run: node packages/backend/node_modules/playwright-core/cli.js install chromium
-      - name: Compare ten original cases per source
+      - name: Capture twenty original recovery cases
         working-directory: driver
         env:
           BG_COMPARE_KIND: ${{ matrix.kind }}
-          BG_COMPARE_BEFORE: ${{ github.workspace }}/before
+          BG_COMPARE_BEFORE: ${{ github.workspace }}/after
           BG_COMPARE_AFTER: ${{ github.workspace }}/after
           BG_COMPARE_OUTPUT: ${{ runner.temp }}/native-comparison
           BG_FRONTEND_EVIDENCE_PUBLIC_KEY: ${{ vars.BG_FRONTEND_EVIDENCE_PUBLIC_KEY }}
