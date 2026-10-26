@@ -1,0 +1,15 @@
+{
+  "extends": "../../../packages/frontend/tsconfig.json",
+  "compilerOptions": {
+    "composite": false,
+    "incremental": false,
+    "types": ["bun"]
+  },
+  "include": [
+    "../../../packages/frontend/node_modules/vite/client.d.ts",
+    "../../../packages/frontend/src/build-flags.d.ts",
+    "../../../packages/frontend/tests/startup-recovery.browser.test.ts",
+    "../../../packages/frontend/tests/fixtures/startup-recovery-server.ts"
+  ],
+  "references": []
+}
