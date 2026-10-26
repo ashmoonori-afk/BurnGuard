@@ -219,10 +219,31 @@ async function dismissPresentationWithEscape(page: Page): Promise<void> {
   } finally { clearTimeout(timer); }
 }
 
+function initialPresentationDocument(page: Page): Promise<boolean> {
+  const published = page.evaluate(() => new Promise<boolean>((resolve, reject) => {
+    const observer = new MutationObserver(() => {
+      const frame = document.querySelector("main iframe");
+      if (!(frame instanceof HTMLIFrameElement)) return;
+      clearTimeout(timer);
+      observer.disconnect();
+      resolve(Boolean(frame.srcdoc));
+    });
+    const timer = window.setTimeout(() => {
+      observer.disconnect();
+      reject(new Error("presentation_publication_deadline"));
+    }, 5000);
+    observer.observe(document, { subtree: true, childList: true });
+  }));
+  published.catch(() => undefined);
+  return published;
+}
+
 test("presentation remounts after its owned fullscreen exit and forwards focused page Escape", async () => {
   await withBrowser(async (page) => {
     const entered = fullscreenState(page, true);
+    const initial = initialPresentationDocument(page);
     await page.getByRole("button", { name: "Present test fixture" }).click();
+    expect(await initial).toBe(true);
     await page.evaluate(() => globalThis.presentationLoad);
     const dialog = page.getByRole("dialog");
     await dialog.waitFor();
@@ -236,7 +257,9 @@ test("presentation remounts after its owned fullscreen exit and forwards focused
     await dialog.waitFor({ state: "hidden", timeout: 3000 });
     await exited;
     const reentered = fullscreenState(page, true);
+    const remounted = initialPresentationDocument(page);
     await page.getByRole("button", { name: "Present test fixture" }).click();
+    expect(await remounted).toBe(true);
     await page.evaluate(() => globalThis.presentationLoad);
     await frame.locator("body[data-deck-ready][data-presenter]").waitFor();
     await reentered;
@@ -262,8 +285,21 @@ async function settleFrameMessages(page: Page): Promise<void> {
 
 test("presentation fullscreen fallback preserves authored input, composition and untrusted source isolation", async () => {
   await withBrowser(async (page) => {
+    await page.evaluate(() => {
+      let focusReturned = false;
+      const focus = HTMLIFrameElement.prototype.focus;
+      HTMLIFrameElement.prototype.focus = function(options) {
+        focus.call(this, options);
+        if (this.matches("main iframe") && this.srcdoc) focusReturned = true;
+      };
+      const present = globalThis.deckTest.present;
+      globalThis.deckTest.present = src => present(src).then(() => {
+        document.documentElement.dataset.qaPresentationFocusReady = String(focusReturned);
+      });
+    });
     await page.getByRole("button", { name: "Present test fixture" }).click();
     await page.evaluate(() => globalThis.presentationLoad);
+    expect(await page.locator("html").getAttribute("data-qa-presentation-focus-ready")).toBe("true");
     const dialog = page.getByRole("dialog");
     await dialog.waitFor();
     const frame = page.frameLocator("main iframe");
