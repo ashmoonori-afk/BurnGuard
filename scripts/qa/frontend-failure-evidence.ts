@@ -163,7 +163,8 @@ if (import.meta.main) {
     const failedTestIds = tests.map(run => ({ phase: run.phase, ids: failedTestDigests(run.records) }));
     const incomplete = results.some(result => result.stdout.truncated || result.stderr.truncated || !result.stdout.complete || !result.stderr.complete);
     const failed = results.some(result => result.exit !== 0) || !sameNames || !sameStatuses || incomplete;
-    if (failed) {
+    const retained = failed || process.env.BG_FRONTEND_EVIDENCE_RETAIN_ALL === "1";
+    if (retained) {
       await writeFile(path.join(destination, "frontend-failure.encrypted.json"), sealEvidence(JSON.stringify({
         receipt, results, tests, counts, same_names: sameNames, same_statuses: sameStatuses,
         first_failure: results.find(result => result.exit !== 0 || result.timed_out)?.phase ?? null,
@@ -176,7 +177,7 @@ if (import.meta.main) {
       failed_test_ids: failedTestIds,
       same_names: sameNames,
       same_statuses: sameStatuses,
-      retained: failed,
+      retained,
     }));
     process.exitCode = failed ? 1 : 0;
   } catch {

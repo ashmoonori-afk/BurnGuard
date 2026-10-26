@@ -28,26 +28,52 @@ test("Given the Canvas browser fixture When bundled as a classic IIFE script The
   expect(() => new Script(script)).not.toThrow();
 });
 
+let cspAttempt = 0;
 async function assertCanvasPolicy(
   action: "popup" | "navigation",
-  launch: (server: ReturnType<typeof Bun.serve>) => ReturnType<typeof launchChromiumViaNode> =
-    () => launchChromiumViaNode({ channel: "chrome" }, AbortSignal.timeout(20000)),
+  launch?: (server: ReturnType<typeof Bun.serve>) => ReturnType<typeof launchChromiumViaNode>,
 ) {
+  const attempt = ++cspAttempt;
+  const started = performance.now();
+  let ownedSignal: AbortSignal | undefined;
+  const phase = (stage: string, browserVersion?: string) => console.error(JSON.stringify({
+    event: "csp_lifecycle_phase", attempt, action, stage,
+    elapsed_ms: Math.round(performance.now() - started),
+    owner_aborted: ownedSignal?.aborted ?? null,
+    ...(browserVersion === undefined ? {} : { browser: browserVersion }),
+  }));
+  const aborted = () => phase("owner-signal-abort");
+  const disconnected = () => phase("browser-disconnected");
+  phase("source-start");
   const source = await readFile(new URL("../src/components/canvas/Canvas.tsx", import.meta.url), "utf8");
   const sandbox = /sandbox="([^"]+)"/.exec(source)?.[1];
   if (sandbox === undefined) throw new Error("Canvas sandbox attribute missing");
   const requests: string[] = [];
   const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch(request) { requests.push(new URL(request.url).pathname); return new Response("<!doctype html><body></body>", { headers: { "content-type": "text/html" } }); } });
+  phase("server-ready");
   let browser: Awaited<ReturnType<typeof launchChromiumViaNode>> | undefined;
   try {
-    browser = await launch(server);
+    phase("launch-start");
+    if (launch) browser = await launch(server);
+    else {
+      ownedSignal = AbortSignal.timeout(20000);
+      ownedSignal.addEventListener("abort", aborted, { once: true });
+      browser = await launchChromiumViaNode({ channel: "chrome" }, ownedSignal);
+    }
+    browser.once("disconnected", disconnected);
+    phase("launch-end", browser.version());
+    phase("page-start");
     const page = await browser.newPage();
+    phase("page-end");
     const base = `${server.url.origin}/api/projects/p/fs/index.html`;
+    phase("goto-start");
     await page.goto(server.url.origin);
+    phase("goto-end");
     await page.evaluate(() => window.addEventListener("message", event => {
       if (event.source === document.querySelector("iframe")?.contentWindow && event.data?.event === "navigate") console.log(`NAVIGATE:${event.data.payload.href}`);
     }));
     const html = buildSandboxedArtifactSrcDoc(`<html><head></head><body><button id="open" onclick="document.querySelector('output').textContent = window.open('${server.url.origin}/unexpected') === null ? 'blocked' : 'opened'">Open</button><output></output><a href="next.html">Normal link</a><a target="_blank" href="other.html">Blank link</a></body></html>`, base);
+    phase("frame-start");
     await page.evaluate(({ html, sandbox }) => new Promise<void>((resolve, reject) => {
       const frame = document.createElement("iframe");
       frame.setAttribute("sandbox", sandbox);
@@ -56,9 +82,12 @@ async function assertCanvasPolicy(
       frame.srcdoc = html;
       document.body.append(frame);
     }), { html, sandbox });
+    phase("frame-end");
     const frame = page.frameLocator("iframe");
     if (action === "popup") {
+      phase("popup-start");
       await frame.locator("#open").click();
+      phase("popup-end");
       expect(await frame.locator("output").textContent()).toBe("blocked");
     } else for (const [name, file] of [["Normal link", "next.html"], ["Blank link", "other.html"]] as const) {
       const navigation = page.waitForEvent("console", { predicate: message => message.text() === `NAVIGATE:${new URL(file, base).href}`, timeout: 3000 });
@@ -68,9 +97,16 @@ async function assertCanvasPolicy(
       expect(page.context().pages()).toEqual([page]);
     }
     expect(requests).not.toContain("/unexpected");
+    phase("assertions-end");
   } finally {
-    try { await browser?.close(); }
-    finally { await server.stop(true); }
+    phase("cleanup-start");
+    try {
+      try { await browser?.close(); phase("browser-closed"); }
+      finally { await server.stop(true); phase("server-stopped"); }
+    } finally {
+      ownedSignal?.removeEventListener("abort", aborted);
+      browser?.off("disconnected", disconnected);
+    }
   }
 }
 

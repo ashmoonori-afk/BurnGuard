@@ -13,6 +13,7 @@ concurrency:
 
 jobs:
   os-tests:
+    if: github.ref != 'refs/heads/diag/f02-csp-cold-1026'
     name: ${{ matrix.name }}
     strategy:
       fail-fast: false

@@ -2,7 +2,7 @@ name: Frontend failure evidence
 
 on:
   push:
-    branches: [main]
+    branches: [main, diag/f02-csp-cold-1026]
     paths:
       - packages/frontend/**
       - packages/shared/**
@@ -31,6 +31,11 @@ concurrency:
 
 jobs:
   capture:
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        attempt: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     # Configure this repository variable with an RSA >=3072-bit SPKI public PEM.
     # Keep the matching private key OFF GitHub. No evidence is uploaded unencrypted.
     # Explicit opt-in is needed because artifacts in a public repository are not private.
@@ -50,24 +55,13 @@ jobs:
         env:
           BG_FRONTEND_EVIDENCE_PUBLIC_KEY: ${{ vars.BG_FRONTEND_EVIDENCE_PUBLIC_KEY }}
           BG_FRONTEND_EVIDENCE_DIRECTORY: ${{ runner.temp }}/frontend-failure-evidence
+          BG_FRONTEND_EVIDENCE_RETAIN_ALL: "1"
         run: bun scripts/qa/frontend-failure-evidence.ts
-      - name: Retain encrypted failures for seven days
-        if: failure()
+      - name: Retain encrypted phases for seven days
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: frontend-failure-${{ github.run_id }}-${{ github.run_attempt }}
+          name: csp-phases-${{ github.run_id }}-${{ matrix.attempt }}
           path: ${{ runner.temp }}/frontend-failure-evidence/frontend-failure.encrypted.json
-          retention-days: 7
-          if-no-files-found: error
-      - name: Prove controlled failure capture with the owner recipient
-        env:
-          BG_FRONTEND_EVIDENCE_PUBLIC_KEY: ${{ vars.BG_FRONTEND_EVIDENCE_PUBLIC_KEY }}
-          BG_FRONTEND_EVIDENCE_PROOF_DIRECTORY: ${{ runner.temp }}/frontend-retention-proof
-        run: bun test --timeout 30000 scripts/qa/frontend-failure-evidence.test.ts -t "import failure before three registrations"
-      - name: Retain the encrypted failure proof for owner-side recovery
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-retention-proof-${{ github.run_id }}
-          path: ${{ runner.temp }}/frontend-retention-proof/frontend-failure.encrypted.json
           retention-days: 7
           if-no-files-found: error
