@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import { buildSandboxedArtifactSrcDoc } from "../src/components/canvas/frame-bridge";
 import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
@@ -28,14 +28,19 @@ test("Given the Canvas browser fixture When bundled as a classic IIFE script The
   expect(() => new Script(script)).not.toThrow();
 });
 
-for (const action of ["popup", "navigation"] as const) test.skipIf(!systemChromeAvailable)(`system Chrome Canvas ${action} policy blocks popups and preserves project links`, async () => {
+async function assertCanvasPolicy(
+  action: "popup" | "navigation",
+  launch: (server: ReturnType<typeof Bun.serve>) => ReturnType<typeof launchChromiumViaNode> =
+    () => launchChromiumViaNode({ channel: "chrome" }, AbortSignal.timeout(20000)),
+) {
   const source = await readFile(new URL("../src/components/canvas/Canvas.tsx", import.meta.url), "utf8");
   const sandbox = /sandbox="([^"]+)"/.exec(source)?.[1];
   if (sandbox === undefined) throw new Error("Canvas sandbox attribute missing");
   const requests: string[] = [];
   const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch(request) { requests.push(new URL(request.url).pathname); return new Response("<!doctype html><body></body>", { headers: { "content-type": "text/html" } }); } });
-  const browser = await launchChromiumViaNode({ channel: "chrome" }, AbortSignal.timeout(20000));
+  let browser: Awaited<ReturnType<typeof launchChromiumViaNode>> | undefined;
   try {
+    browser = await launch(server);
     const page = await browser.newPage();
     const base = `${server.url.origin}/api/projects/p/fs/index.html`;
     await page.goto(server.url.origin);
@@ -63,8 +68,32 @@ for (const action of ["popup", "navigation"] as const) test.skipIf(!systemChrome
       expect(page.context().pages()).toEqual([page]);
     }
     expect(requests).not.toContain("/unexpected");
-  } finally { await browser.close(); await server.stop(true); }
-}, 20000);
+  } finally {
+    try { await browser?.close(); }
+    finally { await server.stop(true); }
+  }
+}
+
+for (const action of ["popup", "navigation"] as const) test.skipIf(!systemChromeAvailable)(`system Chrome Canvas ${action} policy blocks popups and preserves project links`, () => assertCanvasPolicy(action), 20000);
+
+for (const stage of ["launch", "browser close"] as const) test(`Given ${stage} rejects When the CSP fixture owns a real server Then cleanup stops that server`, async () => {
+  const failure = new Error("fixture_ownership_failure");
+  let cleanup: (() => Promise<void>) | undefined;
+  let assertStopped: () => void = () => { throw new Error("server_not_observed"); };
+  try {
+    await expect(assertCanvasPolicy("popup", async server => {
+      const stopped = spyOn(server, "stop");
+      cleanup = async () => { stopped.mockRestore(); await server.stop(true); };
+      assertStopped = () => { expect(stopped).toHaveBeenCalledWith(true); };
+      if (stage === "launch") throw failure;
+      const browser = await launchChromiumViaNode({ channel: "chrome" }, AbortSignal.timeout(20000));
+      const close = browser.close.bind(browser);
+      browser.close = async () => { await close(); throw failure; };
+      return browser;
+    })).rejects.toBe(failure);
+    assertStopped();
+  } finally { await cleanup?.(); }
+}, 30000);
 
 test.skipIf(!systemChromeAvailable)("system Chrome routes trusted external clicks with modifiers and preserves activation across postMessage", async () => {
   const compiler = Bun.spawn([process.execPath, "build", `${import.meta.dir}/fixtures/canvas-css-browser.ts`, "--target=browser", "--format=iife"], { stdout: "pipe", stderr: "pipe" });
