@@ -200,6 +200,11 @@ export default function ExportMenu({ projectId, projectType, projectOptionsJson,
       </DropdownMenuTrigger>
       <DropdownMenuContent
         data-export-menu-content
+        onPointerDownOutside={(event) => {
+          // The exiting menu can still observe the pointer that reopens its trigger.
+          const target = event.detail.originalEvent.target;
+          if (target instanceof Node && exportTriggerRef.current?.contains(target)) event.preventDefault();
+        }}
         onCloseAutoFocus={(event) => {
           const next = pendingDetailsRef.current;
           if (next === null) return;
