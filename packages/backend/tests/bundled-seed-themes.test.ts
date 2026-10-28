@@ -223,9 +223,20 @@ describe("bundled design systems", () => {
     const destinationRoot = await mkdtemp(path.join(tmpdir(), "bg-theme-seeds-"));
     try {
       const canonicalCss = await readFile(canonicalTokensPath, "utf8");
-      // Family decisions vary; the dedicated layout contract check covers required grid tokens.
-      const requiredTokens = [...(await extractCssCustomProperties(canonicalCss)).keys()].filter(token => !token.startsWith("family-"));
+      // Preserve shipped shared keys and new canonical keys. Only the additional
+      // stops in Northvale's ten preview ramps are specific to that sample.
+      const sharedCss = await readFile(path.join(import.meta.dir, "fixtures/northvale-legacy/colors_and_type.css"), "utf8");
+      const sharedTokens = await extractCssCustomProperties(sharedCss);
+      const sampleTokens = await extractCssCustomProperties(canonicalCss);
+      const requiredTokens = [...new Set([...sharedTokens.keys(), ...sampleTokens.keys()])].filter(token =>
+        !token.startsWith("family-") &&
+        (sharedTokens.has(token) || !/^(red|orange|yellow|green|teal|aqua|blue|ultramarine|purple|pink)-(10|20|30|40|50|60|70|80|90|100)$/.test(token)),
+      );
       expect(requiredTokens.length).toBeGreaterThan(0);
+      for (const token of requiredTokens) {
+        expect(sampleTokens.has(token), `northvale: --${token}`).toBe(true);
+        expect(sampleTokens.get(token)?.trim(), `northvale: --${token}`).not.toBe("");
+      }
 
       await seedBundledDesignSystems(resolveRepoRoot(), destinationRoot);
 

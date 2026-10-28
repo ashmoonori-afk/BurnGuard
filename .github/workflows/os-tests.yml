@@ -76,6 +76,7 @@ jobs:
           packages/backend/tests/export-naming.test.ts
           packages/backend/tests/design-system-contrast.test.ts
           packages/backend/tests/bundled-seed-themes.test.ts
+          packages/backend/tests/northvale-preview-repair.test.ts
           packages/backend/tests/design-system-starter.test.ts
           packages/frontend/tests/canvas-edit-review.test.ts
           packages/frontend/tests/revision-thumbnails.test.ts
@@ -234,6 +235,7 @@ jobs:
           packages/frontend/tests/launch-authority.browser.test.ts
           packages/frontend/tests/startup-recovery.browser.test.ts
           packages/frontend/tests/design-system-pin.browser.test.ts
+          packages/frontend/tests/northvale-previews.browser.test.ts
           packages/frontend/tests/workspace-controls.browser.test.ts
           packages/frontend/tests/app-font.browser.test.ts
       - name: Chromium popup and deck runtime

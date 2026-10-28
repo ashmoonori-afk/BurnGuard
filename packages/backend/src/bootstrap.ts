@@ -38,6 +38,7 @@ import { reconcileResearchState, type ResearchRecoveryDependencies } from "./ser
 import { recoverVisualAlternatives } from "./services/visual-alternative-recovery";
 import { bundledThemeHistory, installedThemeState, recoverBundledTheme, refreshBundledTheme, type BundledThemeHistory, type BundledThemeRefresh } from "./services/bundled-theme-refresh";
 import { reapPersistedSessionProcesses } from "./services/session-process-recovery";
+import { repairNorthvalePreviews } from "./services/northvale-preview-repair";
 
 async function exists(target: string): Promise<boolean> {
   try {
@@ -166,6 +167,13 @@ export async function bootstrapLocalAppData(researchRecovery?: ResearchRecoveryD
   reconcilePipelineRows(getDb());
   await reconcileCatalogState(getSqlite(), systemsDir);
   await reconcileExtractionState();
+  const northvaleRepair = await repairNorthvalePreviews(getSqlite(), {
+    systemsRoot: systemsDir,
+    sourceRoot: path.join(resolveRepoRoot(), "design system sample"),
+  });
+  if (northvaleRepair.preserved.length > 0) {
+    console.warn("[seed] Northvale preview repair partial", northvaleRepair.reason, northvaleRepair.preserved.length);
+  }
   const artifactRecovery = await reconcileArtifactState(getSqlite());
   for (const project of artifactRecovery.unavailableProjects) {
     console.warn("[artifact] project recovery deferred", project.projectId, project.code);
