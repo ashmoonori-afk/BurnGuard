@@ -105,7 +105,8 @@ async function startServer(sessionId: string, generation: "first" | "second") {
     return {
       origin: ready.origin, recovered: ready.recovered, secret, exited, waitFor, stop, mark,
       phases: () => ({ generation, phases, truncated: phases.length === 48, received: received.map(message => message.kind) }),
-      childPhases: async () => (await output).flatMap(text => text.split("\n").filter(line => line.startsWith("F09_FIXTURE_PHASE "))).slice(0, 49),
+      childPhases: async () => (await output).flatMap(text => text.split("\n").filter(line => line.startsWith("F09_FIXTURE_PHASE "))).slice(0, 50),
+      childRequests: async () => (await output).flatMap(text => text.split("\n").filter(line => line.startsWith("F09_FIXTURE_REQUEST "))).slice(0, 33),
     };
   } catch (error) {
     await stop();
@@ -228,7 +229,10 @@ test("Given a backend killed after its real commit When relaunched Then interrup
     committedCrash.catch(() => mark("committed-crash-rejected"));
     try {
       await page.locator('[data-qa="composer"] textarea').press("Control+Enter");
-      expect(await committedCrash).toBe(137);
+      // Exact native receipts observed on Bun 1.3.14: Windows self-SIGKILL is 1;
+      // macOS is 137. The kill marker and durable assertions below exclude early exit.
+      expect(await committedCrash).toBe(process.platform === "win32" ? 1 : 137);
+      expect(await server.childPhases()).toContain('F09_FIXTURE_PHASE {"phase":"committed-self-kill"}');
     } finally {
       page.off("response", onResponse);
       page.off("requestfailed", onRequestFailed);
@@ -307,7 +311,7 @@ test("Given a backend killed after its real commit When relaunched Then interrup
       try { await server?.stop(); }
       finally {
         try {
-          if (server) console.error(JSON.stringify({ event: "f09_recovery_phases", failed, parent: server.phases(), child: await server.childPhases() }));
+          if (server) console.error(JSON.stringify({ event: "f09_recovery_phases", failed, parent: server.phases(), child: await server.childPhases(), requests: await server.childRequests() }));
         } finally {
           db.prepare("DELETE FROM projects WHERE id=?").run(projectId);
           await rm(root, { recursive: true, force: true });

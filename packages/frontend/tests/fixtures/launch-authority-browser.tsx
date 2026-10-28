@@ -1,6 +1,7 @@
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { QueryClientProvider } from "@tanstack/react-query";
+import type { Query } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { authorizedFetch, isAuthorityExpired } from "../../src/api/client";
 import { queryClient } from "../../src/api/queryClient";
@@ -133,6 +134,21 @@ globalThis.launchAuthorityTest = {
   sameComposer() { return composer !== null && composer === document.querySelector("textarea"); },
   settleInitialQueries() {
     return new Promise((resolve, reject) => {
+      const categories = ["project", "session", "files", "artifacts", "visual-alternatives", "design-audit", "comments", "design-directions", "undo-info", "unverified-draft", "instructions", "palette", "exports", "backends", "settings", "prompt-library", "design-systems"] as const;
+      const summarize = (query: Query) => {
+        const key = query.queryKey;
+        const candidate = key[0] === "project" || key[0] === "projects"
+          ? key[2] === "fs" && key[4] === "undo-info" ? "undo-info" : key[2] ?? "project"
+          : key[0];
+        return {
+          category: categories.find(name => name === candidate) ?? "other",
+          status: query.state.status,
+          fetchStatus: query.state.fetchStatus,
+          failureCount: query.state.fetchFailureCount,
+        };
+      };
+      const changes: ReturnType<typeof summarize>[] = [];
+      let changeCount = 0;
       const check = () => {
         if (queryClient.isFetching() !== 0) return;
         clearTimeout(timer);
@@ -141,9 +157,17 @@ globalThis.launchAuthorityTest = {
       };
       const timer = setTimeout(() => {
         unsubscribe();
-        reject(new Error("Initial authority fixture queries did not settle"));
+        const queries = queryClient.getQueryCache().getAll();
+        reject(new Error(`Initial authority fixture queries did not settle: ${JSON.stringify({
+          fetching: queryClient.isFetching(), queryCount: queries.length,
+          queries: queries.slice(0, 32).map(summarize), queriesTruncated: queries.length > 32,
+          changes, changesTruncated: changeCount > 48,
+        })}`));
       }, 5000);
-      const unsubscribe = queryClient.getQueryCache().subscribe(check);
+      const unsubscribe = queryClient.getQueryCache().subscribe(event => {
+        if (changeCount++ < 48) changes.push(summarize(event.query));
+        check();
+      });
       check();
     });
   },

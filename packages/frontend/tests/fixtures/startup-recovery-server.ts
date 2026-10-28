@@ -1,4 +1,5 @@
 import { mock } from "bun:test";
+import { writeSync } from "node:fs";
 import { join } from "node:path";
 import { CLAUDE_MODELS } from "@bg/shared";
 import type { AdapterRunInput, AdapterRunResult } from "../../../backend/src/adapters/types";
@@ -8,10 +9,14 @@ import * as checkpoints from "../../../backend/src/services/checkpoints";
 import * as lucideReference from "../../../backend/src/harness/lucide-reference";
 import * as promptBuilder from "../../../backend/src/harness/prompt-builder";
 import { getSqlite } from "../../../backend/src/db/sqlite-client";
+import { getProjectDetail } from "../../../backend/src/db/project-read-repository";
 import { insertNormalizedEvent } from "../../../backend/src/db/events";
+import { projectsDir, resolveManagedPath } from "../../../backend/src/lib/paths";
 import { reconcileArtifactState } from "../../../backend/src/services/artifact-recovery";
+import { writeProjectAuditCache } from "../../../backend/src/services/design-audit";
 import { sequencedBroker } from "../../../backend/src/services/broker";
 import { closeActiveExportBrowsers } from "../../../backend/src/services/export-browser-registry";
+import { unmeasuredAuthorityAudit } from "./launch-authority-audit";
 
 export type RecoveryServerMessage =
   | { readonly kind: "ready"; readonly origin: string; readonly recovered: number }
@@ -35,6 +40,14 @@ const mark = (phase: string, values: Record<string, string | number | boolean> =
   process.stderr.write(`F09_FIXTURE_PHASE ${JSON.stringify({ phase, ms: Math.round(performance.now() - started), ...values })}\n`);
 };
 mark("started");
+let requestCount = 0;
+const observeRequest = (phase: "enter" | "response", category: string, status: number) => {
+  if (requestCount++ >= 32) {
+    if (requestCount === 33) process.stderr.write('F09_FIXTURE_REQUEST {"phase":"truncated"}\n');
+    return;
+  }
+  process.stderr.write(`F09_FIXTURE_REQUEST ${JSON.stringify({ phase, category, status, ms: Math.round(performance.now() - started) })}\n`);
+};
 
 // Capture originals before module replacement so the observations call real implementations.
 const writePreTurnSnapshot = checkpoints.writePreTurnSnapshot;
@@ -101,11 +114,23 @@ const { createApp } = await import("../../../backend/src/server");
 const { interruptAllUserTurns } = await import("../../../backend/src/services/turns");
 const recovered = await reconcileArtifactState(getSqlite());
 mark("reconciled", { recovered: recovered.sessions });
+const session = getSqlite().query<{ readonly project_id: string }, [string]>("SELECT project_id FROM sessions WHERE id=?").get(sessionId);
+if (session === null) throw new Error("Missing recovery fixture session");
+const project = await getProjectDetail(session.project_id);
+if (project === null) throw new Error("Missing initialized recovery fixture project");
+// Isolate unrelated measurement, not the real audit route or identity checks.
+// Re-read after reconciliation so the restarted generation names the committed artifact.
+await writeProjectAuditCache(resolveManagedPath(projectsDir, project.dir_path), unmeasuredAuthorityAudit(project));
+mark("audit-cache-seeded");
 const unsubscribe = sequencedBroker.subscribe(sessionId, ({ event }) => {
   mark("broker", { type: event.type });
   // This synchronous notification follows the real SQLite commit and baseline publication,
   // but precedes the turn's buffered success terminal. SIGKILL cannot run graceful cleanup.
-  if (generation === "first" && event.type === "artifact.operation" && event.outcome === "committed") process.kill(process.pid, "SIGKILL");
+  if (generation === "first" && event.type === "artifact.operation" && event.outcome === "committed") {
+    // A pipe write must finish before the intentional kill; async logging can be lost.
+    writeSync(2, 'F09_FIXTURE_PHASE {"phase":"committed-self-kill"}\n');
+    process.kill(process.pid, "SIGKILL");
+  }
   if (event.type === "status.idle") {
     mark("terminal-send-before");
     send({ kind: "terminal", stopReason: event.stopReason });
@@ -123,7 +148,16 @@ const server = Bun.serve({
     if (pathname === "/fixture.css") return new Response(Bun.file(join(appRoot, "f09-fixture.css")), { headers: { "content-type": "text/css; charset=utf-8" } });
     if (!pathname.startsWith("/api/") && !pathname.startsWith("/runtime/")) return new Response('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/fixture.css"></head><body><div id="root" class="flex h-dvh flex-col"></div><script src="/fixture.js"></script></body></html>', { headers: { "content-type": "text/html; charset=utf-8" } });
     if (request.method === "POST") mark("post-enter");
+    // Only fixed route categories leave the fixture; never paths, IDs or query strings.
+    const parts = pathname.split("/");
+    const category = parts[2] === "projects"
+      ? ["session", "files", "artifacts", "visual-alternatives", "design-audit", "comments", "design-directions", "unverified-draft", "instructions", "exports"].find(name => name === parts[4]) ?? (parts.length === 4 ? "project" : "other-project")
+      : parts[2] === "sessions"
+        ? ["snapshot", "events", "stream", "composer-draft"].find(name => name === parts[4]) ?? "other-session"
+        : ["bootstrap", "backends", "settings", "prompt-library", "design-systems"].find(name => name === parts[2]) ?? "other";
+    observeRequest("enter", category, 0);
     const response = await app.fetch(request);
+    observeRequest("response", category, response.status);
     if (request.method !== "GET" || response.status >= 400 || pathname.endsWith("/stream")) {
       mark("response", { method: request.method, status: response.status, stream: pathname.endsWith("/stream") });
     }
