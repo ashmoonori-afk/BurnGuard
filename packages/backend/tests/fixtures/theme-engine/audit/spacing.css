@@ -1,0 +1,21 @@
+.s01 { padding: 4px; } /* s-p01 */
+.s02 { margin-left: 8px; } /* s-p02 */
+.s03 { gap: 16px; } /* s-p03 */
+.s04 { row-gap: 5px; } /* s-p04 */
+.s05 { padding-inline: 1em; } /* s-p05 */
+.s06 { margin-top: 10%; } /* s-p06 */
+.s07 { & .child { column-gap: 4px; } } /* s-p07 */
+.sdup { padding-top: 4px; } /* s-p08 */
+.sdup { padding-top: 16px; } /* s-p09 */
+.s10 { --local-space: 4px; gap: var(--local-space); } /* s-p10 */
+.s11 { margin: var(--missing, 4px); } /* s-p11 */
+.sn01 { padding: var(--space-sm); } /* s-n01 */
+.sn02 { margin: 0; } /* s-n02 */
+.sn03 { gap: inherit; } /* s-n03 */
+.sn04 { margin-inline: auto; } /* s-n04 */
+.sn05 { width: 8px; } /* s-n05 */
+.sn06 { height: 16px; } /* s-n06 */
+.sn07 { min-width: 4px; } /* s-n07 */
+.sn08 { inline-size: 8px; } /* s-n08 */
+.sn09 { --local-space: var(--space-md); gap: var(--local-space); } /* s-n09 */
+.sn10 { padding: var(--missing, var(--space-lg)); } /* s-n10 */

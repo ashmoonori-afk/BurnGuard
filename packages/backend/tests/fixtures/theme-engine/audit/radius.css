@@ -1,0 +1,21 @@
+.r01 { border-radius: 4px; } /* r-p01 */
+.r02 { border-top-left-radius: 8px; } /* r-p02 */
+.r03 { border-top-right-radius: 16px; } /* r-p03 */
+.r04 { border-bottom-left-radius: 5px; } /* r-p04 */
+.r05 { border-radius: 1em; } /* r-p05 */
+.r06 { border-radius: 50%; } /* r-p06 */
+.r07 { & .child { border-radius: 4px; } } /* r-p07 */
+.rdup { border-radius: 4px; } /* r-p08 */
+.rdup { border-radius: 16px; } /* r-p09 */
+.r10 { --local-radius: 4px; border-radius: var(--local-radius); } /* r-p10 */
+.r11 { border-radius: var(--missing, 4px); } /* r-p11 */
+.rn01 { border-radius: var(--radius-sm); } /* r-n01 */
+.rn02 { border-radius: var(--radius-control); } /* r-n02 */
+.rn03 { border-radius: 0; } /* r-n03 */
+.rn04 { border-radius: inherit; } /* r-n04 */
+.rn05 { border-radius: initial; } /* r-n05 */
+.rn06 { border-radius: unset; } /* r-n06 */
+.rn07 { border-radius: revert; } /* r-n07 */
+.rn08 { border-radius: var(--missing, var(--radius-lg)); } /* r-n08 */
+.rn09 { --local-radius: var(--radius-sm); border-radius: var(--local-radius); } /* r-n09 */
+.rn10 { border-radius: var(--radius-sm) var(--radius-lg); } /* r-n10 */

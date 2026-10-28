@@ -1,0 +1,356 @@
+{
+  "schema_version": 1,
+  "capture_kind": "rendered-request-and-user-export",
+  "positions_are_absolute": true,
+  "tolerance": {
+    "lightness": 1e-9,
+    "chroma": 1e-7,
+    "retention_ratio": 0.000001,
+    "hue_degrees": 0.00001
+  },
+  "metric_definition": {
+    "retention": "delivered C / explicitly requested C at the same brand anchor; zero requested C reported separately",
+    "mapping_hue_drift": "wrapped delivered H minus explicitly requested H at the exact anchor; achromatic inputs excluded",
+    "default_scale_variation": "measured separately; not inferred to be gamut-map hue drift"
+  },
+  "cases": [
+    {
+      "id": "brand-in-gamut-p3",
+      "gamut": "display-p3",
+      "requested_text": "oklch(70% 0.12 30)",
+      "requested": {
+        "l": 0.7,
+        "c": 0.12,
+        "h": 30
+      },
+      "position": 0.3,
+      "interpretation": "exact brand anchor, no intentional hue variation at the anchor",
+      "source": "rendered input and user-facing JSON export",
+      "comparison": true,
+      "delivered": {
+        "l": 0.7,
+        "c": 0.12,
+        "h": 30,
+        "hex": "#df8071"
+      },
+      "visible_request": [
+        0.7,
+        0.12,
+        30
+      ],
+      "outside_warning": false
+    },
+    {
+      "id": "brand-gamut-switch-p3-to-srgb",
+      "gamut": "srgb",
+      "requested_text": "oklch(70% 0.12 30)",
+      "requested": {
+        "l": 0.7,
+        "c": 0.12,
+        "h": 30
+      },
+      "position": 0.3,
+      "interpretation": "exact brand anchor, no intentional hue variation at the anchor",
+      "source": "rendered input and user-facing JSON export",
+      "comparison": false,
+      "delivered": {
+        "l": 0.7,
+        "c": 0.09452655780435675,
+        "h": 30,
+        "hex": "#d3887b"
+      },
+      "visible_request": [
+        0.7,
+        0.12,
+        30
+      ],
+      "outside_warning": false
+    },
+    {
+      "id": "brand-outside-srgb",
+      "gamut": "srgb",
+      "requested_text": "oklch(70% 0.4 30)",
+      "requested": {
+        "l": 0.7,
+        "c": 0.4,
+        "h": 30
+      },
+      "position": 0.3,
+      "interpretation": "input UI explicitly says outside sRGB and nearest displayable colour; exact anchor identifies intended L/h",
+      "source": "rendered request preview and user-facing JSON export",
+      "comparison": true,
+      "delivered": {
+        "l": 0.7,
+        "c": 0.1915125548839569,
+        "h": 30,
+        "hex": "#ff6551"
+      },
+      "visible_request": [
+        0.7,
+        0.4,
+        30
+      ],
+      "outside_warning": true
+    },
+    {
+      "id": "brand-fresh-in-srgb",
+      "gamut": "srgb",
+      "requested_text": "oklch(70% 0.12 30)",
+      "requested": {
+        "l": 0.7,
+        "c": 0.12,
+        "h": 30
+      },
+      "position": 0.30000000000000004,
+      "scale_name": "Brand 3",
+      "comparison": true,
+      "interpretation": "fresh brand request in the declared gamut; exact anchor has no intentional hue variation",
+      "delivered": {
+        "l": 0.7,
+        "c": 0.12,
+        "h": 30,
+        "hex": "#df8071"
+      },
+      "visible_request": [
+        0.7,
+        0.12,
+        30
+      ],
+      "outside_warning": false
+    },
+    {
+      "id": "brand-outside-p3",
+      "gamut": "display-p3",
+      "requested_text": "oklch(70% 0.4 30)",
+      "requested": {
+        "l": 0.7,
+        "c": 0.4,
+        "h": 30
+      },
+      "position": 0.30000000000000004,
+      "scale_name": "Brand 4",
+      "comparison": true,
+      "interpretation": "fresh brand request in the declared gamut; exact anchor has no intentional hue variation",
+      "delivered": {
+        "l": 0.7,
+        "c": 0.24312222003936768,
+        "h": 30,
+        "hex": "#ff6551"
+      },
+      "visible_request": [
+        0.7,
+        0.4,
+        30
+      ],
+      "outside_warning": true
+    },
+    {
+      "id": "brand-blue-outside-srgb",
+      "gamut": "srgb",
+      "requested_text": "oklch(70% 0.4 260)",
+      "requested": {
+        "l": 0.7,
+        "c": 0.4,
+        "h": 260
+      },
+      "position": 0.30000000000000004,
+      "scale_name": "Brand 5",
+      "comparison": true,
+      "interpretation": "fresh brand request in the declared gamut; exact anchor has no intentional hue variation",
+      "delivered": {
+        "l": 0.7,
+        "c": 0.1574171483516693,
+        "h": 260,
+        "hex": "#629dff"
+      },
+      "visible_request": [
+        0.7,
+        0.4,
+        260
+      ],
+      "outside_warning": true
+    },
+    {
+      "id": "brand-blue-outside-p3",
+      "gamut": "display-p3",
+      "requested_text": "oklch(70% 0.4 260)",
+      "requested": {
+        "l": 0.7,
+        "c": 0.4,
+        "h": 260
+      },
+      "position": 0.30000000000000004,
+      "scale_name": "Brand 6",
+      "comparison": true,
+      "interpretation": "fresh brand request in the declared gamut; exact anchor has no intentional hue variation",
+      "delivered": {
+        "l": 0.7,
+        "c": 0.1703801453113556,
+        "h": 260,
+        "hex": "#629dff"
+      },
+      "visible_request": [
+        0.7,
+        0.4,
+        260
+      ],
+      "outside_warning": true
+    },
+    {
+      "id": "brand-near-white-srgb",
+      "gamut": "srgb",
+      "requested_text": "oklch(98% 0.1 145)",
+      "requested": {
+        "l": 0.98,
+        "c": 0.1,
+        "h": 145
+      },
+      "position": 0.020000000000000018,
+      "scale_name": "Brand 7",
+      "comparison": true,
+      "interpretation": "fresh brand request in the declared gamut; exact anchor has no intentional hue variation",
+      "delivered": {
+        "l": 0.98,
+        "c": 0.033682554960250854,
+        "h": 145.00000000000006,
+        "hex": "#ebffeb"
+      },
+      "visible_request": [
+        0.98,
+        0.1,
+        145
+      ],
+      "outside_warning": true
+    },
+    {
+      "id": "brand-near-white-p3",
+      "gamut": "display-p3",
+      "requested_text": "oklch(98% 0.1 145)",
+      "requested": {
+        "l": 0.98,
+        "c": 0.1,
+        "h": 145
+      },
+      "position": 0.020000000000000018,
+      "scale_name": "Brand 8",
+      "comparison": true,
+      "interpretation": "fresh brand request in the declared gamut; exact anchor has no intentional hue variation",
+      "delivered": {
+        "l": 0.98,
+        "c": 0.03726455569267273,
+        "h": 145.00000000000006,
+        "hex": "#ebffeb"
+      },
+      "visible_request": [
+        0.98,
+        0.1,
+        145
+      ],
+      "outside_warning": true
+    },
+    {
+      "id": "brand-near-black-srgb",
+      "gamut": "srgb",
+      "requested_text": "oklch(2% 0.1 260)",
+      "requested": {
+        "l": 0.02,
+        "c": 0.1,
+        "h": 260
+      },
+      "position": 0.98,
+      "scale_name": "Brand 9",
+      "comparison": true,
+      "interpretation": "fresh brand request in the declared gamut; exact anchor has no intentional hue variation",
+      "delivered": {
+        "l": 0.020000000000000018,
+        "c": 0.010213375091552734,
+        "h": 260,
+        "hex": "#000000"
+      },
+      "visible_request": [
+        0.02,
+        0.1,
+        260
+      ],
+      "outside_warning": true
+    },
+    {
+      "id": "brand-near-black-p3",
+      "gamut": "display-p3",
+      "requested_text": "oklch(2% 0.1 260)",
+      "requested": {
+        "l": 0.02,
+        "c": 0.1,
+        "h": 260
+      },
+      "position": 0.98,
+      "scale_name": "Brand 10",
+      "comparison": true,
+      "interpretation": "fresh brand request in the declared gamut; exact anchor has no intentional hue variation",
+      "delivered": {
+        "l": 0.020000000000000018,
+        "c": 0.012981921434402466,
+        "h": 260,
+        "hex": "#000000"
+      },
+      "visible_request": [
+        0.02,
+        0.1,
+        260
+      ],
+      "outside_warning": true
+    },
+    {
+      "id": "brand-grey-srgb",
+      "gamut": "srgb",
+      "requested_text": "oklch(50% 0 0)",
+      "requested": {
+        "l": 0.5,
+        "c": 0,
+        "h": 0
+      },
+      "position": 0.5,
+      "scale_name": "Brand 11",
+      "comparison": true,
+      "interpretation": "fresh brand request in the declared gamut; exact anchor has no intentional hue variation",
+      "delivered": {
+        "l": 0.5,
+        "c": 0,
+        "h": 0,
+        "hex": "#636363"
+      },
+      "visible_request": [
+        0.5,
+        0,
+        0
+      ],
+      "outside_warning": false
+    },
+    {
+      "id": "brand-grey-p3",
+      "gamut": "display-p3",
+      "requested_text": "oklch(50% 0 0)",
+      "requested": {
+        "l": 0.5,
+        "c": 0,
+        "h": 0
+      },
+      "position": 0.5,
+      "scale_name": "Brand 12",
+      "comparison": true,
+      "interpretation": "fresh brand request in the declared gamut; exact anchor has no intentional hue variation",
+      "delivered": {
+        "l": 0.5,
+        "c": 0,
+        "h": 0,
+        "hex": "#636363"
+      },
+      "visible_request": [
+        0.5,
+        0,
+        0
+      ],
+      "outside_warning": false
+    }
+  ]
+}

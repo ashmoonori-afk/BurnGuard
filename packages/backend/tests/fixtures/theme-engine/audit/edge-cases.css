@@ -1,0 +1,15 @@
+.shadowed-colour { --brand: #abcdef; color: var(--brand); } /* c-p14 */
+.shadowed-radius { --radius-sm: 1em; border-radius: var(--radius-sm); } /* r-p14 */
+.shadowed-space { --space-md: 2em; padding: var(--space-md); } /* s-p14 */
+.shadowed-font { --font-md: 2em; font-size: var(--font-md); } /* f-p14 */
+.shadowed-shadow { --shadow-soft: inset 0 0 1em red; box-shadow: var(--shadow-soft); } /* h-p14 */
+.cycle-colour { --a: var(--b); --b: var(--a); color: var(--a); } /* c-u03 */
+.cycle-radius { --a: var(--b); --b: var(--a); border-radius: var(--a); } /* r-u03 */
+.cycle-space { --a: var(--b); --b: var(--a); gap: var(--a); } /* s-u03 */
+.cycle-font { --a: var(--b); --b: var(--a); font-size: var(--a); } /* f-u03 */
+.cycle-shadow { --a: var(--b); --b: var(--a); box-shadow: var(--a); } /* h-u03 */
+.fallback-colour { color: var(--brand, #ff0000); } /* c-n14 */
+.fallback-radius { border-radius: var(--radius-sm, 99px); } /* r-n14 */
+.fallback-space { gap: var(--space-md, 99px); } /* s-n14 */
+.fallback-font { font-size: var(--font-md, 99px); } /* f-n14 */
+.fallback-shadow { box-shadow: var(--shadow-soft, 0 0 99px red); } /* h-n14 */

@@ -1,0 +1,3733 @@
+{
+  "schema_version": 1,
+  "kind": "legacy-source-inventory",
+  "hash_algorithm": "sha256",
+  "hash_bytes": "Unmodified file bytes, including original line endings; no text normalization.",
+  "path_base": "A worktree root",
+  "ordering": "Systems in registry order; paths sorted lexicographically within each system.",
+  "registry": {
+    "path": "packages/backend/src/data/bundled-design-systems.ts",
+    "bytes": 3106,
+    "sha256": "b68f94c6bc02bca611fd4bab4d532b3d34bd82ef4cdd9142a209fcb39fd30413"
+  },
+  "systems": [
+    {
+      "id": "legacy-light",
+      "system_id": "builtin-theme-light",
+      "slug": "light",
+      "root": "design system themes/light",
+      "files": [
+        {
+          "path": "design system themes/light/README.md",
+          "bytes": 9873,
+          "sha256": "f7e37537ed5aa7da837f6570a48d834479059a4763bfb43e311dd114d99a1d85",
+          "relative_path": "README.md",
+          "category": "root-readme"
+        },
+        {
+          "path": "design system themes/light/SKILL.md",
+          "bytes": 3290,
+          "sha256": "dd9f50a3d3cd9a22d992e13c97dfce9bf4d0c42d9dd8bee2c28ce0e9b52e21ef",
+          "relative_path": "SKILL.md",
+          "category": "root-skill"
+        },
+        {
+          "path": "design system themes/light/colors_and_type.css",
+          "bytes": 4687,
+          "sha256": "d5243b7b72ce0d0fb6efab95cae21d2b58e85fca08643c2ae77d4ae6a622a364",
+          "relative_path": "colors_and_type.css",
+          "category": "legacy-css"
+        },
+        {
+          "path": "design system themes/light/surfaces/content.css",
+          "bytes": 674,
+          "sha256": "68d1cd940c7dbc56ee76e55128183cde821d433ae765002fae85afa26fbba0e4",
+          "relative_path": "surfaces/content.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/light/surfaces/slides.css",
+          "bytes": 625,
+          "sha256": "a64a719a388b262f1076cb36290487505615487abb9d50c05a9b3f726f073313",
+          "relative_path": "surfaces/slides.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/light/surfaces/website.css",
+          "bytes": 534,
+          "sha256": "873f041d7124dc6f205fb1d9935bbb6b3be0f300a028fd968ef898484c3c6db5",
+          "relative_path": "surfaces/website.css",
+          "category": "surface"
+        }
+      ],
+      "categories": {
+        "legacy_css": [
+          "colors_and_type.css"
+        ],
+        "root_readme": [
+          "README.md"
+        ],
+        "root_skill": [
+          "SKILL.md"
+        ],
+        "surfaces": [
+          "surfaces/content.css",
+          "surfaces/slides.css",
+          "surfaces/website.css"
+        ],
+        "assets": [],
+        "fonts": []
+      },
+      "shared_font_inventory": "shared-fonts"
+    },
+    {
+      "id": "legacy-dark",
+      "system_id": "builtin-theme-dark",
+      "slug": "dark",
+      "root": "design system themes/dark",
+      "files": [
+        {
+          "path": "design system themes/dark/README.md",
+          "bytes": 10203,
+          "sha256": "9205c991fd07c024a789d13ecf2af4bb3c7dd96a9cb549ad5e5cf9eb2384cab1",
+          "relative_path": "README.md",
+          "category": "root-readme"
+        },
+        {
+          "path": "design system themes/dark/SKILL.md",
+          "bytes": 3499,
+          "sha256": "39325ac226a39379ca6f242bb6ea8140b4ae77f47252893edc9c18862d92b89d",
+          "relative_path": "SKILL.md",
+          "category": "root-skill"
+        },
+        {
+          "path": "design system themes/dark/colors_and_type.css",
+          "bytes": 4692,
+          "sha256": "89797bf74b0d671393a844c6782de380ec822630d721435995025d0a934b9b11",
+          "relative_path": "colors_and_type.css",
+          "category": "legacy-css"
+        },
+        {
+          "path": "design system themes/dark/surfaces/content.css",
+          "bytes": 673,
+          "sha256": "f729e3635d694e621e3bec4af431f2c5515723f207d88bc79f89e47b8979ece4",
+          "relative_path": "surfaces/content.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/dark/surfaces/slides.css",
+          "bytes": 624,
+          "sha256": "315dad01bdac97cf1c5a0bae95ca2c9b7db74fb5c701085b82e5eac92c6c7865",
+          "relative_path": "surfaces/slides.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/dark/surfaces/website.css",
+          "bytes": 533,
+          "sha256": "3e009becb9002cf54a7f4d83d29f43df0237f7e6d2d75995c24a58017a8fa397",
+          "relative_path": "surfaces/website.css",
+          "category": "surface"
+        }
+      ],
+      "categories": {
+        "legacy_css": [
+          "colors_and_type.css"
+        ],
+        "root_readme": [
+          "README.md"
+        ],
+        "root_skill": [
+          "SKILL.md"
+        ],
+        "surfaces": [
+          "surfaces/content.css",
+          "surfaces/slides.css",
+          "surfaces/website.css"
+        ],
+        "assets": [],
+        "fonts": []
+      },
+      "shared_font_inventory": "shared-fonts"
+    },
+    {
+      "id": "legacy-cupcake",
+      "system_id": "builtin-theme-cupcake",
+      "slug": "cupcake",
+      "root": "design system themes/cupcake",
+      "files": [
+        {
+          "path": "design system themes/cupcake/README.md",
+          "bytes": 9980,
+          "sha256": "29a6c0439408b5202fee36f847dcd8ec9df6d996fe97325d67af58f7eaaec5b2",
+          "relative_path": "README.md",
+          "category": "root-readme"
+        },
+        {
+          "path": "design system themes/cupcake/SKILL.md",
+          "bytes": 3363,
+          "sha256": "35643522aeacf45f2eb6b9ca3b73b607334ce576b46fa13db6995c28ede1c38c",
+          "relative_path": "SKILL.md",
+          "category": "root-skill"
+        },
+        {
+          "path": "design system themes/cupcake/colors_and_type.css",
+          "bytes": 4704,
+          "sha256": "f8f56478480208873053b139bb315498ab6bd144bd3c2686bd93262876f8faef",
+          "relative_path": "colors_and_type.css",
+          "category": "legacy-css"
+        },
+        {
+          "path": "design system themes/cupcake/surfaces/content.css",
+          "bytes": 676,
+          "sha256": "61be8f145191942cbb2f272e7554621496f8adfbe027605a8143db685dcc1674",
+          "relative_path": "surfaces/content.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/cupcake/surfaces/slides.css",
+          "bytes": 627,
+          "sha256": "e3e5e96c4dcacf94a1dccf611d07eb474045798e623e92f5d30a9abf5ae65326",
+          "relative_path": "surfaces/slides.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/cupcake/surfaces/website.css",
+          "bytes": 536,
+          "sha256": "12bdd86229a30d8fe1536a131e7bdd14ed08c6a3d13a41cf0a68fc122897fb2c",
+          "relative_path": "surfaces/website.css",
+          "category": "surface"
+        }
+      ],
+      "categories": {
+        "legacy_css": [
+          "colors_and_type.css"
+        ],
+        "root_readme": [
+          "README.md"
+        ],
+        "root_skill": [
+          "SKILL.md"
+        ],
+        "surfaces": [
+          "surfaces/content.css",
+          "surfaces/slides.css",
+          "surfaces/website.css"
+        ],
+        "assets": [],
+        "fonts": []
+      },
+      "shared_font_inventory": "shared-fonts"
+    },
+    {
+      "id": "legacy-retro",
+      "system_id": "builtin-theme-retro",
+      "slug": "retro",
+      "root": "design system themes/retro",
+      "files": [
+        {
+          "path": "design system themes/retro/README.md",
+          "bytes": 10012,
+          "sha256": "55d53675a6d3ec709023e5ce8eab6343def8ad60073cb99e58990fafae3506d4",
+          "relative_path": "README.md",
+          "category": "root-readme"
+        },
+        {
+          "path": "design system themes/retro/SKILL.md",
+          "bytes": 3349,
+          "sha256": "df6a24ac0f94d7a29d2f584e384295761717f31ec6cf6ca7265c82dad92d8c5c",
+          "relative_path": "SKILL.md",
+          "category": "root-skill"
+        },
+        {
+          "path": "design system themes/retro/colors_and_type.css",
+          "bytes": 4720,
+          "sha256": "4f09dd5929f3f12a88bea88c47bb9a7f14fdaa7c6a14488271bc306f44d6408a",
+          "relative_path": "colors_and_type.css",
+          "category": "legacy-css"
+        },
+        {
+          "path": "design system themes/retro/surfaces/content.css",
+          "bytes": 674,
+          "sha256": "e3e76df45d03446621cd6d13c907655fe548322d02948c1a17b99c17978c8b35",
+          "relative_path": "surfaces/content.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/retro/surfaces/slides.css",
+          "bytes": 625,
+          "sha256": "36120e361ea55a10e436533338cf738198df6fd2d1d40daa9093534753bfe115",
+          "relative_path": "surfaces/slides.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/retro/surfaces/website.css",
+          "bytes": 534,
+          "sha256": "b38e1a7df5ff082c46a39233b932538bb0d1584d60a63e135e4552f6da3a8d52",
+          "relative_path": "surfaces/website.css",
+          "category": "surface"
+        }
+      ],
+      "categories": {
+        "legacy_css": [
+          "colors_and_type.css"
+        ],
+        "root_readme": [
+          "README.md"
+        ],
+        "root_skill": [
+          "SKILL.md"
+        ],
+        "surfaces": [
+          "surfaces/content.css",
+          "surfaces/slides.css",
+          "surfaces/website.css"
+        ],
+        "assets": [],
+        "fonts": []
+      },
+      "shared_font_inventory": "shared-fonts"
+    },
+    {
+      "id": "legacy-cyberpunk",
+      "system_id": "builtin-theme-cyberpunk",
+      "slug": "cyberpunk",
+      "root": "design system themes/cyberpunk",
+      "files": [
+        {
+          "path": "design system themes/cyberpunk/README.md",
+          "bytes": 10136,
+          "sha256": "5628f77d34925d7f78870c4fc5f982a9a90382507ba49119e94065a5594bc8df",
+          "relative_path": "README.md",
+          "category": "root-readme"
+        },
+        {
+          "path": "design system themes/cyberpunk/SKILL.md",
+          "bytes": 3331,
+          "sha256": "4315f208f39674a003da5e59cd81c764091f3bfabf4c4cdc1ed9bcafbc425e94",
+          "relative_path": "SKILL.md",
+          "category": "root-skill"
+        },
+        {
+          "path": "design system themes/cyberpunk/colors_and_type.css",
+          "bytes": 4695,
+          "sha256": "a3462e3e6382588e6be6dcc298ac081ab7ed8f10e6fde525bc603c14be0f3737",
+          "relative_path": "colors_and_type.css",
+          "category": "legacy-css"
+        },
+        {
+          "path": "design system themes/cyberpunk/surfaces/content.css",
+          "bytes": 678,
+          "sha256": "fe9e60454ec8e13c6597e54e442d005ed823b3185e5195efee0fa57660da06f3",
+          "relative_path": "surfaces/content.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/cyberpunk/surfaces/slides.css",
+          "bytes": 629,
+          "sha256": "7d51938a62b79c6c63df59ff0d6586862cb4e1a6dad3e7e2e86259988a67f5e0",
+          "relative_path": "surfaces/slides.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/cyberpunk/surfaces/website.css",
+          "bytes": 538,
+          "sha256": "4847c225a6299946d029e9e52f669db9889bdbcd78310d28c96634328af0105c",
+          "relative_path": "surfaces/website.css",
+          "category": "surface"
+        }
+      ],
+      "categories": {
+        "legacy_css": [
+          "colors_and_type.css"
+        ],
+        "root_readme": [
+          "README.md"
+        ],
+        "root_skill": [
+          "SKILL.md"
+        ],
+        "surfaces": [
+          "surfaces/content.css",
+          "surfaces/slides.css",
+          "surfaces/website.css"
+        ],
+        "assets": [],
+        "fonts": []
+      },
+      "shared_font_inventory": "shared-fonts"
+    },
+    {
+      "id": "legacy-synthwave",
+      "system_id": "builtin-theme-synthwave",
+      "slug": "synthwave",
+      "root": "design system themes/synthwave",
+      "files": [
+        {
+          "path": "design system themes/synthwave/README.md",
+          "bytes": 9876,
+          "sha256": "eaddad2277cef6fce4a63377c0281aa5a956517b1bd6b52830fdbad0f70022c2",
+          "relative_path": "README.md",
+          "category": "root-readme"
+        },
+        {
+          "path": "design system themes/synthwave/SKILL.md",
+          "bytes": 3311,
+          "sha256": "cf5e2135831a8389ebf9cea867ec2ecec53125535403e4db70fca5108a17c8f1",
+          "relative_path": "SKILL.md",
+          "category": "root-skill"
+        },
+        {
+          "path": "design system themes/synthwave/colors_and_type.css",
+          "bytes": 4718,
+          "sha256": "8e2c28c389c4224c9ffddf707552dbea28bb624bce2f5c9e6162162a216bb9db",
+          "relative_path": "colors_and_type.css",
+          "category": "legacy-css"
+        },
+        {
+          "path": "design system themes/synthwave/surfaces/content.css",
+          "bytes": 678,
+          "sha256": "78bae086e928db868f122ac30b9d32b91ec795cbd49a96af946659f48fe6bd49",
+          "relative_path": "surfaces/content.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/synthwave/surfaces/slides.css",
+          "bytes": 629,
+          "sha256": "679eab1685268427107c9d4a100331885e2579afb9d61155d4fac9d8a34316ee",
+          "relative_path": "surfaces/slides.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/synthwave/surfaces/website.css",
+          "bytes": 538,
+          "sha256": "591ed6ab19d5f81269cba45e89fc1e83173c808205d726383805f8d0843c4bfe",
+          "relative_path": "surfaces/website.css",
+          "category": "surface"
+        }
+      ],
+      "categories": {
+        "legacy_css": [
+          "colors_and_type.css"
+        ],
+        "root_readme": [
+          "README.md"
+        ],
+        "root_skill": [
+          "SKILL.md"
+        ],
+        "surfaces": [
+          "surfaces/content.css",
+          "surfaces/slides.css",
+          "surfaces/website.css"
+        ],
+        "assets": [],
+        "fonts": []
+      },
+      "shared_font_inventory": "shared-fonts"
+    },
+    {
+      "id": "legacy-luxury",
+      "system_id": "builtin-theme-luxury",
+      "slug": "luxury",
+      "root": "design system themes/luxury",
+      "files": [
+        {
+          "path": "design system themes/luxury/README.md",
+          "bytes": 10143,
+          "sha256": "10ec86701f65fff458aeed1e6063e46e52b66c19e2d9436e3a49bb6eec9081bb",
+          "relative_path": "README.md",
+          "category": "root-readme"
+        },
+        {
+          "path": "design system themes/luxury/SKILL.md",
+          "bytes": 3548,
+          "sha256": "c9cf60bd848453eb2c90bfab20e3f9429e64bd8b954b9fa0f3457415d6084ee6",
+          "relative_path": "SKILL.md",
+          "category": "root-skill"
+        },
+        {
+          "path": "design system themes/luxury/colors_and_type.css",
+          "bytes": 4705,
+          "sha256": "8299e8c18eacceff72324ccef085e15954a33d646421a28591cb00b727ca952b",
+          "relative_path": "colors_and_type.css",
+          "category": "legacy-css"
+        },
+        {
+          "path": "design system themes/luxury/surfaces/content.css",
+          "bytes": 675,
+          "sha256": "01d226c85a4f2c03d25e1e2ddc5960da6dfa7927e1cccc829a8644847cf1163a",
+          "relative_path": "surfaces/content.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/luxury/surfaces/slides.css",
+          "bytes": 626,
+          "sha256": "968b3373393a85f1ad6d76a9b6a1c1c46ded1a37ca26ac85f2e19085e92e1b99",
+          "relative_path": "surfaces/slides.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/luxury/surfaces/website.css",
+          "bytes": 535,
+          "sha256": "31fd30a1b6cfb9e9131ccd2ff8498fbd99da10a5d9c2a5eec4245635df7db67c",
+          "relative_path": "surfaces/website.css",
+          "category": "surface"
+        }
+      ],
+      "categories": {
+        "legacy_css": [
+          "colors_and_type.css"
+        ],
+        "root_readme": [
+          "README.md"
+        ],
+        "root_skill": [
+          "SKILL.md"
+        ],
+        "surfaces": [
+          "surfaces/content.css",
+          "surfaces/slides.css",
+          "surfaces/website.css"
+        ],
+        "assets": [],
+        "fonts": []
+      },
+      "shared_font_inventory": "shared-fonts"
+    },
+    {
+      "id": "legacy-dracula",
+      "system_id": "builtin-theme-dracula",
+      "slug": "dracula",
+      "root": "design system themes/dracula",
+      "files": [
+        {
+          "path": "design system themes/dracula/README.md",
+          "bytes": 9951,
+          "sha256": "029b5763ba1d7c5ba69306f2f350fd004f70ef584965e9cde6378839928e7b19",
+          "relative_path": "README.md",
+          "category": "root-readme"
+        },
+        {
+          "path": "design system themes/dracula/SKILL.md",
+          "bytes": 3322,
+          "sha256": "593cdb521c88ff3dfa401bfbe2238059a61005c7de6e8b872e25e62ca9a9bd02",
+          "relative_path": "SKILL.md",
+          "category": "root-skill"
+        },
+        {
+          "path": "design system themes/dracula/colors_and_type.css",
+          "bytes": 4700,
+          "sha256": "e0de895acad15754a97ec259600fcb25ae47d3119eeda95619d4ef212bbb4033",
+          "relative_path": "colors_and_type.css",
+          "category": "legacy-css"
+        },
+        {
+          "path": "design system themes/dracula/surfaces/content.css",
+          "bytes": 676,
+          "sha256": "f8de5141cd21b3d60c9d16e0cb3c5239d16123e9e21298c242fe9635910df394",
+          "relative_path": "surfaces/content.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/dracula/surfaces/slides.css",
+          "bytes": 627,
+          "sha256": "e9a0a28eef279aae9f75729dbbc3bca8ab92d19ad6cbfbf2199cd89fedf54fab",
+          "relative_path": "surfaces/slides.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/dracula/surfaces/website.css",
+          "bytes": 537,
+          "sha256": "3517dd81f7dd091c281ea53a0d774b930b59ccc2c262dae8fa0bb28ad82b7df6",
+          "relative_path": "surfaces/website.css",
+          "category": "surface"
+        }
+      ],
+      "categories": {
+        "legacy_css": [
+          "colors_and_type.css"
+        ],
+        "root_readme": [
+          "README.md"
+        ],
+        "root_skill": [
+          "SKILL.md"
+        ],
+        "surfaces": [
+          "surfaces/content.css",
+          "surfaces/slides.css",
+          "surfaces/website.css"
+        ],
+        "assets": [],
+        "fonts": []
+      },
+      "shared_font_inventory": "shared-fonts"
+    },
+    {
+      "id": "legacy-nord",
+      "system_id": "builtin-theme-nord",
+      "slug": "nord",
+      "root": "design system themes/nord",
+      "files": [
+        {
+          "path": "design system themes/nord/README.md",
+          "bytes": 9989,
+          "sha256": "52bdcd97f20827dae2d70e5244ea744cc8ec6a1a0fe2b0a2088a0c7f33d7cf2d",
+          "relative_path": "README.md",
+          "category": "root-readme"
+        },
+        {
+          "path": "design system themes/nord/SKILL.md",
+          "bytes": 3313,
+          "sha256": "dfcb8060edf51e840c0ded899168738eb184bf80eceda6d60bdb80f03c586ab8",
+          "relative_path": "SKILL.md",
+          "category": "root-skill"
+        },
+        {
+          "path": "design system themes/nord/colors_and_type.css",
+          "bytes": 4686,
+          "sha256": "77370a82d4b1804a53e86b569a89ab01da2b46f0ed2fbc22eeecaed52c083b08",
+          "relative_path": "colors_and_type.css",
+          "category": "legacy-css"
+        },
+        {
+          "path": "design system themes/nord/surfaces/content.css",
+          "bytes": 673,
+          "sha256": "c4fdfe5476299849c6c8415069e6ac4aa345ecc3acf7a9bed5d31516aac563a6",
+          "relative_path": "surfaces/content.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/nord/surfaces/slides.css",
+          "bytes": 624,
+          "sha256": "bfc4f45de172c4be1bf948035d37e60c3d74c66650cc0cbf4caf819ab9dce5ec",
+          "relative_path": "surfaces/slides.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/nord/surfaces/website.css",
+          "bytes": 533,
+          "sha256": "434a337abe5eb135cf03f79405fefaf3cfe77039095fa5cda50956e3cf9d7853",
+          "relative_path": "surfaces/website.css",
+          "category": "surface"
+        }
+      ],
+      "categories": {
+        "legacy_css": [
+          "colors_and_type.css"
+        ],
+        "root_readme": [
+          "README.md"
+        ],
+        "root_skill": [
+          "SKILL.md"
+        ],
+        "surfaces": [
+          "surfaces/content.css",
+          "surfaces/slides.css",
+          "surfaces/website.css"
+        ],
+        "assets": [],
+        "fonts": []
+      },
+      "shared_font_inventory": "shared-fonts"
+    },
+    {
+      "id": "legacy-business",
+      "system_id": "builtin-theme-business",
+      "slug": "business",
+      "root": "design system themes/business",
+      "files": [
+        {
+          "path": "design system themes/business/README.md",
+          "bytes": 10005,
+          "sha256": "9ca5a9b7883979655af5c5db6e5a44ed508c55316e29c6cf02a8543eb60b9f80",
+          "relative_path": "README.md",
+          "category": "root-readme"
+        },
+        {
+          "path": "design system themes/business/SKILL.md",
+          "bytes": 3373,
+          "sha256": "2ebfc98ccfbf3d98e1ad2d6ef087111f394d592e82da19326db50328610fb598",
+          "relative_path": "SKILL.md",
+          "category": "root-skill"
+        },
+        {
+          "path": "design system themes/business/colors_and_type.css",
+          "bytes": 4693,
+          "sha256": "ffd2f566e2e5864f33a116b2ec5002d07d59f1d019a610934ecefba9335915bf",
+          "relative_path": "colors_and_type.css",
+          "category": "legacy-css"
+        },
+        {
+          "path": "design system themes/business/surfaces/content.css",
+          "bytes": 677,
+          "sha256": "ca5e87a534bf26393788d179de231510df7c16fc34c1672e7c0120e64aa7389f",
+          "relative_path": "surfaces/content.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/business/surfaces/slides.css",
+          "bytes": 628,
+          "sha256": "8c71c5e66f0e9af6df82ac4229a1a6e9a7740d747d9ef291f0987173c792c23e",
+          "relative_path": "surfaces/slides.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/business/surfaces/website.css",
+          "bytes": 537,
+          "sha256": "4a1059eac13fade93a7ab18b3be81ae743756a0e6245699dd16c393ad0573d92",
+          "relative_path": "surfaces/website.css",
+          "category": "surface"
+        }
+      ],
+      "categories": {
+        "legacy_css": [
+          "colors_and_type.css"
+        ],
+        "root_readme": [
+          "README.md"
+        ],
+        "root_skill": [
+          "SKILL.md"
+        ],
+        "surfaces": [
+          "surfaces/content.css",
+          "surfaces/slides.css",
+          "surfaces/website.css"
+        ],
+        "assets": [],
+        "fonts": []
+      },
+      "shared_font_inventory": "shared-fonts"
+    },
+    {
+      "id": "legacy-cobalt-atelier",
+      "system_id": "builtin-theme-cobalt-atelier",
+      "slug": "cobalt-atelier",
+      "root": "design system themes/cobalt-atelier",
+      "files": [
+        {
+          "path": "design system themes/cobalt-atelier/README.md",
+          "bytes": 13010,
+          "sha256": "8b3c8bc595ff7bcc3ec92fbec8454cf1925606aebcb12f49e63476e9bf1900b8",
+          "relative_path": "README.md",
+          "category": "root-readme"
+        },
+        {
+          "path": "design system themes/cobalt-atelier/SKILL.md",
+          "bytes": 8010,
+          "sha256": "e8ed52d837a14d0a867e14255ae1661ea23db250cf1653f9e469bc7c67d25b8c",
+          "relative_path": "SKILL.md",
+          "category": "root-skill"
+        },
+        {
+          "path": "design system themes/cobalt-atelier/colors_and_type.css",
+          "bytes": 4636,
+          "sha256": "d924a7040a2006dec06a185baef562c119fb9ae91df6e18a7093a9e440f399b2",
+          "relative_path": "colors_and_type.css",
+          "category": "legacy-css"
+        },
+        {
+          "path": "design system themes/cobalt-atelier/surfaces/content.css",
+          "bytes": 673,
+          "sha256": "af473e219565eb171451d79753b2b33e6c45f66d0a59b48596056732d4ed3335",
+          "relative_path": "surfaces/content.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/cobalt-atelier/surfaces/slides.css",
+          "bytes": 625,
+          "sha256": "9729165ddceee004ee7bbe125d80a9bb080ae8110aa1a1302ab8ba5e5c58bfa3",
+          "relative_path": "surfaces/slides.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/cobalt-atelier/surfaces/website.css",
+          "bytes": 534,
+          "sha256": "86dea83302d9cb865965cb935e081ee6585d5fa0ad2787e004c6bad333b395d5",
+          "relative_path": "surfaces/website.css",
+          "category": "surface"
+        }
+      ],
+      "categories": {
+        "legacy_css": [
+          "colors_and_type.css"
+        ],
+        "root_readme": [
+          "README.md"
+        ],
+        "root_skill": [
+          "SKILL.md"
+        ],
+        "surfaces": [
+          "surfaces/content.css",
+          "surfaces/slides.css",
+          "surfaces/website.css"
+        ],
+        "assets": [],
+        "fonts": []
+      },
+      "shared_font_inventory": "shared-fonts"
+    },
+    {
+      "id": "legacy-signal-reel",
+      "system_id": "builtin-theme-signal-reel",
+      "slug": "signal-reel",
+      "root": "design system themes/signal-reel",
+      "files": [
+        {
+          "path": "design system themes/signal-reel/README.md",
+          "bytes": 13315,
+          "sha256": "aaa5aef5ca3c1e59b08b3890bf03f381ae4af950e83565d24e7f12aeec1607d8",
+          "relative_path": "README.md",
+          "category": "root-readme"
+        },
+        {
+          "path": "design system themes/signal-reel/SKILL.md",
+          "bytes": 7929,
+          "sha256": "9f33347da2a751c036908a513340d0c574b221bff9375394ed5372a6555a5bf6",
+          "relative_path": "SKILL.md",
+          "category": "root-skill"
+        },
+        {
+          "path": "design system themes/signal-reel/colors_and_type.css",
+          "bytes": 4554,
+          "sha256": "2b619b83a3e2e8e7c448bba09ab2f405a9628bac0ba262f652cb41cb9cdaa61c",
+          "relative_path": "colors_and_type.css",
+          "category": "legacy-css"
+        },
+        {
+          "path": "design system themes/signal-reel/surfaces/content.css",
+          "bytes": 671,
+          "sha256": "d2af65f034804d910b332b9317f07ca9e3b13f2f06eab0b2198f533e8065e956",
+          "relative_path": "surfaces/content.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/signal-reel/surfaces/slides.css",
+          "bytes": 622,
+          "sha256": "55b836098de06122b2a9aaa9398d206dccb0bbf6dbadb30530f7e4a214fd8684",
+          "relative_path": "surfaces/slides.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/signal-reel/surfaces/website.css",
+          "bytes": 531,
+          "sha256": "0203a290ced6f56966b9ad7a874b34f36e7650d2efd23551a049b023c41b9b88",
+          "relative_path": "surfaces/website.css",
+          "category": "surface"
+        }
+      ],
+      "categories": {
+        "legacy_css": [
+          "colors_and_type.css"
+        ],
+        "root_readme": [
+          "README.md"
+        ],
+        "root_skill": [
+          "SKILL.md"
+        ],
+        "surfaces": [
+          "surfaces/content.css",
+          "surfaces/slides.css",
+          "surfaces/website.css"
+        ],
+        "assets": [],
+        "fonts": []
+      },
+      "shared_font_inventory": "shared-fonts"
+    },
+    {
+      "id": "legacy-daylight-press",
+      "system_id": "builtin-theme-daylight-press",
+      "slug": "daylight-press",
+      "root": "design system themes/daylight-press",
+      "files": [
+        {
+          "path": "design system themes/daylight-press/README.md",
+          "bytes": 12925,
+          "sha256": "c561651bdab7244efb0ab855ed0c58e59f5f012b09141b006b6a07f1ee13bf66",
+          "relative_path": "README.md",
+          "category": "root-readme"
+        },
+        {
+          "path": "design system themes/daylight-press/SKILL.md",
+          "bytes": 7706,
+          "sha256": "9928c302907430b471db902cde6e670631ef8698d5558f588af1b2f4cc8cb7c0",
+          "relative_path": "SKILL.md",
+          "category": "root-skill"
+        },
+        {
+          "path": "design system themes/daylight-press/colors_and_type.css",
+          "bytes": 4592,
+          "sha256": "a2d511a2ecc0126664fb425fd930f11260910d7bf43b1adafa1bf4fb6840ad58",
+          "relative_path": "colors_and_type.css",
+          "category": "legacy-css"
+        },
+        {
+          "path": "design system themes/daylight-press/surfaces/content.css",
+          "bytes": 674,
+          "sha256": "d57040744ac607e24ad9565ddcf556675650e9af88fbd153f691522100e70c55",
+          "relative_path": "surfaces/content.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/daylight-press/surfaces/slides.css",
+          "bytes": 625,
+          "sha256": "2421c2d88e84592a98685fd346d6c5f0ae7ed669eabc15de5caae5f2d52cb891",
+          "relative_path": "surfaces/slides.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/daylight-press/surfaces/website.css",
+          "bytes": 534,
+          "sha256": "40c612c10a2c92214034317fff4a5c3290d0c6cea89dfe0897dede5dac7df399",
+          "relative_path": "surfaces/website.css",
+          "category": "surface"
+        }
+      ],
+      "categories": {
+        "legacy_css": [
+          "colors_and_type.css"
+        ],
+        "root_readme": [
+          "README.md"
+        ],
+        "root_skill": [
+          "SKILL.md"
+        ],
+        "surfaces": [
+          "surfaces/content.css",
+          "surfaces/slides.css",
+          "surfaces/website.css"
+        ],
+        "assets": [],
+        "fonts": []
+      },
+      "shared_font_inventory": "shared-fonts"
+    },
+    {
+      "id": "legacy-blueprint-manual",
+      "system_id": "builtin-theme-blueprint-manual",
+      "slug": "blueprint-manual",
+      "root": "design system themes/blueprint-manual",
+      "files": [
+        {
+          "path": "design system themes/blueprint-manual/README.md",
+          "bytes": 13275,
+          "sha256": "d0fc02afede980f07ee1a79d70eb698d48498d0e2beca467f7475d070a3dd471",
+          "relative_path": "README.md",
+          "category": "root-readme"
+        },
+        {
+          "path": "design system themes/blueprint-manual/SKILL.md",
+          "bytes": 7965,
+          "sha256": "d17544d60f553ddf7b74146d3c511e86c4beac5022726e3b2e84cdb8053829b5",
+          "relative_path": "SKILL.md",
+          "category": "root-skill"
+        },
+        {
+          "path": "design system themes/blueprint-manual/colors_and_type.css",
+          "bytes": 4548,
+          "sha256": "220400bcd63c4ecddadd51aa54c0b2bfdfe7058f0569ad0b283a5807927fcde5",
+          "relative_path": "colors_and_type.css",
+          "category": "legacy-css"
+        },
+        {
+          "path": "design system themes/blueprint-manual/surfaces/content.css",
+          "bytes": 676,
+          "sha256": "656c809fca879272b6085273fc114affd273fb760c1f47aad2a61c9b78e70f8f",
+          "relative_path": "surfaces/content.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/blueprint-manual/surfaces/slides.css",
+          "bytes": 627,
+          "sha256": "7c2dc43320fd851b75ef42e6de60b70c85952f39ca1e23f5004e95b835ba895f",
+          "relative_path": "surfaces/slides.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/blueprint-manual/surfaces/website.css",
+          "bytes": 537,
+          "sha256": "c52deac7d8001913bb7b659432f407320a2918c72f8f564d2bbb3334124a3136",
+          "relative_path": "surfaces/website.css",
+          "category": "surface"
+        }
+      ],
+      "categories": {
+        "legacy_css": [
+          "colors_and_type.css"
+        ],
+        "root_readme": [
+          "README.md"
+        ],
+        "root_skill": [
+          "SKILL.md"
+        ],
+        "surfaces": [
+          "surfaces/content.css",
+          "surfaces/slides.css",
+          "surfaces/website.css"
+        ],
+        "assets": [],
+        "fonts": []
+      },
+      "shared_font_inventory": "shared-fonts"
+    },
+    {
+      "id": "legacy-ledger-index",
+      "system_id": "builtin-theme-ledger-index",
+      "slug": "ledger-index",
+      "root": "design system themes/ledger-index",
+      "files": [
+        {
+          "path": "design system themes/ledger-index/README.md",
+          "bytes": 13290,
+          "sha256": "bfe51a5f421186b271531256b252c0365d6216431ec29896430b755666f49e19",
+          "relative_path": "README.md",
+          "category": "root-readme"
+        },
+        {
+          "path": "design system themes/ledger-index/SKILL.md",
+          "bytes": 7699,
+          "sha256": "501f92399ff6f304b88eb06e842e18baaff7bd8a41033684da3bd61da3ccd7c1",
+          "relative_path": "SKILL.md",
+          "category": "root-skill"
+        },
+        {
+          "path": "design system themes/ledger-index/colors_and_type.css",
+          "bytes": 4463,
+          "sha256": "b9a8cc79394f652dd23d80b71fd7cbcc6f0068c27da3963666c8a7d3a68b4ad4",
+          "relative_path": "colors_and_type.css",
+          "category": "legacy-css"
+        },
+        {
+          "path": "design system themes/ledger-index/surfaces/content.css",
+          "bytes": 672,
+          "sha256": "923865727782cf922c02c832c13669ed8971a7dad9ebced8f7faf3ace137c127",
+          "relative_path": "surfaces/content.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/ledger-index/surfaces/slides.css",
+          "bytes": 623,
+          "sha256": "3dc6f958b23d262575c0c130ff048e7cb419de8ed9dda6d075d56d7c2ceedf28",
+          "relative_path": "surfaces/slides.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/ledger-index/surfaces/website.css",
+          "bytes": 532,
+          "sha256": "0d052548095f897b1ceaa111bd362ca75ab7279ef53e0cf1a73d7bb56152333a",
+          "relative_path": "surfaces/website.css",
+          "category": "surface"
+        }
+      ],
+      "categories": {
+        "legacy_css": [
+          "colors_and_type.css"
+        ],
+        "root_readme": [
+          "README.md"
+        ],
+        "root_skill": [
+          "SKILL.md"
+        ],
+        "surfaces": [
+          "surfaces/content.css",
+          "surfaces/slides.css",
+          "surfaces/website.css"
+        ],
+        "assets": [],
+        "fonts": []
+      },
+      "shared_font_inventory": "shared-fonts"
+    },
+    {
+      "id": "legacy-dune-editorial",
+      "system_id": "builtin-theme-dune-editorial",
+      "slug": "dune-editorial",
+      "root": "design system themes/dune-editorial",
+      "files": [
+        {
+          "path": "design system themes/dune-editorial/README.md",
+          "bytes": 12951,
+          "sha256": "b204dcd5b3d618409eefbd250c24711b6798764fb0a30c4844eb0bb41fda5bf1",
+          "relative_path": "README.md",
+          "category": "root-readme"
+        },
+        {
+          "path": "design system themes/dune-editorial/SKILL.md",
+          "bytes": 7707,
+          "sha256": "44f4bec85f2bd27a2c7b412ceffc16ce3c2f66e7d2050ce4041488a221def899",
+          "relative_path": "SKILL.md",
+          "category": "root-skill"
+        },
+        {
+          "path": "design system themes/dune-editorial/colors_and_type.css",
+          "bytes": 4595,
+          "sha256": "b41f0342cfcc1210cb2c7258d4b19913cc69c3b74dcd3e168c8a2015dae3384a",
+          "relative_path": "colors_and_type.css",
+          "category": "legacy-css"
+        },
+        {
+          "path": "design system themes/dune-editorial/surfaces/content.css",
+          "bytes": 672,
+          "sha256": "ea1ae0edfa93c52f6380527124a0fb6356689246c18765e7688a944cf8e1b3eb",
+          "relative_path": "surfaces/content.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/dune-editorial/surfaces/slides.css",
+          "bytes": 625,
+          "sha256": "2148dab30bf0cbcb089feb33341bcf01f641f1ef43896eb0ba062f015dd19e10",
+          "relative_path": "surfaces/slides.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/dune-editorial/surfaces/website.css",
+          "bytes": 534,
+          "sha256": "acbc6e767ae5a330b359835a30dd112f758942ac841b104be0c30cb418e922d4",
+          "relative_path": "surfaces/website.css",
+          "category": "surface"
+        }
+      ],
+      "categories": {
+        "legacy_css": [
+          "colors_and_type.css"
+        ],
+        "root_readme": [
+          "README.md"
+        ],
+        "root_skill": [
+          "SKILL.md"
+        ],
+        "surfaces": [
+          "surfaces/content.css",
+          "surfaces/slides.css",
+          "surfaces/website.css"
+        ],
+        "assets": [],
+        "fonts": []
+      },
+      "shared_font_inventory": "shared-fonts"
+    },
+    {
+      "id": "legacy-archive-folio",
+      "system_id": "builtin-theme-archive-folio",
+      "slug": "archive-folio",
+      "root": "design system themes/archive-folio",
+      "files": [
+        {
+          "path": "design system themes/archive-folio/README.md",
+          "bytes": 13081,
+          "sha256": "a2da8cfc517662cdc475e250906ee8aa5bfe20e963e1e2efd2c925fbe4f73180",
+          "relative_path": "README.md",
+          "category": "root-readme"
+        },
+        {
+          "path": "design system themes/archive-folio/SKILL.md",
+          "bytes": 7994,
+          "sha256": "5af29d40d24039c2753240366580be3366509c5693e0b2d8d36e06c4443aa33a",
+          "relative_path": "SKILL.md",
+          "category": "root-skill"
+        },
+        {
+          "path": "design system themes/archive-folio/colors_and_type.css",
+          "bytes": 4489,
+          "sha256": "77efd9bc5d1978c51bf4057e811917b7fa7a91b770e5da1aefcb013e248e7b21",
+          "relative_path": "colors_and_type.css",
+          "category": "legacy-css"
+        },
+        {
+          "path": "design system themes/archive-folio/surfaces/content.css",
+          "bytes": 673,
+          "sha256": "9280c516b8b2622c76c52e73f279e218940eadaa0f83b964c9dc960fcc6781b7",
+          "relative_path": "surfaces/content.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/archive-folio/surfaces/slides.css",
+          "bytes": 624,
+          "sha256": "6c3d4a3df39800d46d25cfd1ef8eb95d2f3fcb1600fd2f3f32006bb159d7a035",
+          "relative_path": "surfaces/slides.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/archive-folio/surfaces/website.css",
+          "bytes": 533,
+          "sha256": "fb9deea75d3b438fff5fc8efe39a1cb98ab167de3ee954168916d4edff1cc8f7",
+          "relative_path": "surfaces/website.css",
+          "category": "surface"
+        }
+      ],
+      "categories": {
+        "legacy_css": [
+          "colors_and_type.css"
+        ],
+        "root_readme": [
+          "README.md"
+        ],
+        "root_skill": [
+          "SKILL.md"
+        ],
+        "surfaces": [
+          "surfaces/content.css",
+          "surfaces/slides.css",
+          "surfaces/website.css"
+        ],
+        "assets": [],
+        "fonts": []
+      },
+      "shared_font_inventory": "shared-fonts"
+    },
+    {
+      "id": "legacy-signal-console",
+      "system_id": "builtin-theme-signal-console",
+      "slug": "signal-console",
+      "root": "design system themes/signal-console",
+      "files": [
+        {
+          "path": "design system themes/signal-console/README.md",
+          "bytes": 14281,
+          "sha256": "2cce0ef7fd9a656f9547d1268ce8742af11535b20d73f84fb18e7168e3c01b2b",
+          "relative_path": "README.md",
+          "category": "root-readme"
+        },
+        {
+          "path": "design system themes/signal-console/SKILL.md",
+          "bytes": 8254,
+          "sha256": "1de5443b973b4736ec7259850f0b912b4bcead136e239275f69d38d9fd826a36",
+          "relative_path": "SKILL.md",
+          "category": "root-skill"
+        },
+        {
+          "path": "design system themes/signal-console/colors_and_type.css",
+          "bytes": 4648,
+          "sha256": "7b22e9950a5172342ef201e04902447b85dad9c6a29d21103d3a343980bbda2c",
+          "relative_path": "colors_and_type.css",
+          "category": "legacy-css"
+        },
+        {
+          "path": "design system themes/signal-console/surfaces/content.css",
+          "bytes": 674,
+          "sha256": "ad52e654b465cd150ab729e84055b2941999319df15c4d0eb5ee6f16cfb6a324",
+          "relative_path": "surfaces/content.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/signal-console/surfaces/slides.css",
+          "bytes": 625,
+          "sha256": "44c9326d5e556cc85f305cf3054fc802e87e001d6d92107a043d2fdf7eea61fa",
+          "relative_path": "surfaces/slides.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/signal-console/surfaces/website.css",
+          "bytes": 534,
+          "sha256": "ba71e19dd3cda8c0c547dbd18620bfa0f380de10a5b89c553d226d8145ad94ad",
+          "relative_path": "surfaces/website.css",
+          "category": "surface"
+        }
+      ],
+      "categories": {
+        "legacy_css": [
+          "colors_and_type.css"
+        ],
+        "root_readme": [
+          "README.md"
+        ],
+        "root_skill": [
+          "SKILL.md"
+        ],
+        "surfaces": [
+          "surfaces/content.css",
+          "surfaces/slides.css",
+          "surfaces/website.css"
+        ],
+        "assets": [],
+        "fonts": []
+      },
+      "shared_font_inventory": "shared-fonts"
+    },
+    {
+      "id": "legacy-paper-instrument",
+      "system_id": "builtin-theme-paper-instrument",
+      "slug": "paper-instrument",
+      "root": "design system themes/paper-instrument",
+      "files": [
+        {
+          "path": "design system themes/paper-instrument/README.md",
+          "bytes": 14118,
+          "sha256": "ae2fe635c752d0faf59110ac5eff4bc6e1c6cb4a6749e548716b671d71a07cd3",
+          "relative_path": "README.md",
+          "category": "root-readme"
+        },
+        {
+          "path": "design system themes/paper-instrument/SKILL.md",
+          "bytes": 8160,
+          "sha256": "4b9f43b172f023e552a5cca3a27acbae125c9ceb0357487410d6560ef57a9aa1",
+          "relative_path": "SKILL.md",
+          "category": "root-skill"
+        },
+        {
+          "path": "design system themes/paper-instrument/colors_and_type.css",
+          "bytes": 4676,
+          "sha256": "9ebf5ec869b66296be138411b0d77feae456c8d2c2ac9a8faf5caf88b55a41d7",
+          "relative_path": "colors_and_type.css",
+          "category": "legacy-css"
+        },
+        {
+          "path": "design system themes/paper-instrument/surfaces/content.css",
+          "bytes": 675,
+          "sha256": "fac2192bea44887d32a164d6525cee5ee6d662c168f50b0c6718da9315da329a",
+          "relative_path": "surfaces/content.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/paper-instrument/surfaces/slides.css",
+          "bytes": 627,
+          "sha256": "e93ab372f272881d348cc0e6eb64e0fb8daa160d8cd0a97824dc744baac57f41",
+          "relative_path": "surfaces/slides.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/paper-instrument/surfaces/website.css",
+          "bytes": 536,
+          "sha256": "a19a4b59dff11915dfff5b2576125a7269721f337e0ae03e1060bd585877fce5",
+          "relative_path": "surfaces/website.css",
+          "category": "surface"
+        }
+      ],
+      "categories": {
+        "legacy_css": [
+          "colors_and_type.css"
+        ],
+        "root_readme": [
+          "README.md"
+        ],
+        "root_skill": [
+          "SKILL.md"
+        ],
+        "surfaces": [
+          "surfaces/content.css",
+          "surfaces/slides.css",
+          "surfaces/website.css"
+        ],
+        "assets": [],
+        "fonts": []
+      },
+      "shared_font_inventory": "shared-fonts"
+    },
+    {
+      "id": "legacy-quiet-runtime",
+      "system_id": "builtin-theme-quiet-runtime",
+      "slug": "quiet-runtime",
+      "root": "design system themes/quiet-runtime",
+      "files": [
+        {
+          "path": "design system themes/quiet-runtime/README.md",
+          "bytes": 14145,
+          "sha256": "593e4cd9825d6ba3ef0ed16168f6d0a22280b6e61c55aed53d1fbbfc458020cd",
+          "relative_path": "README.md",
+          "category": "root-readme"
+        },
+        {
+          "path": "design system themes/quiet-runtime/SKILL.md",
+          "bytes": 7964,
+          "sha256": "de55465d46cfefb24c9c61e5fc978e08887eb489db5a63f754f48da9705881a5",
+          "relative_path": "SKILL.md",
+          "category": "root-skill"
+        },
+        {
+          "path": "design system themes/quiet-runtime/colors_and_type.css",
+          "bytes": 4660,
+          "sha256": "3be8b8196d824f6df48a3377fbac5f5313e7a3eb35f74c90cec69a31bb4e0bad",
+          "relative_path": "colors_and_type.css",
+          "category": "legacy-css"
+        },
+        {
+          "path": "design system themes/quiet-runtime/surfaces/content.css",
+          "bytes": 673,
+          "sha256": "fa6e3f5051b15ac4fb8de7d594454e8102c4be7578b9a17d4960f5902fee77d1",
+          "relative_path": "surfaces/content.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/quiet-runtime/surfaces/slides.css",
+          "bytes": 624,
+          "sha256": "bfe1da3729936760d8cdf67ec668b07c7957e5ae3084933b676116d0a3541b48",
+          "relative_path": "surfaces/slides.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/quiet-runtime/surfaces/website.css",
+          "bytes": 533,
+          "sha256": "3ecfce5340970b82f2ead3e09af559f228a402434f9e857a0af8f5959ff1f08c",
+          "relative_path": "surfaces/website.css",
+          "category": "surface"
+        }
+      ],
+      "categories": {
+        "legacy_css": [
+          "colors_and_type.css"
+        ],
+        "root_readme": [
+          "README.md"
+        ],
+        "root_skill": [
+          "SKILL.md"
+        ],
+        "surfaces": [
+          "surfaces/content.css",
+          "surfaces/slides.css",
+          "surfaces/website.css"
+        ],
+        "assets": [],
+        "fonts": []
+      },
+      "shared_font_inventory": "shared-fonts"
+    },
+    {
+      "id": "legacy-graphite-spec",
+      "system_id": "builtin-theme-graphite-spec",
+      "slug": "graphite-spec",
+      "root": "design system themes/graphite-spec",
+      "files": [
+        {
+          "path": "design system themes/graphite-spec/README.md",
+          "bytes": 14148,
+          "sha256": "1c1e5dd55245eac1b31253d0e072eee49e19285ee532289e8dbfa84fff82c8ac",
+          "relative_path": "README.md",
+          "category": "root-readme"
+        },
+        {
+          "path": "design system themes/graphite-spec/SKILL.md",
+          "bytes": 8109,
+          "sha256": "d6da551b73019833ccad6fa0aceaf3857bcfd0eb037d76938ccb0c3aaa88dd1a",
+          "relative_path": "SKILL.md",
+          "category": "root-skill"
+        },
+        {
+          "path": "design system themes/graphite-spec/colors_and_type.css",
+          "bytes": 4673,
+          "sha256": "fe1933d269771131f7a038c1176c3d6e79a3c121096c318c8ca25df62b77dea3",
+          "relative_path": "colors_and_type.css",
+          "category": "legacy-css"
+        },
+        {
+          "path": "design system themes/graphite-spec/surfaces/content.css",
+          "bytes": 673,
+          "sha256": "8bf4389f3660e4564e2a482265024d950eb599b40069ad685182e5501b96e84d",
+          "relative_path": "surfaces/content.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/graphite-spec/surfaces/slides.css",
+          "bytes": 624,
+          "sha256": "ce6e73449965fb8be073f52d375d2c6fe5167cdde6a2a5419d270b7ce9e6d376",
+          "relative_path": "surfaces/slides.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/graphite-spec/surfaces/website.css",
+          "bytes": 533,
+          "sha256": "736e0fca9d9a5444a7097871a9b7cf63525831fe5de3fadbcfa532effd95ac5f",
+          "relative_path": "surfaces/website.css",
+          "category": "surface"
+        }
+      ],
+      "categories": {
+        "legacy_css": [
+          "colors_and_type.css"
+        ],
+        "root_readme": [
+          "README.md"
+        ],
+        "root_skill": [
+          "SKILL.md"
+        ],
+        "surfaces": [
+          "surfaces/content.css",
+          "surfaces/slides.css",
+          "surfaces/website.css"
+        ],
+        "assets": [],
+        "fonts": []
+      },
+      "shared_font_inventory": "shared-fonts"
+    },
+    {
+      "id": "legacy-exploded-field-module",
+      "system_id": "builtin-theme-exploded-field-module",
+      "slug": "exploded-field-module",
+      "root": "design system themes/exploded-field-module",
+      "files": [
+        {
+          "path": "design system themes/exploded-field-module/README.md",
+          "bytes": 14730,
+          "sha256": "1503d7d0f79d93e10b6e47f166364b9b664df46fe80893227e32339c6ec27cee",
+          "relative_path": "README.md",
+          "category": "root-readme"
+        },
+        {
+          "path": "design system themes/exploded-field-module/SKILL.md",
+          "bytes": 8395,
+          "sha256": "1795401622a104334b849b2c613534cff24f350ac13777726e9b605de88da894",
+          "relative_path": "SKILL.md",
+          "category": "root-skill"
+        },
+        {
+          "path": "design system themes/exploded-field-module/colors_and_type.css",
+          "bytes": 4671,
+          "sha256": "534113e0224e5df5f9eb061014059ec06d5d4346175a120f1a8647a3e8e6f33a",
+          "relative_path": "colors_and_type.css",
+          "category": "legacy-css"
+        },
+        {
+          "path": "design system themes/exploded-field-module/surfaces/content.css",
+          "bytes": 681,
+          "sha256": "b108be9c090686de53a5010311d18c6530a5b162c3371151c05713c3dc21f0c9",
+          "relative_path": "surfaces/content.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/exploded-field-module/surfaces/slides.css",
+          "bytes": 632,
+          "sha256": "ce1d19ff5245305d53f8ea23a4e9da6293c0a01458fda538591211bf402f90cc",
+          "relative_path": "surfaces/slides.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/exploded-field-module/surfaces/website.css",
+          "bytes": 541,
+          "sha256": "4b0a3d6b6664151316508923a19f9264d45d0ba90248effb8ffa68be8d3c7894",
+          "relative_path": "surfaces/website.css",
+          "category": "surface"
+        }
+      ],
+      "categories": {
+        "legacy_css": [
+          "colors_and_type.css"
+        ],
+        "root_readme": [
+          "README.md"
+        ],
+        "root_skill": [
+          "SKILL.md"
+        ],
+        "surfaces": [
+          "surfaces/content.css",
+          "surfaces/slides.css",
+          "surfaces/website.css"
+        ],
+        "assets": [],
+        "fonts": []
+      },
+      "shared_font_inventory": "shared-fonts"
+    },
+    {
+      "id": "legacy-long-form-press",
+      "system_id": "builtin-theme-long-form-press",
+      "slug": "long-form-press",
+      "root": "design system themes/long-form-press",
+      "files": [
+        {
+          "path": "design system themes/long-form-press/README.md",
+          "bytes": 14424,
+          "sha256": "3dfa5d026dc06ef3bc541670046ba89483d54e2cecd651d41d00157ca91fe826",
+          "relative_path": "README.md",
+          "category": "root-readme"
+        },
+        {
+          "path": "design system themes/long-form-press/SKILL.md",
+          "bytes": 8196,
+          "sha256": "c2db2d8647598bf61e874df9a8face473f0c606f3abe048abd2ccab8692acd17",
+          "relative_path": "SKILL.md",
+          "category": "root-skill"
+        },
+        {
+          "path": "design system themes/long-form-press/colors_and_type.css",
+          "bytes": 4662,
+          "sha256": "7cb79a21b5d8df12b2c85206ff299f2f3028116dfd08d956e4472da5e3cfdedb",
+          "relative_path": "colors_and_type.css",
+          "category": "legacy-css"
+        },
+        {
+          "path": "design system themes/long-form-press/surfaces/content.css",
+          "bytes": 673,
+          "sha256": "d0f1f7565763cb2260ee8aef8a88f3c63c957c78ce003faf50650b21b442c9e1",
+          "relative_path": "surfaces/content.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/long-form-press/surfaces/slides.css",
+          "bytes": 626,
+          "sha256": "23ef92f7b9d7302ec47dd58dcd84e5026a553103c38b5e05643ad7019733f786",
+          "relative_path": "surfaces/slides.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/long-form-press/surfaces/website.css",
+          "bytes": 535,
+          "sha256": "166301b5d319e58f559c7ff20dd30f6bfa7d92e2417b7a7fe274a85d812ae40d",
+          "relative_path": "surfaces/website.css",
+          "category": "surface"
+        }
+      ],
+      "categories": {
+        "legacy_css": [
+          "colors_and_type.css"
+        ],
+        "root_readme": [
+          "README.md"
+        ],
+        "root_skill": [
+          "SKILL.md"
+        ],
+        "surfaces": [
+          "surfaces/content.css",
+          "surfaces/slides.css",
+          "surfaces/website.css"
+        ],
+        "assets": [],
+        "fonts": []
+      },
+      "shared_font_inventory": "shared-fonts"
+    },
+    {
+      "id": "legacy-wide-gutter-review",
+      "system_id": "builtin-theme-wide-gutter-review",
+      "slug": "wide-gutter-review",
+      "root": "design system themes/wide-gutter-review",
+      "files": [
+        {
+          "path": "design system themes/wide-gutter-review/README.md",
+          "bytes": 14027,
+          "sha256": "95f8d4afbbf2c95a13956dca44b84c186f70f2aeb6dd0a6dc3e8c0a527136c49",
+          "relative_path": "README.md",
+          "category": "root-readme"
+        },
+        {
+          "path": "design system themes/wide-gutter-review/SKILL.md",
+          "bytes": 8003,
+          "sha256": "f77d616fbba281a08fec109ad11b7dc6c6baa37278bcea425ee5e93653b53a22",
+          "relative_path": "SKILL.md",
+          "category": "root-skill"
+        },
+        {
+          "path": "design system themes/wide-gutter-review/colors_and_type.css",
+          "bytes": 4680,
+          "sha256": "a393d8af9b152b6ace4f5d22680f459aea32521e4b6c6334a3100d83cbc9c5c0",
+          "relative_path": "colors_and_type.css",
+          "category": "legacy-css"
+        },
+        {
+          "path": "design system themes/wide-gutter-review/surfaces/content.css",
+          "bytes": 677,
+          "sha256": "465fc04358a2715f4b1ec51f5c9d8e1587c79095847e5dc49ed2060fffb2371b",
+          "relative_path": "surfaces/content.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/wide-gutter-review/surfaces/slides.css",
+          "bytes": 629,
+          "sha256": "dcaa4f24f671c19a80e6b5188d5637c94a1ca2abbc828edb1cd26f005ed613e7",
+          "relative_path": "surfaces/slides.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/wide-gutter-review/surfaces/website.css",
+          "bytes": 538,
+          "sha256": "c7533b8e251c3c83cd7612e4235b3571af287499b3016e2533a9b43192a4e3be",
+          "relative_path": "surfaces/website.css",
+          "category": "surface"
+        }
+      ],
+      "categories": {
+        "legacy_css": [
+          "colors_and_type.css"
+        ],
+        "root_readme": [
+          "README.md"
+        ],
+        "root_skill": [
+          "SKILL.md"
+        ],
+        "surfaces": [
+          "surfaces/content.css",
+          "surfaces/slides.css",
+          "surfaces/website.css"
+        ],
+        "assets": [],
+        "fonts": []
+      },
+      "shared_font_inventory": "shared-fonts"
+    },
+    {
+      "id": "legacy-quarterly-folio",
+      "system_id": "builtin-theme-quarterly-folio",
+      "slug": "quarterly-folio",
+      "root": "design system themes/quarterly-folio",
+      "files": [
+        {
+          "path": "design system themes/quarterly-folio/README.md",
+          "bytes": 14230,
+          "sha256": "a6dad43da20e5f6210d9f4ff4e6ecc89fcbfe62dd9ea0bbb1f142cadbeb168ee",
+          "relative_path": "README.md",
+          "category": "root-readme"
+        },
+        {
+          "path": "design system themes/quarterly-folio/SKILL.md",
+          "bytes": 8260,
+          "sha256": "1970ca1f559fad87361dae55df5c8203d4629bb0ff7594baf483d9b078ec98b8",
+          "relative_path": "SKILL.md",
+          "category": "root-skill"
+        },
+        {
+          "path": "design system themes/quarterly-folio/colors_and_type.css",
+          "bytes": 4650,
+          "sha256": "828d065adb1caaee02979ab2356296f9a591721b10f891d1a26ef33da787bb51",
+          "relative_path": "colors_and_type.css",
+          "category": "legacy-css"
+        },
+        {
+          "path": "design system themes/quarterly-folio/surfaces/content.css",
+          "bytes": 675,
+          "sha256": "b008e26c1d17eb63f09b210f194b38b428e9008410bce0a199a3e700934ca848",
+          "relative_path": "surfaces/content.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/quarterly-folio/surfaces/slides.css",
+          "bytes": 626,
+          "sha256": "0958ba5269e7501d0b22fc9fe1f0a571361de692967fb885384d121bcb6b954a",
+          "relative_path": "surfaces/slides.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/quarterly-folio/surfaces/website.css",
+          "bytes": 535,
+          "sha256": "13129ef3deef4a300903489cb8fcf4b54b451124f63413726d7b81ceacfa42ef",
+          "relative_path": "surfaces/website.css",
+          "category": "surface"
+        }
+      ],
+      "categories": {
+        "legacy_css": [
+          "colors_and_type.css"
+        ],
+        "root_readme": [
+          "README.md"
+        ],
+        "root_skill": [
+          "SKILL.md"
+        ],
+        "surfaces": [
+          "surfaces/content.css",
+          "surfaces/slides.css",
+          "surfaces/website.css"
+        ],
+        "assets": [],
+        "fonts": []
+      },
+      "shared_font_inventory": "shared-fonts"
+    },
+    {
+      "id": "legacy-night-edition",
+      "system_id": "builtin-theme-night-edition",
+      "slug": "night-edition",
+      "root": "design system themes/night-edition",
+      "files": [
+        {
+          "path": "design system themes/night-edition/README.md",
+          "bytes": 14414,
+          "sha256": "d5ccd328d60946f00737ffe979cd43e1bd11dcaa3c62ef5970b7cc917acd9045",
+          "relative_path": "README.md",
+          "category": "root-readme"
+        },
+        {
+          "path": "design system themes/night-edition/SKILL.md",
+          "bytes": 8105,
+          "sha256": "2874a6c83dfaf285f95602daa7cc52a3e5f58b009c21ac5a9273c20e49ac9161",
+          "relative_path": "SKILL.md",
+          "category": "root-skill"
+        },
+        {
+          "path": "design system themes/night-edition/colors_and_type.css",
+          "bytes": 4660,
+          "sha256": "bd036cd6488bd6c4dfff66fbc5cad9a1504671b4a5a57dbfe0e2184a98da77ea",
+          "relative_path": "colors_and_type.css",
+          "category": "legacy-css"
+        },
+        {
+          "path": "design system themes/night-edition/surfaces/content.css",
+          "bytes": 673,
+          "sha256": "84f412279da8f3245754a31159472846018b44df4aadce9863303c08d03d607f",
+          "relative_path": "surfaces/content.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/night-edition/surfaces/slides.css",
+          "bytes": 624,
+          "sha256": "20430ca432dfa133c0ec1d5a6e8566b4446ef8f8939fb57a30a8daefcb5b8319",
+          "relative_path": "surfaces/slides.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/night-edition/surfaces/website.css",
+          "bytes": 534,
+          "sha256": "68841c9da290ff1d7ec6c34532fda6109c7c70e8e2fc240749430d7802b3e12e",
+          "relative_path": "surfaces/website.css",
+          "category": "surface"
+        }
+      ],
+      "categories": {
+        "legacy_css": [
+          "colors_and_type.css"
+        ],
+        "root_readme": [
+          "README.md"
+        ],
+        "root_skill": [
+          "SKILL.md"
+        ],
+        "surfaces": [
+          "surfaces/content.css",
+          "surfaces/slides.css",
+          "surfaces/website.css"
+        ],
+        "assets": [],
+        "fonts": []
+      },
+      "shared_font_inventory": "shared-fonts"
+    },
+    {
+      "id": "legacy-studio-counter",
+      "system_id": "builtin-theme-studio-counter",
+      "slug": "studio-counter",
+      "root": "design system themes/studio-counter",
+      "files": [
+        {
+          "path": "design system themes/studio-counter/README.md",
+          "bytes": 14487,
+          "sha256": "797e4f1c65820ebc822d6f74d5735e1c3bacd9edef08e97b73a714b72db32b3c",
+          "relative_path": "README.md",
+          "category": "root-readme"
+        },
+        {
+          "path": "design system themes/studio-counter/SKILL.md",
+          "bytes": 8400,
+          "sha256": "af2938b29b2a9d1da28b1ee4029cb95dddadadcff62549ee4e31c8f31f4d3c6c",
+          "relative_path": "SKILL.md",
+          "category": "root-skill"
+        },
+        {
+          "path": "design system themes/studio-counter/colors_and_type.css",
+          "bytes": 4660,
+          "sha256": "d1cc43465e6ad42efb98dcaa36c4efb34e7f928c43acd3cd30f5b200bdcf6be6",
+          "relative_path": "colors_and_type.css",
+          "category": "legacy-css"
+        },
+        {
+          "path": "design system themes/studio-counter/surfaces/content.css",
+          "bytes": 674,
+          "sha256": "717f43c78f44db5fc62a9612802a8fb13cc2605e2aac5d4d5eabe1b04ca32ed6",
+          "relative_path": "surfaces/content.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/studio-counter/surfaces/slides.css",
+          "bytes": 625,
+          "sha256": "2e8db02249f8dea4d37f96b1bdb998a99d339c645840a2a3c8c3d713d926f499",
+          "relative_path": "surfaces/slides.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/studio-counter/surfaces/website.css",
+          "bytes": 534,
+          "sha256": "84489159201498046a84c5338b13d40c72f1c62227c7d34cba0f62cf961294bd",
+          "relative_path": "surfaces/website.css",
+          "category": "surface"
+        }
+      ],
+      "categories": {
+        "legacy_css": [
+          "colors_and_type.css"
+        ],
+        "root_readme": [
+          "README.md"
+        ],
+        "root_skill": [
+          "SKILL.md"
+        ],
+        "surfaces": [
+          "surfaces/content.css",
+          "surfaces/slides.css",
+          "surfaces/website.css"
+        ],
+        "assets": [],
+        "fonts": []
+      },
+      "shared_font_inventory": "shared-fonts"
+    },
+    {
+      "id": "legacy-atelier-counter",
+      "system_id": "builtin-theme-atelier-counter",
+      "slug": "atelier-counter",
+      "root": "design system themes/atelier-counter",
+      "files": [
+        {
+          "path": "design system themes/atelier-counter/README.md",
+          "bytes": 14529,
+          "sha256": "1879e0776453a8cee5377d260480adf73cadf77094d393963b4d7e51c39895bf",
+          "relative_path": "README.md",
+          "category": "root-readme"
+        },
+        {
+          "path": "design system themes/atelier-counter/SKILL.md",
+          "bytes": 8492,
+          "sha256": "e2f3f7495c3d2175b2512d276c21d881875d83026434ad929a699d87ff6edb05",
+          "relative_path": "SKILL.md",
+          "category": "root-skill"
+        },
+        {
+          "path": "design system themes/atelier-counter/colors_and_type.css",
+          "bytes": 4669,
+          "sha256": "41785b418b09e9455d263400fc3505b45bac45d225bbaab57730d8a51c6e04c7",
+          "relative_path": "colors_and_type.css",
+          "category": "legacy-css"
+        },
+        {
+          "path": "design system themes/atelier-counter/surfaces/content.css",
+          "bytes": 675,
+          "sha256": "7537d01cffd62cd2ddd2158fb64063216cd782f52e8d7618d8ddb07dbd298a3a",
+          "relative_path": "surfaces/content.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/atelier-counter/surfaces/slides.css",
+          "bytes": 626,
+          "sha256": "4775c135a6cf5d5fb114c747eee7db0331cb2d0db64f5e9b2f2a972cb77a9439",
+          "relative_path": "surfaces/slides.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/atelier-counter/surfaces/website.css",
+          "bytes": 536,
+          "sha256": "9ed35c9248e921ab7d95d4fd9d435b632b5344851ee18d9566f74aa150a8cda0",
+          "relative_path": "surfaces/website.css",
+          "category": "surface"
+        }
+      ],
+      "categories": {
+        "legacy_css": [
+          "colors_and_type.css"
+        ],
+        "root_readme": [
+          "README.md"
+        ],
+        "root_skill": [
+          "SKILL.md"
+        ],
+        "surfaces": [
+          "surfaces/content.css",
+          "surfaces/slides.css",
+          "surfaces/website.css"
+        ],
+        "assets": [],
+        "fonts": []
+      },
+      "shared_font_inventory": "shared-fonts"
+    },
+    {
+      "id": "legacy-market-stack",
+      "system_id": "builtin-theme-market-stack",
+      "slug": "market-stack",
+      "root": "design system themes/market-stack",
+      "files": [
+        {
+          "path": "design system themes/market-stack/README.md",
+          "bytes": 14371,
+          "sha256": "be85054994d07949b2d491e24b2b9773572a9a85e5caadd45621d9242e300713",
+          "relative_path": "README.md",
+          "category": "root-readme"
+        },
+        {
+          "path": "design system themes/market-stack/SKILL.md",
+          "bytes": 8232,
+          "sha256": "d4130512e9e759fcebe141a9b22941a1ccb12aeda3d57fba0a72bd08a457be27",
+          "relative_path": "SKILL.md",
+          "category": "root-skill"
+        },
+        {
+          "path": "design system themes/market-stack/colors_and_type.css",
+          "bytes": 4683,
+          "sha256": "a99fd656cf3de928eb6fd94bd220a3b2447ab46bb6999af6c5c7aec401bc0438",
+          "relative_path": "colors_and_type.css",
+          "category": "legacy-css"
+        },
+        {
+          "path": "design system themes/market-stack/surfaces/content.css",
+          "bytes": 672,
+          "sha256": "b530daf1ee48dcfb84010dc5fb66e67625d9f68c0a7f901bb61f19277146645b",
+          "relative_path": "surfaces/content.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/market-stack/surfaces/slides.css",
+          "bytes": 623,
+          "sha256": "91ee6d76522d6c44f9544d7755caa5c5d5fa856e342812e87e6d6cd13d3f20a9",
+          "relative_path": "surfaces/slides.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/market-stack/surfaces/website.css",
+          "bytes": 532,
+          "sha256": "1b84f66fb65b6fa0d33dd405f58067326b2ec0c77f57be583de31b606baf9889",
+          "relative_path": "surfaces/website.css",
+          "category": "surface"
+        }
+      ],
+      "categories": {
+        "legacy_css": [
+          "colors_and_type.css"
+        ],
+        "root_readme": [
+          "README.md"
+        ],
+        "root_skill": [
+          "SKILL.md"
+        ],
+        "surfaces": [
+          "surfaces/content.css",
+          "surfaces/slides.css",
+          "surfaces/website.css"
+        ],
+        "assets": [],
+        "fonts": []
+      },
+      "shared_font_inventory": "shared-fonts"
+    },
+    {
+      "id": "legacy-vitrine-mono",
+      "system_id": "builtin-theme-vitrine-mono",
+      "slug": "vitrine-mono",
+      "root": "design system themes/vitrine-mono",
+      "files": [
+        {
+          "path": "design system themes/vitrine-mono/README.md",
+          "bytes": 14418,
+          "sha256": "665ee029bc099edbc97d1fcfba4415f75f039b144cf71271580133639b08fa33",
+          "relative_path": "README.md",
+          "category": "root-readme"
+        },
+        {
+          "path": "design system themes/vitrine-mono/SKILL.md",
+          "bytes": 8245,
+          "sha256": "d5f6f3b654b3fa7805ff88bcc46bdd4fd2a10b0aa22730362894c1ab61f7e69c",
+          "relative_path": "SKILL.md",
+          "category": "root-skill"
+        },
+        {
+          "path": "design system themes/vitrine-mono/colors_and_type.css",
+          "bytes": 4619,
+          "sha256": "9832bb16d6cd9d940376ffd3aa66848ad65922c2fa6877af9d4969d23e269afd",
+          "relative_path": "colors_and_type.css",
+          "category": "legacy-css"
+        },
+        {
+          "path": "design system themes/vitrine-mono/surfaces/content.css",
+          "bytes": 672,
+          "sha256": "b9f420f828de929c2d88ce75bcb5311b0aa92f31ce2adea8ff3e433914f487f8",
+          "relative_path": "surfaces/content.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/vitrine-mono/surfaces/slides.css",
+          "bytes": 623,
+          "sha256": "89034cb61c927ce7669a9ae6ed312a7c3d20d7b73c878985a6381a6f3df56ef4",
+          "relative_path": "surfaces/slides.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/vitrine-mono/surfaces/website.css",
+          "bytes": 532,
+          "sha256": "a8b4dabf9c0312d64b50c0d5d511f94f421697cabf322889b2b2f9ebea2e442e",
+          "relative_path": "surfaces/website.css",
+          "category": "surface"
+        }
+      ],
+      "categories": {
+        "legacy_css": [
+          "colors_and_type.css"
+        ],
+        "root_readme": [
+          "README.md"
+        ],
+        "root_skill": [
+          "SKILL.md"
+        ],
+        "surfaces": [
+          "surfaces/content.css",
+          "surfaces/slides.css",
+          "surfaces/website.css"
+        ],
+        "assets": [],
+        "fonts": []
+      },
+      "shared_font_inventory": "shared-fonts"
+    },
+    {
+      "id": "legacy-modular-configurator",
+      "system_id": "builtin-theme-modular-configurator",
+      "slug": "modular-configurator",
+      "root": "design system themes/modular-configurator",
+      "files": [
+        {
+          "path": "design system themes/modular-configurator/README.md",
+          "bytes": 14787,
+          "sha256": "d1d1571f06270402b7570b2b7f526f3debe4452f25fca7e36cc7723b472cd086",
+          "relative_path": "README.md",
+          "category": "root-readme"
+        },
+        {
+          "path": "design system themes/modular-configurator/SKILL.md",
+          "bytes": 8297,
+          "sha256": "ecc44bb3fdb77975bf660c64dfd1934d3485ff92af04e9d048576d34cd5615d7",
+          "relative_path": "SKILL.md",
+          "category": "root-skill"
+        },
+        {
+          "path": "design system themes/modular-configurator/colors_and_type.css",
+          "bytes": 4675,
+          "sha256": "70b227d39edaa028c7a626252a576ea2e3137c90024f2fe13f283a40506dea1c",
+          "relative_path": "colors_and_type.css",
+          "category": "legacy-css"
+        },
+        {
+          "path": "design system themes/modular-configurator/surfaces/content.css",
+          "bytes": 680,
+          "sha256": "60bf5396335bd91a487bcca471bb183bb16d27d9275a3e6cb6fe642eeefd0269",
+          "relative_path": "surfaces/content.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/modular-configurator/surfaces/slides.css",
+          "bytes": 631,
+          "sha256": "6e3d3fd1b3a4e9e31108f1e0ae0f9c6933a02ba1c1317f5529dd7aea023e5370",
+          "relative_path": "surfaces/slides.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/modular-configurator/surfaces/website.css",
+          "bytes": 540,
+          "sha256": "f6c8838994b2f1c2a8c221b7f876a9ac07d6f5c821e0140b27ef084e311b631f",
+          "relative_path": "surfaces/website.css",
+          "category": "surface"
+        }
+      ],
+      "categories": {
+        "legacy_css": [
+          "colors_and_type.css"
+        ],
+        "root_readme": [
+          "README.md"
+        ],
+        "root_skill": [
+          "SKILL.md"
+        ],
+        "surfaces": [
+          "surfaces/content.css",
+          "surfaces/slides.css",
+          "surfaces/website.css"
+        ],
+        "assets": [],
+        "fonts": []
+      },
+      "shared_font_inventory": "shared-fonts"
+    },
+    {
+      "id": "legacy-night-marquee",
+      "system_id": "builtin-theme-night-marquee",
+      "slug": "night-marquee",
+      "root": "design system themes/night-marquee",
+      "files": [
+        {
+          "path": "design system themes/night-marquee/README.md",
+          "bytes": 14612,
+          "sha256": "580da4be6f738d646c28021a7d1a7259e1a3778f932c0f7bfc62ba85ee9b5a33",
+          "relative_path": "README.md",
+          "category": "root-readme"
+        },
+        {
+          "path": "design system themes/night-marquee/SKILL.md",
+          "bytes": 8289,
+          "sha256": "7367de59b439fea203ee6c22761e073a68883a9ae00ebfe9d5b0a7a58e8414e0",
+          "relative_path": "SKILL.md",
+          "category": "root-skill"
+        },
+        {
+          "path": "design system themes/night-marquee/colors_and_type.css",
+          "bytes": 4691,
+          "sha256": "eeda2871250f1e8e2c3d46066465e5e1ad5b21bcde0810519f5b22a69913253e",
+          "relative_path": "colors_and_type.css",
+          "category": "legacy-css"
+        },
+        {
+          "path": "design system themes/night-marquee/surfaces/content.css",
+          "bytes": 673,
+          "sha256": "331e03d0b7dd0ee0b31d2d30422a47998cc5a50bef41b6d13458bb5beb5edfc2",
+          "relative_path": "surfaces/content.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/night-marquee/surfaces/slides.css",
+          "bytes": 624,
+          "sha256": "15e075b657187a7c43b068975da88df5732ac5680356f70701c0fa9d8db3b062",
+          "relative_path": "surfaces/slides.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/night-marquee/surfaces/website.css",
+          "bytes": 534,
+          "sha256": "5d4fe3cd5b2348e562be76f4cb55a2456de0af5abe548a4f588e07b9c93bfba2",
+          "relative_path": "surfaces/website.css",
+          "category": "surface"
+        }
+      ],
+      "categories": {
+        "legacy_css": [
+          "colors_and_type.css"
+        ],
+        "root_readme": [
+          "README.md"
+        ],
+        "root_skill": [
+          "SKILL.md"
+        ],
+        "surfaces": [
+          "surfaces/content.css",
+          "surfaces/slides.css",
+          "surfaces/website.css"
+        ],
+        "assets": [],
+        "fonts": []
+      },
+      "shared_font_inventory": "shared-fonts"
+    },
+    {
+      "id": "legacy-stencil-field",
+      "system_id": "builtin-theme-stencil-field",
+      "slug": "stencil-field",
+      "root": "design system themes/stencil-field",
+      "files": [
+        {
+          "path": "design system themes/stencil-field/README.md",
+          "bytes": 14298,
+          "sha256": "642b6b4be2de94f4c2d957e65aa60ad88ec93ace341a0bcbfe09908b242d2370",
+          "relative_path": "README.md",
+          "category": "root-readme"
+        },
+        {
+          "path": "design system themes/stencil-field/SKILL.md",
+          "bytes": 8239,
+          "sha256": "fbbc763a387986331412d1412f42b743f68842e5b4f4a093c3a82e3a95dcc75a",
+          "relative_path": "SKILL.md",
+          "category": "root-skill"
+        },
+        {
+          "path": "design system themes/stencil-field/colors_and_type.css",
+          "bytes": 4683,
+          "sha256": "2b750a022bf150c05ab9350457a516d66b0aa27994fc57cb956a4c4db3e152cf",
+          "relative_path": "colors_and_type.css",
+          "category": "legacy-css"
+        },
+        {
+          "path": "design system themes/stencil-field/surfaces/content.css",
+          "bytes": 673,
+          "sha256": "72882e7669c46f423fb56929f6df9e89141ce847d0605269119f1d38baec30b7",
+          "relative_path": "surfaces/content.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/stencil-field/surfaces/slides.css",
+          "bytes": 624,
+          "sha256": "308dee0f53ac808618bf604f801e3c04b183fc091e47589da717ce8d97c79516",
+          "relative_path": "surfaces/slides.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/stencil-field/surfaces/website.css",
+          "bytes": 534,
+          "sha256": "df9a743e541e09f8155383457be04d70f9b2fa2a80ca28a2ec996c7b6e9098e0",
+          "relative_path": "surfaces/website.css",
+          "category": "surface"
+        }
+      ],
+      "categories": {
+        "legacy_css": [
+          "colors_and_type.css"
+        ],
+        "root_readme": [
+          "README.md"
+        ],
+        "root_skill": [
+          "SKILL.md"
+        ],
+        "surfaces": [
+          "surfaces/content.css",
+          "surfaces/slides.css",
+          "surfaces/website.css"
+        ],
+        "assets": [],
+        "fonts": []
+      },
+      "shared_font_inventory": "shared-fonts"
+    },
+    {
+      "id": "legacy-press-riso",
+      "system_id": "builtin-theme-press-riso",
+      "slug": "press-riso",
+      "root": "design system themes/press-riso",
+      "files": [
+        {
+          "path": "design system themes/press-riso/README.md",
+          "bytes": 14399,
+          "sha256": "614abb35875e553c635694667df8aeb08501e56ffc9772d5c154cf6625953e6f",
+          "relative_path": "README.md",
+          "category": "root-readme"
+        },
+        {
+          "path": "design system themes/press-riso/SKILL.md",
+          "bytes": 8335,
+          "sha256": "e01cac1de6c5a5d74d77ce4201186b6f8a12dcfca12c00cfeb2ea2c9a07ce10f",
+          "relative_path": "SKILL.md",
+          "category": "root-skill"
+        },
+        {
+          "path": "design system themes/press-riso/colors_and_type.css",
+          "bytes": 4655,
+          "sha256": "c2a09c3804d27aec18b7d88ec8d00482abfb71270cc861bec4cdaf13a9a7f321",
+          "relative_path": "colors_and_type.css",
+          "category": "legacy-css"
+        },
+        {
+          "path": "design system themes/press-riso/surfaces/content.css",
+          "bytes": 670,
+          "sha256": "4be4f655909fff18f28a455e24662d831815b2431492716b69dca9633471b6a4",
+          "relative_path": "surfaces/content.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/press-riso/surfaces/slides.css",
+          "bytes": 621,
+          "sha256": "7b1d2511e28b949f3bbd0aba76ae23c0c352eebced9c92d4ad22b673762559bc",
+          "relative_path": "surfaces/slides.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/press-riso/surfaces/website.css",
+          "bytes": 530,
+          "sha256": "cd5f62f21fbb10c567ee7bc730a40f7a65635fb072b3621948c3c2c7907ec03a",
+          "relative_path": "surfaces/website.css",
+          "category": "surface"
+        }
+      ],
+      "categories": {
+        "legacy_css": [
+          "colors_and_type.css"
+        ],
+        "root_readme": [
+          "README.md"
+        ],
+        "root_skill": [
+          "SKILL.md"
+        ],
+        "surfaces": [
+          "surfaces/content.css",
+          "surfaces/slides.css",
+          "surfaces/website.css"
+        ],
+        "assets": [],
+        "fonts": []
+      },
+      "shared_font_inventory": "shared-fonts"
+    },
+    {
+      "id": "legacy-exhibit-wall",
+      "system_id": "builtin-theme-exhibit-wall",
+      "slug": "exhibit-wall",
+      "root": "design system themes/exhibit-wall",
+      "files": [
+        {
+          "path": "design system themes/exhibit-wall/README.md",
+          "bytes": 14336,
+          "sha256": "828d334f0e2aae06bf0de333beae1656873e7ffcf21d199672d1dbd09435944f",
+          "relative_path": "README.md",
+          "category": "root-readme"
+        },
+        {
+          "path": "design system themes/exhibit-wall/SKILL.md",
+          "bytes": 8321,
+          "sha256": "8668e826b64208431ecdb038aa5ee4fc65669ee25111be62b513e48f4f35ffc0",
+          "relative_path": "SKILL.md",
+          "category": "root-skill"
+        },
+        {
+          "path": "design system themes/exhibit-wall/colors_and_type.css",
+          "bytes": 4656,
+          "sha256": "bd1962a707e65de8f297676d3471fa4024ad6a50bcadff413504a268710cca74",
+          "relative_path": "colors_and_type.css",
+          "category": "legacy-css"
+        },
+        {
+          "path": "design system themes/exhibit-wall/surfaces/content.css",
+          "bytes": 672,
+          "sha256": "ecfe6913e040594bf5a693e5c5548cde71d82f0b7a3c6072559f96e259210a82",
+          "relative_path": "surfaces/content.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/exhibit-wall/surfaces/slides.css",
+          "bytes": 623,
+          "sha256": "a15e70e8167b58385883854f6b72f0b7587e00faf24afea972d69ab1058b01c2",
+          "relative_path": "surfaces/slides.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/exhibit-wall/surfaces/website.css",
+          "bytes": 532,
+          "sha256": "647132d3cd93bc711734ad3d0ade4d5126be01b0ce8f00a4f3bda3a7b2e4b04e",
+          "relative_path": "surfaces/website.css",
+          "category": "surface"
+        }
+      ],
+      "categories": {
+        "legacy_css": [
+          "colors_and_type.css"
+        ],
+        "root_readme": [
+          "README.md"
+        ],
+        "root_skill": [
+          "SKILL.md"
+        ],
+        "surfaces": [
+          "surfaces/content.css",
+          "surfaces/slides.css",
+          "surfaces/website.css"
+        ],
+        "assets": [],
+        "fonts": []
+      },
+      "shared_font_inventory": "shared-fonts"
+    },
+    {
+      "id": "legacy-index-table",
+      "system_id": "builtin-theme-index-table",
+      "slug": "index-table",
+      "root": "design system themes/index-table",
+      "files": [
+        {
+          "path": "design system themes/index-table/README.md",
+          "bytes": 14791,
+          "sha256": "84987875f0021492d61eab4e28ac27405a4b9650966fe258c96e5f235f32fb37",
+          "relative_path": "README.md",
+          "category": "root-readme"
+        },
+        {
+          "path": "design system themes/index-table/SKILL.md",
+          "bytes": 8403,
+          "sha256": "20b12f5bcb713110ce8d34278faab2f9847440bb996d006374cdd406fef0aea6",
+          "relative_path": "SKILL.md",
+          "category": "root-skill"
+        },
+        {
+          "path": "design system themes/index-table/colors_and_type.css",
+          "bytes": 4691,
+          "sha256": "78c4ff135701dcdb63932e438ae2e15fb795a93d85091079f1c290818a3aeee9",
+          "relative_path": "colors_and_type.css",
+          "category": "legacy-css"
+        },
+        {
+          "path": "design system themes/index-table/surfaces/content.css",
+          "bytes": 669,
+          "sha256": "6d94a3a1aebdc19f678d8dc6237c8cb325bacd678699fbc03918050ccbef599a",
+          "relative_path": "surfaces/content.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/index-table/surfaces/slides.css",
+          "bytes": 622,
+          "sha256": "03ed772ed827b448bc8c1f514e24b5757c26c2519a5a0ed0d34d2cdb93358c54",
+          "relative_path": "surfaces/slides.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/index-table/surfaces/website.css",
+          "bytes": 531,
+          "sha256": "aa66a33decfbc8803d5bb21ac780a0a55d320f432f5079856eaeca395fe090c5",
+          "relative_path": "surfaces/website.css",
+          "category": "surface"
+        }
+      ],
+      "categories": {
+        "legacy_css": [
+          "colors_and_type.css"
+        ],
+        "root_readme": [
+          "README.md"
+        ],
+        "root_skill": [
+          "SKILL.md"
+        ],
+        "surfaces": [
+          "surfaces/content.css",
+          "surfaces/slides.css",
+          "surfaces/website.css"
+        ],
+        "assets": [],
+        "fonts": []
+      },
+      "shared_font_inventory": "shared-fonts"
+    },
+    {
+      "id": "legacy-facet-archive",
+      "system_id": "builtin-theme-facet-archive",
+      "slug": "facet-archive",
+      "root": "design system themes/facet-archive",
+      "files": [
+        {
+          "path": "design system themes/facet-archive/README.md",
+          "bytes": 14311,
+          "sha256": "60ecb17fd4bac38ef6b3062aebc7f34f38ffe32abb5c28c75f0b83be42ef9362",
+          "relative_path": "README.md",
+          "category": "root-readme"
+        },
+        {
+          "path": "design system themes/facet-archive/SKILL.md",
+          "bytes": 8211,
+          "sha256": "56a4ef2108e5cc4a3e8e3bb11e65dc225d7d10e58362c561ef196bf99d80c5e3",
+          "relative_path": "SKILL.md",
+          "category": "root-skill"
+        },
+        {
+          "path": "design system themes/facet-archive/colors_and_type.css",
+          "bytes": 4690,
+          "sha256": "d66b0fa9f65d3586e3650cf2dc92f5581c26db5bdd25e320cbb522b3eade1a6d",
+          "relative_path": "colors_and_type.css",
+          "category": "legacy-css"
+        },
+        {
+          "path": "design system themes/facet-archive/surfaces/content.css",
+          "bytes": 673,
+          "sha256": "30b2690645cd2d966ddb08fd92c8fcfbfa774a33ba190e45c9f890dac4c8f5ef",
+          "relative_path": "surfaces/content.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/facet-archive/surfaces/slides.css",
+          "bytes": 624,
+          "sha256": "89962ac004404d5ab1676294e1f30d0ffb78ed207e645a684781de8855bb5788",
+          "relative_path": "surfaces/slides.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/facet-archive/surfaces/website.css",
+          "bytes": 533,
+          "sha256": "6af1785e5e277b63fbccdea19d89a959da025508c81ba600ca855076ad082cb4",
+          "relative_path": "surfaces/website.css",
+          "category": "surface"
+        }
+      ],
+      "categories": {
+        "legacy_css": [
+          "colors_and_type.css"
+        ],
+        "root_readme": [
+          "README.md"
+        ],
+        "root_skill": [
+          "SKILL.md"
+        ],
+        "surfaces": [
+          "surfaces/content.css",
+          "surfaces/slides.css",
+          "surfaces/website.css"
+        ],
+        "assets": [],
+        "fonts": []
+      },
+      "shared_font_inventory": "shared-fonts"
+    },
+    {
+      "id": "legacy-console-ledger",
+      "system_id": "builtin-theme-console-ledger",
+      "slug": "console-ledger",
+      "root": "design system themes/console-ledger",
+      "files": [
+        {
+          "path": "design system themes/console-ledger/README.md",
+          "bytes": 14445,
+          "sha256": "1e27236c959984f3a9e11de76735b5610dbe1470426a71b284fc018ebd5d7209",
+          "relative_path": "README.md",
+          "category": "root-readme"
+        },
+        {
+          "path": "design system themes/console-ledger/SKILL.md",
+          "bytes": 8356,
+          "sha256": "bd4d21944ad410295c332c398ac866d9f6833fa514c476fea7b60ef91c399995",
+          "relative_path": "SKILL.md",
+          "category": "root-skill"
+        },
+        {
+          "path": "design system themes/console-ledger/colors_and_type.css",
+          "bytes": 4688,
+          "sha256": "c7644452d5a4dc9604feab19c36cb20fad76e65016b677d149ade01bf2c3ef4b",
+          "relative_path": "colors_and_type.css",
+          "category": "legacy-css"
+        },
+        {
+          "path": "design system themes/console-ledger/surfaces/content.css",
+          "bytes": 672,
+          "sha256": "a10cc5ecc5bc60782754f4260ba7de98103756bcee2d43069a22e6b06ff240f6",
+          "relative_path": "surfaces/content.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/console-ledger/surfaces/slides.css",
+          "bytes": 625,
+          "sha256": "75ccd184ecbd16ed926e3ff63c9208844c758d37f4ba4d19bdad2768a3792670",
+          "relative_path": "surfaces/slides.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/console-ledger/surfaces/website.css",
+          "bytes": 534,
+          "sha256": "b75ec7199e0aa015407cc59c65d7f8ddaf75accab60215591fe80df6b0f14f27",
+          "relative_path": "surfaces/website.css",
+          "category": "surface"
+        }
+      ],
+      "categories": {
+        "legacy_css": [
+          "colors_and_type.css"
+        ],
+        "root_readme": [
+          "README.md"
+        ],
+        "root_skill": [
+          "SKILL.md"
+        ],
+        "surfaces": [
+          "surfaces/content.css",
+          "surfaces/slides.css",
+          "surfaces/website.css"
+        ],
+        "assets": [],
+        "fonts": []
+      },
+      "shared_font_inventory": "shared-fonts"
+    },
+    {
+      "id": "legacy-field-register",
+      "system_id": "builtin-theme-field-register",
+      "slug": "field-register",
+      "root": "design system themes/field-register",
+      "files": [
+        {
+          "path": "design system themes/field-register/README.md",
+          "bytes": 14263,
+          "sha256": "38a5b1e4638805c43d6eed9addf3d89ce50ef08ef9fa49bf07a4a957b06e96f1",
+          "relative_path": "README.md",
+          "category": "root-readme"
+        },
+        {
+          "path": "design system themes/field-register/SKILL.md",
+          "bytes": 8310,
+          "sha256": "0fa935c269e168716cdd99e796d51847e6c666ff4363da3928fb78fe84025769",
+          "relative_path": "SKILL.md",
+          "category": "root-skill"
+        },
+        {
+          "path": "design system themes/field-register/colors_and_type.css",
+          "bytes": 4723,
+          "sha256": "cd666dabc9daf99a0f6b34f8f4c7e66a7be404ebc9cae221aedd3f0abdf89bb6",
+          "relative_path": "colors_and_type.css",
+          "category": "legacy-css"
+        },
+        {
+          "path": "design system themes/field-register/surfaces/content.css",
+          "bytes": 673,
+          "sha256": "4cb9120180e4aaa2fe6910a99f61bbc2f304f93530f5055101b4e6622239bf19",
+          "relative_path": "surfaces/content.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/field-register/surfaces/slides.css",
+          "bytes": 625,
+          "sha256": "1aff829be4fec4c111c900df0bdf31f2ac02a13c6451ea526117972625c009e3",
+          "relative_path": "surfaces/slides.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/field-register/surfaces/website.css",
+          "bytes": 534,
+          "sha256": "3bd9cfe93a251a2218eb546b81896172889a31cc4cc2255e220c914cb2b3b0a2",
+          "relative_path": "surfaces/website.css",
+          "category": "surface"
+        }
+      ],
+      "categories": {
+        "legacy_css": [
+          "colors_and_type.css"
+        ],
+        "root_readme": [
+          "README.md"
+        ],
+        "root_skill": [
+          "SKILL.md"
+        ],
+        "surfaces": [
+          "surfaces/content.css",
+          "surfaces/slides.css",
+          "surfaces/website.css"
+        ],
+        "assets": [],
+        "fonts": []
+      },
+      "shared_font_inventory": "shared-fonts"
+    },
+    {
+      "id": "legacy-warm-vestibule",
+      "system_id": "builtin-theme-warm-vestibule",
+      "slug": "warm-vestibule",
+      "root": "design system themes/warm-vestibule",
+      "files": [
+        {
+          "path": "design system themes/warm-vestibule/README.md",
+          "bytes": 14383,
+          "sha256": "9a18a2f20a5d02e2992f5624319d063927022116b9f91d60e902fc75ba4be28d",
+          "relative_path": "README.md",
+          "category": "root-readme"
+        },
+        {
+          "path": "design system themes/warm-vestibule/SKILL.md",
+          "bytes": 8227,
+          "sha256": "30302c272b24815a7575fc602cbae8c7534b0a44a8b976bb3cce1370af0292cf",
+          "relative_path": "SKILL.md",
+          "category": "root-skill"
+        },
+        {
+          "path": "design system themes/warm-vestibule/colors_and_type.css",
+          "bytes": 4660,
+          "sha256": "0053659947c80dabb5b58d1089078230c0752182cc672e85565494ae39f265ae",
+          "relative_path": "colors_and_type.css",
+          "category": "legacy-css"
+        },
+        {
+          "path": "design system themes/warm-vestibule/surfaces/content.css",
+          "bytes": 674,
+          "sha256": "d9e85907da1e1fb95d825158ba9f76643ffd84ab1124653319d20a391f98bf54",
+          "relative_path": "surfaces/content.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/warm-vestibule/surfaces/slides.css",
+          "bytes": 625,
+          "sha256": "5d142c14c991bb2d55ad8d2b5c4e4bbb223e7d77daf30f70bc3849c9fcda9ca2",
+          "relative_path": "surfaces/slides.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/warm-vestibule/surfaces/website.css",
+          "bytes": 534,
+          "sha256": "dfc4ad18eb4cf218f9d9591e509c7b73a84e51c09da239e19ed49f850bed9120",
+          "relative_path": "surfaces/website.css",
+          "category": "surface"
+        }
+      ],
+      "categories": {
+        "legacy_css": [
+          "colors_and_type.css"
+        ],
+        "root_readme": [
+          "README.md"
+        ],
+        "root_skill": [
+          "SKILL.md"
+        ],
+        "surfaces": [
+          "surfaces/content.css",
+          "surfaces/slides.css",
+          "surfaces/website.css"
+        ],
+        "assets": [],
+        "fonts": []
+      },
+      "shared_font_inventory": "shared-fonts"
+    },
+    {
+      "id": "legacy-stone-court",
+      "system_id": "builtin-theme-stone-court",
+      "slug": "stone-court",
+      "root": "design system themes/stone-court",
+      "files": [
+        {
+          "path": "design system themes/stone-court/README.md",
+          "bytes": 14396,
+          "sha256": "8c60487cda8f4e003b9d9904b99f25930285077dce4c50522b0e841af3067d52",
+          "relative_path": "README.md",
+          "category": "root-readme"
+        },
+        {
+          "path": "design system themes/stone-court/SKILL.md",
+          "bytes": 8313,
+          "sha256": "bdf5146adfffb639b1628eeac4d11ba763be628167b6684aa7c9d0e52ec2a1c5",
+          "relative_path": "SKILL.md",
+          "category": "root-skill"
+        },
+        {
+          "path": "design system themes/stone-court/colors_and_type.css",
+          "bytes": 4653,
+          "sha256": "a4a8d5162a6cb225adf5fa4568505823e88ca9cafc34c3b1d4536bb8a133babb",
+          "relative_path": "colors_and_type.css",
+          "category": "legacy-css"
+        },
+        {
+          "path": "design system themes/stone-court/surfaces/content.css",
+          "bytes": 671,
+          "sha256": "0b116d5f2d5701305a3139977bed2ea6128c9daf4219319521ea805880aedaad",
+          "relative_path": "surfaces/content.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/stone-court/surfaces/slides.css",
+          "bytes": 622,
+          "sha256": "9c30be8d3140a209f8e110779d486547582902606f0004d1cd315f2443a5c1c7",
+          "relative_path": "surfaces/slides.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/stone-court/surfaces/website.css",
+          "bytes": 531,
+          "sha256": "f94a1f0d51b319a2dd437c4e56e517323ec1ce2424d00eda5e6f0226471e31dc",
+          "relative_path": "surfaces/website.css",
+          "category": "surface"
+        }
+      ],
+      "categories": {
+        "legacy_css": [
+          "colors_and_type.css"
+        ],
+        "root_readme": [
+          "README.md"
+        ],
+        "root_skill": [
+          "SKILL.md"
+        ],
+        "surfaces": [
+          "surfaces/content.css",
+          "surfaces/slides.css",
+          "surfaces/website.css"
+        ],
+        "assets": [],
+        "fonts": []
+      },
+      "shared_font_inventory": "shared-fonts"
+    },
+    {
+      "id": "legacy-linen-retreat",
+      "system_id": "builtin-theme-linen-retreat",
+      "slug": "linen-retreat",
+      "root": "design system themes/linen-retreat",
+      "files": [
+        {
+          "path": "design system themes/linen-retreat/README.md",
+          "bytes": 14221,
+          "sha256": "dfce83d6b5106e4d52950ab88f2904d1f86ca312dd5ce4395e1ed89dd0e7c4c0",
+          "relative_path": "README.md",
+          "category": "root-readme"
+        },
+        {
+          "path": "design system themes/linen-retreat/SKILL.md",
+          "bytes": 8165,
+          "sha256": "14aad28f3951c629be1ef136336d63ce4ea78879736b2f58d5c1799108b891c7",
+          "relative_path": "SKILL.md",
+          "category": "root-skill"
+        },
+        {
+          "path": "design system themes/linen-retreat/colors_and_type.css",
+          "bytes": 4646,
+          "sha256": "f42d1fb7d667f2d249da0ec58aaa32363846ab90f888fe2489b8fc8111ba1c71",
+          "relative_path": "colors_and_type.css",
+          "category": "legacy-css"
+        },
+        {
+          "path": "design system themes/linen-retreat/surfaces/content.css",
+          "bytes": 673,
+          "sha256": "2826f745c71e204559116238f0b4f4cfd135bc85d7a5b33f0a206421978a428e",
+          "relative_path": "surfaces/content.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/linen-retreat/surfaces/slides.css",
+          "bytes": 624,
+          "sha256": "ccbfe5be69fe0b61bc372f866398db389a1fa8b6f161f8e10e3d7f8e4e98c945",
+          "relative_path": "surfaces/slides.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/linen-retreat/surfaces/website.css",
+          "bytes": 533,
+          "sha256": "4399b0c9942ce6d9d45c9782d98d59c5a3b0103c6adfdafa969f3d6aee82f4ac",
+          "relative_path": "surfaces/website.css",
+          "category": "surface"
+        }
+      ],
+      "categories": {
+        "legacy_css": [
+          "colors_and_type.css"
+        ],
+        "root_readme": [
+          "README.md"
+        ],
+        "root_skill": [
+          "SKILL.md"
+        ],
+        "surfaces": [
+          "surfaces/content.css",
+          "surfaces/slides.css",
+          "surfaces/website.css"
+        ],
+        "assets": [],
+        "fonts": []
+      },
+      "shared_font_inventory": "shared-fonts"
+    },
+    {
+      "id": "legacy-timber-hall",
+      "system_id": "builtin-theme-timber-hall",
+      "slug": "timber-hall",
+      "root": "design system themes/timber-hall",
+      "files": [
+        {
+          "path": "design system themes/timber-hall/README.md",
+          "bytes": 14192,
+          "sha256": "526210ba3f96f1178339d73ce395505231afb68708881f5ed5700370e10a4b6c",
+          "relative_path": "README.md",
+          "category": "root-readme"
+        },
+        {
+          "path": "design system themes/timber-hall/SKILL.md",
+          "bytes": 8250,
+          "sha256": "0d0a05ee87818a8059b9d2b9312be6514106cf0f1f3be541e6ba63c47b775b80",
+          "relative_path": "SKILL.md",
+          "category": "root-skill"
+        },
+        {
+          "path": "design system themes/timber-hall/colors_and_type.css",
+          "bytes": 4635,
+          "sha256": "d8a6e3a239fa0ecfe9a07e97917af892a4ddd0950d4f0053522930ba8b3e0c2f",
+          "relative_path": "colors_and_type.css",
+          "category": "legacy-css"
+        },
+        {
+          "path": "design system themes/timber-hall/surfaces/content.css",
+          "bytes": 670,
+          "sha256": "c17713d3eafdf7f1a424560bf1c5f91523b92688b54a2e6e045f09f7dc3444fe",
+          "relative_path": "surfaces/content.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/timber-hall/surfaces/slides.css",
+          "bytes": 622,
+          "sha256": "0f32730241085836d0776b3b7154340a171143f90765615b20e9ad3683451f69",
+          "relative_path": "surfaces/slides.css",
+          "category": "surface"
+        },
+        {
+          "path": "design system themes/timber-hall/surfaces/website.css",
+          "bytes": 531,
+          "sha256": "da9b81ab5b713bf8ff427b78862a18f2012e4bed2d75381cb6933794cdc8f471",
+          "relative_path": "surfaces/website.css",
+          "category": "surface"
+        }
+      ],
+      "categories": {
+        "legacy_css": [
+          "colors_and_type.css"
+        ],
+        "root_readme": [
+          "README.md"
+        ],
+        "root_skill": [
+          "SKILL.md"
+        ],
+        "surfaces": [
+          "surfaces/content.css",
+          "surfaces/slides.css",
+          "surfaces/website.css"
+        ],
+        "assets": [],
+        "fonts": []
+      },
+      "shared_font_inventory": "shared-fonts"
+    }
+  ],
+  "shared_inputs": [
+    {
+      "id": "shared-fonts",
+      "root": "assets/fonts",
+      "scope": "All shared local font input files; referenced once by every system rather than duplicated.",
+      "files": [
+        {
+          "path": "assets/fonts/AbrilFatface-OFL.txt",
+          "bytes": 4413,
+          "sha256": "d9186bdd2fe2c3cea09c402a1f0054fa106b8a2c573c6f14f30427c39d16794b"
+        },
+        {
+          "path": "assets/fonts/AbrilFatface.woff2",
+          "bytes": 20736,
+          "sha256": "9b99bcfba7437c121903e508f18d606687215d5eed0b9f5acf314e0f517b4e57"
+        },
+        {
+          "path": "assets/fonts/AlfaSlabOne-OFL.txt",
+          "bytes": 4429,
+          "sha256": "6cb8a5e3f60a5b23d1e5fff9b6fa860f0e5d4055a67bb262497c1e8d8fc13b05"
+        },
+        {
+          "path": "assets/fonts/AlfaSlabOne.woff2",
+          "bytes": 34660,
+          "sha256": "fbffa274d30400921076b92d714db3358cdb3fdb98c30058b4904e7b853e7b19"
+        },
+        {
+          "path": "assets/fonts/Anton-OFL.txt",
+          "bytes": 4391,
+          "sha256": "eee1d24ff8f553eb732237c7dd9b945a78313ed49ad6de02872a47277741b44a"
+        },
+        {
+          "path": "assets/fonts/Anton.woff2",
+          "bytes": 57408,
+          "sha256": "3267c0817cd31510da27af8123b8b2a1141fa1dda1f3724963c0a3d4d7e234c0"
+        },
+        {
+          "path": "assets/fonts/Archivo-OFL.txt",
+          "bytes": 4387,
+          "sha256": "1778201b7bd33e8c08a2eda32a4ad2f69bc38ced9731b01cc3fc47f268c8ef3c"
+        },
+        {
+          "path": "assets/fonts/Archivo.woff2",
+          "bytes": 189368,
+          "sha256": "6ff769840a6c0eb37d13afe7e9f603fa5cdb5f391ff87cc7aab75a3a4d44fdf4"
+        },
+        {
+          "path": "assets/fonts/AstaSans-OFL.txt",
+          "bytes": 4388,
+          "sha256": "464dd1c2459d8d06dc77858c79b5372d40a8452515a1256185396c87aca8365e"
+        },
+        {
+          "path": "assets/fonts/AstaSans.woff2",
+          "bytes": 1055224,
+          "sha256": "798cc2b131677eb1427c86dadae4c944d30b0a2456a75efb0006ef6431920a14"
+        },
+        {
+          "path": "assets/fonts/Barlow-OFL.txt",
+          "bytes": 4376,
+          "sha256": "10b0e6bb43166a50fbe7cde2895bd7f703738a5da843acb5c97c95dc9ea26817"
+        },
+        {
+          "path": "assets/fonts/Barlow.woff2",
+          "bytes": 38456,
+          "sha256": "4f2735b060fe43cbf38c3f5987f1ef0d9ff9788deb21c8f4bdf13b57be5e8027"
+        },
+        {
+          "path": "assets/fonts/BebasNeue-OFL.txt",
+          "bytes": 4336,
+          "sha256": "1ad713665104ebc1ad80176b6b14f2d7dbc91aeed4180855a9514bb350b52e31"
+        },
+        {
+          "path": "assets/fonts/BebasNeue.woff2",
+          "bytes": 21504,
+          "sha256": "bcba0b468e146a88d7c9bfea56770547c0a4152ccc5c47ebbf928c51b6167a54"
+        },
+        {
+          "path": "assets/fonts/BlackHanSans-OFL.txt",
+          "bytes": 4399,
+          "sha256": "c324192c8b3a988bae45a9a7e4ac1258b684739003bda114e0523423440457c9"
+        },
+        {
+          "path": "assets/fonts/BlackHanSans.woff2",
+          "bytes": 190420,
+          "sha256": "63453f8cccb73f6199cbcf35cbd1f05660f73fb3c25c261414c022c1a408ed4a"
+        },
+        {
+          "path": "assets/fonts/BodoniModa-OFL.txt",
+          "bytes": 4400,
+          "sha256": "931dfe2e0cd3c9443295f5c1d754b8a8403bf060df50c1d5900267ade83d0046"
+        },
+        {
+          "path": "assets/fonts/BodoniModa.woff2",
+          "bytes": 74124,
+          "sha256": "09c39d51b3b5698bb12b4c48d1280cc60df34af0b141f964d14ad9e289a2e40e"
+        },
+        {
+          "path": "assets/fonts/Cafe24-OFL.txt",
+          "bytes": 4262,
+          "sha256": "21c8b6512319a32df2d0ceadfd229aa51f8171bf14228370dfe6f82f488f887e"
+        },
+        {
+          "path": "assets/fonts/Cafe24Dongdong.woff2",
+          "bytes": 1153756,
+          "sha256": "d8bec15b910e4857d75ac83f766ad0936474d6412ec2f727ae97c8f61dd2ed19"
+        },
+        {
+          "path": "assets/fonts/Cafe24Syongsyong.woff2",
+          "bytes": 493852,
+          "sha256": "036a423c9bbceb6b510dd2be2c4aa84ae9f8ee18042cec1ee11a4a3a1e542664"
+        },
+        {
+          "path": "assets/fonts/Caveat-OFL.txt",
+          "bytes": 4384,
+          "sha256": "163a2b400e16916ad3196296c946c526d0efce6baf22a2164269ffc62fb9f671"
+        },
+        {
+          "path": "assets/fonts/Caveat.woff2",
+          "bytes": 173468,
+          "sha256": "c7d6a0ad1cbe120518b64ca8c5dac3c064bdfdb3cdc62f472c571f4a769ace9f"
+        },
+        {
+          "path": "assets/fonts/Cormorant-OFL.txt",
+          "bytes": 4386,
+          "sha256": "6f5a41d57400577a50aae88475b11f292f3d7de78ee7d5113c69577331d8ad31"
+        },
+        {
+          "path": "assets/fonts/Cormorant.woff2",
+          "bytes": 171400,
+          "sha256": "2f7afb1c003c6a9d87fd895ddc635e09f3032dcf8e1367252f4eeb73c18ecc8f"
+        },
+        {
+          "path": "assets/fonts/DMSans-OFL.txt",
+          "bytes": 4388,
+          "sha256": "7ec15e79c59bc14b86436a17e5eb7926b46cbcaeb08e1a7e6c110b415e6eb2a2"
+        },
+        {
+          "path": "assets/fonts/DMSans.woff2",
+          "bytes": 88808,
+          "sha256": "6040aefba6c8c12f02e8e95c20d2fcb0e7c10f1d9c49ea445f63dac81aa9f3c4"
+        },
+        {
+          "path": "assets/fonts/DMSerifDisplay-OFL.txt",
+          "bytes": 4512,
+          "sha256": "aa49c876a28d8c0b0a3027d6c25b9c607eee8c0fb96165011d42a6ace1408fe1"
+        },
+        {
+          "path": "assets/fonts/DMSerifDisplay.woff2",
+          "bytes": 31888,
+          "sha256": "4d7cbbffcc9c14873fb2aafca9d69fa00cb5091681beaf9d717c33720b92eccb"
+        },
+        {
+          "path": "assets/fonts/DancingScript-OFL.txt",
+          "bytes": 4442,
+          "sha256": "c02c0002d3bbd41a16933c162888c400469c7029f1362ca9d60d5ed20ea7d157"
+        },
+        {
+          "path": "assets/fonts/DancingScript.woff2",
+          "bytes": 59856,
+          "sha256": "7641e43dcbe5ba3217a3f12080621a041978249b8a6dacaf3d7ff10a7517f8e9"
+        },
+        {
+          "path": "assets/fonts/DoHyeon-OFL.txt",
+          "bytes": 4347,
+          "sha256": "de5ff32211a4340b01477af39ee339d639438955e409f79b666d4b9207f3c92c"
+        },
+        {
+          "path": "assets/fonts/DoHyeon.woff2",
+          "bytes": 204308,
+          "sha256": "adb7ca439eac24ff56e7172c742b0d51a1587fef69d59e4df0aff17a4d3f97b7"
+        },
+        {
+          "path": "assets/fonts/Figtree-OFL.txt",
+          "bytes": 4388,
+          "sha256": "140d37233e7f3ce7313798befa9600893bcceaf41a55fa0fa5ad52f7f657a268"
+        },
+        {
+          "path": "assets/fonts/Figtree.woff2",
+          "bytes": 27748,
+          "sha256": "52b4747792d831ef2f4bc72b36f2aba46ec5c5afee42c3901459b40196e2adb0"
+        },
+        {
+          "path": "assets/fonts/Fraunces-OFL.txt",
+          "bytes": 4391,
+          "sha256": "bdf4c22802eaf804f998195871c6b8938aac2ac14b2d78a8bd66a6f1eced833b"
+        },
+        {
+          "path": "assets/fonts/Fraunces.woff2",
+          "bytes": 195116,
+          "sha256": "dfd2f341144a2935c9b5a879b6b16fea74fb09cbf8cd990b82e4a83d290a3d7e"
+        },
+        {
+          "path": "assets/fonts/GasoekOne-OFL.txt",
+          "bytes": 4387,
+          "sha256": "714d24bf1b9ce8a8a684e27fc5719a03f3f7ca12e16dd9a49c105a567a804a1d"
+        },
+        {
+          "path": "assets/fonts/GasoekOne.woff2",
+          "bytes": 302220,
+          "sha256": "5276195f372d865f36d44c60b4b1ad5978942951cab4ab45847c0a50b4f1951f"
+        },
+        {
+          "path": "assets/fonts/Geist-OFL.txt",
+          "bytes": 4387,
+          "sha256": "1781d2806a07d91c4edf4740b88449fab7d0eadad53f7c351b94cd4d4eb8c00f"
+        },
+        {
+          "path": "assets/fonts/Geist.woff2",
+          "bytes": 69600,
+          "sha256": "a8d53782589d3f9da758c1d973a46954e2aa3bb90665372d1290132138d3871c"
+        },
+        {
+          "path": "assets/fonts/GeistMono-OFL.txt",
+          "bytes": 4387,
+          "sha256": "1781d2806a07d91c4edf4740b88449fab7d0eadad53f7c351b94cd4d4eb8c00f"
+        },
+        {
+          "path": "assets/fonts/GeistMono.woff2",
+          "bytes": 71140,
+          "sha256": "58f03f0f32541bd35bc6a0b6c9f2b2d83593af8e7cc81b1e115e624967370c79"
+        },
+        {
+          "path": "assets/fonts/GmarketSans-OFL.txt",
+          "bytes": 4634,
+          "sha256": "2f6d9ad21f26fbdc8c34b4b3b8c9a34558604eb2edecea663d57ce2565f2bbaa"
+        },
+        {
+          "path": "assets/fonts/GmarketSans.woff2",
+          "bytes": 512232,
+          "sha256": "92d94401f64ada0a804298c31723d0ab26eb52d1ae5143761b6ca15a88adad7a"
+        },
+        {
+          "path": "assets/fonts/GowunBatang-OFL.txt",
+          "bytes": 4396,
+          "sha256": "8a75f14f69187080021a85f40c2239678b7ecd4648fbb476f65c623bf2e87f93"
+        },
+        {
+          "path": "assets/fonts/GowunBatang.woff2",
+          "bytes": 535780,
+          "sha256": "ce579794599797df45e7adfed3a738823cdc6bb6a8067a7986fdbc53c69d6e1b"
+        },
+        {
+          "path": "assets/fonts/GowunDodum-OFL.txt",
+          "bytes": 4395,
+          "sha256": "a7c73f9521cd646bbdfb6684c99a62311bbd7bce11898dc11ef0b3c69eda1aca"
+        },
+        {
+          "path": "assets/fonts/GowunDodum.woff2",
+          "bytes": 445804,
+          "sha256": "8973fb77c46caa9ec81ba6ff5c512ada39a98b157b162e595243334b1fc54948"
+        },
+        {
+          "path": "assets/fonts/GreatVibes-OFL.txt",
+          "bytes": 4398,
+          "sha256": "1467121711cbdf1516ddbad9c008a95bd94747bdec35958e2e49e6de333bd3e5"
+        },
+        {
+          "path": "assets/fonts/GreatVibes.woff2",
+          "bytes": 162112,
+          "sha256": "729a4f2fbe477c1c35150e9502e40b3fdeecca3f531a268e98a49aed9ef5ada1"
+        },
+        {
+          "path": "assets/fonts/Hahmlet-OFL.txt",
+          "bytes": 4386,
+          "sha256": "b1ea6031af4e012d2137fbd4cb35069bde55e475ea8919ff65d084d3335a181b"
+        },
+        {
+          "path": "assets/fonts/Hahmlet.woff2",
+          "bytes": 697476,
+          "sha256": "7ba8e4980879a5ec7d05926b6da529824dc75297bd850cc4b6d073cdb871df68"
+        },
+        {
+          "path": "assets/fonts/Hanna-OFL.txt",
+          "bytes": 4397,
+          "sha256": "c24c183fddedcb4fb5720d2418ccd67da45605541679302272b03d2d55706bc6"
+        },
+        {
+          "path": "assets/fonts/Hanna.woff2",
+          "bytes": 116260,
+          "sha256": "c699c2263a51e7a88e96eaedeb375fd94ae3edf15f15aae9c11a039688824500"
+        },
+        {
+          "path": "assets/fonts/IBMPlexMono-OFL.txt",
+          "bytes": 4362,
+          "sha256": "d741e57d5f865e294df801f96b7b5161a88b211df65887e4358d271c9fc5fb4f"
+        },
+        {
+          "path": "assets/fonts/IBMPlexMono.woff2",
+          "bytes": 39200,
+          "sha256": "3a53d4ee43d3a4edae0bf562d39d04adf93ef0d720687b42d2e48a736a52f76d"
+        },
+        {
+          "path": "assets/fonts/IBMPlexSans-OFL.txt",
+          "bytes": 4362,
+          "sha256": "d741e57d5f865e294df801f96b7b5161a88b211df65887e4358d271c9fc5fb4f"
+        },
+        {
+          "path": "assets/fonts/IBMPlexSans.woff2",
+          "bytes": 229852,
+          "sha256": "4aea8c49bb04155bced7cdea9ed0ed86b5a45da94b2ca54065ac9cb4098efcdb"
+        },
+        {
+          "path": "assets/fonts/IBMPlexSansKR-OFL.txt",
+          "bytes": 4363,
+          "sha256": "37784b44044a4ffd9256702b7c0982c37e5c8887ba90c6dca0479aea93dc898d"
+        },
+        {
+          "path": "assets/fonts/IBMPlexSansKR.woff2",
+          "bytes": 561544,
+          "sha256": "15321dcfb32144e0179833edc46010f3bedfce964c177c5dcadbd8a51ab077e8"
+        },
+        {
+          "path": "assets/fonts/InstrumentSans-OFL.txt",
+          "bytes": 4403,
+          "sha256": "9e27a72ed30eb49a08678f6a5d6ed98ec7ba5368f541637ee0683ec9134ef966"
+        },
+        {
+          "path": "assets/fonts/InstrumentSans.woff2",
+          "bytes": 89028,
+          "sha256": "cf126f83c5a04da38c64d7895d2352542805cde41e6304e73195c2f2a1c61d24"
+        },
+        {
+          "path": "assets/fonts/InstrumentSerif-OFL.txt",
+          "bytes": 4405,
+          "sha256": "129ed7618959716959f2941fdd5b49e0ad6e6c1d78726761786a00253d865521"
+        },
+        {
+          "path": "assets/fonts/InstrumentSerif.woff2",
+          "bytes": 27488,
+          "sha256": "95efb7c3654b35f49b4563864219a49c9e5da9de8277df17feed665f5a69a097"
+        },
+        {
+          "path": "assets/fonts/Inter-OFL.txt",
+          "bytes": 4376,
+          "sha256": "5dd548d31a85f756e01d63e00d7faf1e324103ed3e9102fcbbabf2cc2db6dd39"
+        },
+        {
+          "path": "assets/fonts/Inter.woff2",
+          "bytes": 350460,
+          "sha256": "13b4cddc57045d40b411008e61588c8f81aa0bd72fe884624831a0ff9c4d159a"
+        },
+        {
+          "path": "assets/fonts/JetBrainsMono-OFL.txt",
+          "bytes": 4399,
+          "sha256": "b2fe5e8987594e9ffd1d2ca52a2f5d73eb8335243893c5d6254b5ad69269591d"
+        },
+        {
+          "path": "assets/fonts/JetBrainsMono.woff2",
+          "bytes": 71548,
+          "sha256": "77e8d36966c765d9132b444885f5a5d26f5e696e14a8af86922be65dd97cadaa"
+        },
+        {
+          "path": "assets/fonts/JosefinSans-OFL.txt",
+          "bytes": 4448,
+          "sha256": "1ca7aa0367e92fe1991b3944b856a4ca45bb3e5becec4f264b2f78f3c6634f5d"
+        },
+        {
+          "path": "assets/fonts/JosefinSans.woff2",
+          "bytes": 47636,
+          "sha256": "ab5c169aeb65caf9ee0e5ae152b99e9c3c7ca5629f527c8efccc17bab7d24e58"
+        },
+        {
+          "path": "assets/fonts/Jua-OFL.txt",
+          "bytes": 4342,
+          "sha256": "44a7c6e4c5572392ae122d3b1d8c6ba6fd640a7797e675384585d947f2773e3c"
+        },
+        {
+          "path": "assets/fonts/Jua.woff2",
+          "bytes": 369040,
+          "sha256": "b31b463b071db28f5e7504770ca136e1f5a2e46ad83cde1d418bda219dfc9f9b"
+        },
+        {
+          "path": "assets/fonts/LINESeedSansKR-OFL.txt",
+          "bytes": 4321,
+          "sha256": "2e877cb9d5c82b6f0e0c5da509eb905ae8e299467da73c32f7b80bb9ce51ab62"
+        },
+        {
+          "path": "assets/fonts/LINESeedSansKR.woff2",
+          "bytes": 544224,
+          "sha256": "781355567accaf2792951f7a6253c338c6bac0555eb776c252b5af5e18d52154"
+        },
+        {
+          "path": "assets/fonts/LeagueGothic-OFL.txt",
+          "bytes": 4399,
+          "sha256": "57674b62430148124bb4f2f07f33fc694c6a04f327227d04b796e5687c351e6c"
+        },
+        {
+          "path": "assets/fonts/LeagueGothic.woff2",
+          "bytes": 27196,
+          "sha256": "931d131c119072a1c58d23e753aa70f322390c499d6a5e01b51ffbf1558abfdb"
+        },
+        {
+          "path": "assets/fonts/LeagueSpartan-OFL.txt",
+          "bytes": 4401,
+          "sha256": "351019483aa4511fb497cb81b210aca83a1dc4f2d9b26ed94963253381db890f"
+        },
+        {
+          "path": "assets/fonts/LeagueSpartan.woff2",
+          "bytes": 41104,
+          "sha256": "b19c8e4d26d1ade4e769ea64b7913bc16af86f015be4c303eee19da046223597"
+        },
+        {
+          "path": "assets/fonts/LibreBaskerville-OFL.txt",
+          "bytes": 4448,
+          "sha256": "516bf7fbfdbd0f0e4f50ade6a9127ad83ac7a54370bad6cf70794554569e9c4e"
+        },
+        {
+          "path": "assets/fonts/LibreBaskerville.woff2",
+          "bytes": 64008,
+          "sha256": "1ce91cc87fd7602c7d4d1a925af15aaefbb85acd379dbee9b34a82e653669320"
+        },
+        {
+          "path": "assets/fonts/Lobster-OFL.txt",
+          "bytes": 4429,
+          "sha256": "73e006e6fc23df5f07e0976d78d49c94aece9ce90cdb2522279a6d79eaa7bbd3"
+        },
+        {
+          "path": "assets/fonts/Lobster.woff2",
+          "bytes": 103148,
+          "sha256": "cab999bc4051709969bfe8f97c63faa35b4bcf7a1f9a975d1824160e1d69f411"
+        },
+        {
+          "path": "assets/fonts/Lora-OFL.txt",
+          "bytes": 4423,
+          "sha256": "1d9a970809ac804b582a6ce7f0ebc4e7fefcbfd7ff6299cad35ee656a21be716"
+        },
+        {
+          "path": "assets/fonts/Lora.woff2",
+          "bytes": 84936,
+          "sha256": "0ae4fc09165da9d6d704800d4b14edd0c68d0495b296926ada2bf1a6bb2c3b08"
+        },
+        {
+          "path": "assets/fonts/Manrope-OFL.txt",
+          "bytes": 4384,
+          "sha256": "e01b637272e0cbdfb240184dd98ea5cc671556d9894dae2668d92ab2c906787c"
+        },
+        {
+          "path": "assets/fonts/Manrope.woff2",
+          "bytes": 53580,
+          "sha256": "cfd38ea64c8d948edcbe64df21bacd6d8654a920dba9eeff6186f886f20440ab"
+        },
+        {
+          "path": "assets/fonts/MaruBuri-OFL.txt",
+          "bytes": 4285,
+          "sha256": "8f4d6e304707aec08ce9407ff866646d0849fa5df86cbd0ac07e9e2606fbba3d"
+        },
+        {
+          "path": "assets/fonts/MaruBuri.woff2",
+          "bytes": 433068,
+          "sha256": "9fe9bbda599862088ea3fa7a70a2b2037406657bee726adc59c404732eca4613"
+        },
+        {
+          "path": "assets/fonts/Montserrat-OFL.txt",
+          "bytes": 4399,
+          "sha256": "fa036c290600f85c9c7747dbd2bd3ac26d28de0ac0582ff9320c53161765e19b"
+        },
+        {
+          "path": "assets/fonts/Montserrat.woff2",
+          "bytes": 215968,
+          "sha256": "6e712eafc11f23dc2b0651c0849c1a331aa81a3a4499ba61ef5091e5c123c796"
+        },
+        {
+          "path": "assets/fonts/NanumGothic-OFL.txt",
+          "bytes": 4532,
+          "sha256": "90f6a909ffb2af7f6422ea20042a26180fe5520cba80bbbf75a5e660320d7924"
+        },
+        {
+          "path": "assets/fonts/NanumGothic.woff2",
+          "bytes": 363844,
+          "sha256": "b2b25ce9c9179e0a4c867bd2610e1db5595965345aa1cdb857964ab802c4ee3e"
+        },
+        {
+          "path": "assets/fonts/NanumMyeongjo-OFL.txt",
+          "bytes": 4497,
+          "sha256": "8eb1c1019fe7fe6d0b6e7d7bbbba1d9cbdd969d8c5f26455708f6cfb8a77284c"
+        },
+        {
+          "path": "assets/fonts/NanumMyeongjo.woff2",
+          "bytes": 535912,
+          "sha256": "57663db2c1a471802fe6dcc548b2418404085165ff6b6b2a986aeb5cf7830262"
+        },
+        {
+          "path": "assets/fonts/NanumPenScript-OFL.txt",
+          "bytes": 4534,
+          "sha256": "eeacf16032901d0ed0456876ec77b8f0fda6b3fecec7d972f8543eb602e6c30f"
+        },
+        {
+          "path": "assets/fonts/NanumPenScript.woff2",
+          "bytes": 615464,
+          "sha256": "2391d6623da8e4fc7d631f7b08ded1c9983cc3eef57aba12569d1f076a1f7100"
+        },
+        {
+          "path": "assets/fonts/NanumSquare-OFL.txt",
+          "bytes": 4285,
+          "sha256": "8f4d6e304707aec08ce9407ff866646d0849fa5df86cbd0ac07e9e2606fbba3d"
+        },
+        {
+          "path": "assets/fonts/NanumSquare.woff2",
+          "bytes": 194520,
+          "sha256": "8db08c1e44db3caba0feac0783a326a9b440026f7537ba6ba8ac9bc1b9df2770"
+        },
+        {
+          "path": "assets/fonts/Newsreader-OFL.txt",
+          "bytes": 4394,
+          "sha256": "fdfad38143ec470553cae82a1e45320bdd1b9ec70415d37bd0171051d8a4ded8"
+        },
+        {
+          "path": "assets/fonts/Newsreader.woff2",
+          "bytes": 215576,
+          "sha256": "11edea244db4185b1061dc015b81248de374aa001ef207b48436abb38bd2f84b"
+        },
+        {
+          "path": "assets/fonts/NotoSansKR-OFL.txt",
+          "bytes": 4387,
+          "sha256": "babcfe66c8a098b2fa279bc724a3a342f8124f77ce18941fbcc1bbb39823cded"
+        },
+        {
+          "path": "assets/fonts/NotoSansKR.woff2",
+          "bytes": 3908716,
+          "sha256": "f484190a87503ac2af2cf9771ec35122128453fe0cd92f4368117562d99547e6"
+        },
+        {
+          "path": "assets/fonts/Orbit-OFL.txt",
+          "bytes": 4385,
+          "sha256": "5f8a9f2fdab95e05507d330e78b7fa61a38a1e43b5d13e7d55e47b501d6f7199"
+        },
+        {
+          "path": "assets/fonts/Orbit.woff2",
+          "bytes": 217860,
+          "sha256": "3db610d200b2382d7656fb8f88336090314cf603c7c88ff35fe73777ced54b31"
+        },
+        {
+          "path": "assets/fonts/Oswald-OFL.txt",
+          "bytes": 4389,
+          "sha256": "0b2472b17e950b9967818f169f2618b091c0c259d250d2dd8208961c7f5700e1"
+        },
+        {
+          "path": "assets/fonts/Oswald.woff2",
+          "bytes": 72104,
+          "sha256": "6bbc262410618b85e3d3154309cad8346a9e3c3085a61d04b3710a4cf2831f4d"
+        },
+        {
+          "path": "assets/fonts/Outfit-OFL.txt",
+          "bytes": 4389,
+          "sha256": "c676351bf8576b9aba743cd5eaa8c0e7ee0d51f805d720447b4df4ddb6a2e416"
+        },
+        {
+          "path": "assets/fonts/Outfit.woff2",
+          "bytes": 45144,
+          "sha256": "4ec9dabd58c02424e1db45cf1fecba0ff5eac8f8ca278217de243d45b79da5fe"
+        },
+        {
+          "path": "assets/fonts/Pacifico-OFL.txt",
+          "bytes": 4388,
+          "sha256": "e1b964e3f56697598c46363a8864f0a7b883c86a0c01a9a6a4e90e6949d60ba2"
+        },
+        {
+          "path": "assets/fonts/Pacifico.woff2",
+          "bytes": 105108,
+          "sha256": "4b6238e16e5f3f98571954de8d994de79d6cbfaca26f562bba52af44595ff060"
+        },
+        {
+          "path": "assets/fonts/Paperlogy-OFL.txt",
+          "bytes": 4379,
+          "sha256": "a5a9b6832b5d91b5389e258b82f788791493fb786979eb80b5e142b5664ba22a"
+        },
+        {
+          "path": "assets/fonts/Paperlogy.woff2",
+          "bytes": 433604,
+          "sha256": "765af070cd00b037dc8363d30140cbdf905ee421364bc77c21b5e90b88ffcb19"
+        },
+        {
+          "path": "assets/fonts/PlayfairDisplay-OFL.txt",
+          "bytes": 4449,
+          "sha256": "566be814f8e96e93dfa16101331557eb6b5467e9e03f627c0910fe93ca12300e"
+        },
+        {
+          "path": "assets/fonts/PlayfairDisplay.woff2",
+          "bytes": 106444,
+          "sha256": "aa6c7323250419eded04fc5d6505b910a70296bef62125dfdd91182b02118c11"
+        },
+        {
+          "path": "assets/fonts/PlusJakartaSans-OFL.txt",
+          "bytes": 4402,
+          "sha256": "995c7199cab65954f545996326755daee7b63cc6b42b06c13da1f9502ab08a99"
+        },
+        {
+          "path": "assets/fonts/PlusJakartaSans.woff2",
+          "bytes": 60528,
+          "sha256": "805afa4e1ee9ccc960276a9b61f2746335c7a9ce5e318e49d4de8ebaef941e8d"
+        },
+        {
+          "path": "assets/fonts/Poppins-OFL.txt",
+          "bytes": 4384,
+          "sha256": "8503c30a4d7e09c4c09015fee42f829f18acbe6330755e9930ba50ea44eaa157"
+        },
+        {
+          "path": "assets/fonts/Poppins.woff2",
+          "bytes": 51540,
+          "sha256": "a7025c9f49be42d5e89bd67b557428df37820c5058b3babc5572cc42f2e57c04"
+        },
+        {
+          "path": "assets/fonts/Pretendard-OFL.txt",
+          "bytes": 4815,
+          "sha256": "cc2582fa6dbd72ddfd229e709c0bae635f75a151ed1787adab9729a531b48a1f"
+        },
+        {
+          "path": "assets/fonts/PretendardVariable.woff2",
+          "bytes": 2057688,
+          "sha256": "9599f12fd42fc0bce1cd50b47a0c022e108d7aa64dd0d1bb0ed44f3282d900b4"
+        },
+        {
+          "path": "assets/fonts/PublicSans-OFL.txt",
+          "bytes": 4390,
+          "sha256": "157a9e77f7580246e97c769490e2e977ae94399f9d30f4556015c41fe8c28bac"
+        },
+        {
+          "path": "assets/fonts/PublicSans.woff2",
+          "bytes": 42004,
+          "sha256": "21c579d8bf81de8887fb25b7836818268de2fc040b6a9c6868cb537398da8b8b"
+        },
+        {
+          "path": "assets/fonts/README.md",
+          "bytes": 1834,
+          "sha256": "186ef2da62a8adec81699d10cef45dc0c3ea663559792fdc5fa2f9097b82d51d"
+        },
+        {
+          "path": "assets/fonts/Raleway-OFL.txt",
+          "bytes": 4403,
+          "sha256": "c62d0f4b78825cbf2d99ac7ea3dd163f645210efa032243731184c9f86a6eab6"
+        },
+        {
+          "path": "assets/fonts/Raleway.woff2",
+          "bytes": 129484,
+          "sha256": "6aa19662aaefe65d006e3755377c7e0f2f56d6ead0a5165f4d8be4d185ae4eb1"
+        },
+        {
+          "path": "assets/fonts/Righteous-OFL.txt",
+          "bytes": 4431,
+          "sha256": "1f1862dce9044038c2d8904280985be1be2f000d87c04117873a180c380c8362"
+        },
+        {
+          "path": "assets/fonts/Righteous.woff2",
+          "bytes": 16824,
+          "sha256": "4724c4a71f6b4c9c4f76aa29780ae083d54c688992109e4bf11b506f918e9f8f"
+        },
+        {
+          "path": "assets/fonts/SUIT-OFL.txt",
+          "bytes": 4379,
+          "sha256": "307464e7f575411ac16849ca103f26b35fe014611cf59f363640b37c2979a069"
+        },
+        {
+          "path": "assets/fonts/SUIT.woff2",
+          "bytes": 629376,
+          "sha256": "6d34565ac413963cab62158b3547962e7c086f09d9b33e6a096d59080abfcfc2"
+        },
+        {
+          "path": "assets/fonts/SingleDay-OFL.txt",
+          "bytes": 4352,
+          "sha256": "397e83b05703a4240be51e2c3a2be1d0d7693d7a2d8b1ff367c26a2b9afc013e"
+        },
+        {
+          "path": "assets/fonts/SingleDay.woff2",
+          "bytes": 93072,
+          "sha256": "5739afb565e8b1cfe4c509df528b048ced1ce268d965eb995b18cd5878c1f6fa"
+        },
+        {
+          "path": "assets/fonts/Sora-OFL.txt",
+          "bytes": 4385,
+          "sha256": "ba0b9729c9428ba79a0459ab8ec575791b51509dbec213e383d0316d37fec299"
+        },
+        {
+          "path": "assets/fonts/Sora.woff2",
+          "bytes": 49388,
+          "sha256": "bc5214e383044877fc05baefdd00918a9d56f89e6e856bdc55f41278657c415f"
+        },
+        {
+          "path": "assets/fonts/SourceSans3-OFL.txt",
+          "bytes": 4485,
+          "sha256": "7fac2f6c6bc47144e2c35e8f41147b3c8c895490d44b46266a5312fe93364d2e"
+        },
+        {
+          "path": "assets/fonts/SourceSans3.woff2",
+          "bytes": 169416,
+          "sha256": "707229357fb90c9c5da177826aac06c6da031f569a9a520bfa7fcca5cd03355a"
+        },
+        {
+          "path": "assets/fonts/SpaceGrotesk-OFL.txt",
+          "bytes": 4401,
+          "sha256": "18a4de52385f6b988782639d5d0cc1326e5a8c2de9a7f01d7b20d9aedcc60943"
+        },
+        {
+          "path": "assets/fonts/SpaceGrotesk.woff2",
+          "bytes": 49144,
+          "sha256": "5c37c605b819c288e6d64842d7fcf99c3f9323415e4a1c667d137f0c5a20e504"
+        },
+        {
+          "path": "assets/fonts/Syne-OFL.txt",
+          "bytes": 4402,
+          "sha256": "cc43cdce6f91c57989af8459341c276655e34224e954fa69c2ad700831a742d8"
+        },
+        {
+          "path": "assets/fonts/Syne.woff2",
+          "bytes": 60676,
+          "sha256": "b29a619eefe59c63f93282cf2d6f882b858617984cbebe63620b17d2d6a1df4f"
+        },
+        {
+          "path": "assets/fonts/Urbanist-OFL.txt",
+          "bytes": 4385,
+          "sha256": "ee1221b1c2d08920e5f9ca764eb228dafa5c8090df9cf665373c2287b9cb8f49"
+        },
+        {
+          "path": "assets/fonts/Urbanist.woff2",
+          "bytes": 38388,
+          "sha256": "6b2adf22a5b7aa618fe69cc42382514ad791abdd1fdbc0ac1123251736cb22e5"
+        },
+        {
+          "path": "assets/fonts/WorkSans-OFL.txt",
+          "bytes": 4395,
+          "sha256": "2786ce9d9f2272d1382d3ccb7a6e5887ac87dba5c8dd09266ba1ceb7be16d711"
+        },
+        {
+          "path": "assets/fonts/WorkSans.woff2",
+          "bytes": 131296,
+          "sha256": "aa88c7e12e896eb3658e81aec3cda002030e2319c9bacfc728d47b2b2cc4f737"
+        },
+        {
+          "path": "assets/fonts/fonts.css",
+          "bytes": 11582,
+          "sha256": "b2e70fa758b71308c106efa02442bf2e92541ffaafea570f3a4961c467f6e5f7"
+        },
+        {
+          "path": "assets/fonts/fonts.md",
+          "bytes": 29683,
+          "sha256": "1e90b3be5b0f213eb796a21fce99fa1285fa56da73a73c40221b878723f57b17"
+        },
+        {
+          "path": "assets/fonts/manifest.json",
+          "bytes": 31353,
+          "sha256": "2c4e698d95891f83c430f3d876326f53735e3657a07482e222a11b64f394d63c"
+        }
+      ]
+    }
+  ],
+  "counts": {
+    "systems": 43,
+    "theme_files": 258,
+    "theme_local_assets": 0,
+    "theme_local_fonts": 0,
+    "shared_font_files": 147
+  }
+}

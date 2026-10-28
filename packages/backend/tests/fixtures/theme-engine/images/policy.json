@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "fixture_set": "theme-images-v1",
+  "frozen_before_engine": true,
+  "colour_space": "8-bit straight-alpha sRGB; no ICC profiles in synthetic inputs",
+  "distance": {
+    "name": "Euclidean OKLab",
+    "scale": "L in [0,1]; a and b unscaled; not deltaE*100",
+    "comparison": "Unordered role-aware anchor matching. Compare source RGB, not white/black-composited RGB. Alpha is coverage, not a colour. Ignore RGB at alpha=0. Background colour may also be an enclosed foreground anchor.",
+    "ranking": "No anchor ranking or engine cluster count is asserted."
+  },
+  "tolerances": {
+    "png-opaque": {
+      "max_oklab_error": 0.00001,
+      "basis": "Lossless integer RGB samples; floating-point conversion allowance only."
+    },
+    "png-alpha": {
+      "max_oklab_error": 0.015,
+      "basis": "Lossless encoded straight RGBA; allowance for <=2 channel units from 8-bit premultiply/unpremultiply at alpha>=64. Encoded sample truth remains exact."
+    },
+    "jpeg-q95": {
+      "max_oklab_error": 0.06,
+      "basis": "Lossy JPEG quality 95, chroma subsampling and DCT rounding. Anchor checks use flat interiors >=8 pixels from edges, never boundary ringing. Conservative preregistered budget, not a universal JPEG bound."
+    },
+    "webp-q95": {
+      "max_oklab_error": 0.04,
+      "basis": "Lossy WebP quality 95, YUV/chroma quantization. Flat interior checks only, >=8 pixels from edges. Conservative preregistered budget, not a universal WebP bound."
+    },
+    "webp-alpha-q95": {
+      "max_oklab_error": 0.055,
+      "basis": "WebP lossy RGB plus alpha roundtrip; same interior-only rule, source alpha>=64."
+    },
+    "svg-flat": {
+      "max_oklab_error": 0.00001,
+      "basis": "Literal sRGB fills in axis-aligned integer rectangles; no fonts, gradients, antialias boundary or filters in colour-truth probes."
+    }
+  },
+  "limits_for_negative_cases": {
+    "max_width": 8192,
+    "max_height": 8192,
+    "max_pixels": 16777216,
+    "animation_policy": "reject, never choose an arbitrary frame",
+    "svg_policy": "Reject external/network/file/data references, DTD/entities, scripts, foreignObject and animation; local fragment-only use is a positive control. Never dereference hostile fixtures."
+  },
+  "truth_contract": {
+    "known-colour": "Manually authored geometry, exact source RGBA and areas. Expected foreground/background anchors are human labels, not extraction output. RGB exactness applies to PNG/SVG source samples; codec error budgets apply to lossy anchor comparisons.",
+    "source-colour-only": "Existing SVG literal fills are known; font rasterization, glyph coverage and extracted dominance are not. Do not score these as pixel/anchor truth.",
+    "determinism-only": "Exact bytes and dimensions frozen, no expected colour accuracy or anchor count. Compare repeated future engine outputs, not an invented colour target.",
+    "negative": "Static header/reference facts only; no engine was run. Expected rejection is a future security contract, not a claim about current implementation."
+  },
+  "freeze_rule": "Use only the listed cases and embedded bytes. Do not regenerate, fetch source assets, add random cases or tune thresholds after observing an engine. A changed corpus requires a separately versioned benchmark.",
+  "expected_case_counts": {
+    "total": 40,
+    "known_colour": 19,
+    "source_colour_only": 2,
+    "determinism_only": 1,
+    "negative": 18
+  },
+  "alpha_notes": "Alpha-zero nonzero RGB must be checked in the inflated PNG bytes, not canvas readback, which discards hidden RGB. Partial-alpha probes compare straight RGB and exact alpha separately; no implicit compositing.",
+  "source_asset_root": "A worktree at fixture preparation; source paths are provenance only, never runtime dependencies."
+}

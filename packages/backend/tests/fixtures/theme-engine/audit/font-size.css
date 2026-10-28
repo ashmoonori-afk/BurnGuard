@@ -1,0 +1,21 @@
+.f01 { font-size: 12px; } /* f-p01 */
+.f02 { font-size: 16px; } /* f-p02 */
+.f03 { font-size: 24px; } /* f-p03 */
+.f04 { font-size: 13px; } /* f-p04 */
+.f05 { font-size: 1em; } /* f-p05 */
+.f06 { font-size: 120%; } /* f-p06 */
+.f07 { & .child { font-size: 12px; } } /* f-p07 */
+.fdup { font-size: 12px; } /* f-p08 */
+.fdup { font-size: 24px; } /* f-p09 */
+.f10 { --local-font: 12px; font-size: var(--local-font); } /* f-p10 */
+.f11 { font-size: var(--missing, 12px); } /* f-p11 */
+.fn01 { font-size: var(--font-sm); } /* f-n01 */
+.fn02 { font-size: var(--font-md); } /* f-n02 */
+.fn03 { font-size: 0; } /* f-n03 */
+.fn04 { font-size: inherit; } /* f-n04 */
+.fn05 { font-size: initial; } /* f-n05 */
+.fn06 { font-size: unset; } /* f-n06 */
+.fn07 { font-size: revert; } /* f-n07 */
+.fn08 { font-size: var(--missing, var(--font-lg)); } /* f-n08 */
+.fn09 { --local-font: var(--font-sm); font-size: var(--local-font); } /* f-n09 */
+.fn10 { line-height: 16px; } /* f-n10 */

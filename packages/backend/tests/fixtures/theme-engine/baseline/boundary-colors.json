@@ -1,0 +1,549 @@
+{
+  "schema_version": 1,
+  "kind": "fixed-boundary-rgb-inputs",
+  "channel_encoding": "Normalized nonlinear RGB in the explicitly named gamut; no clipping or conversion is applied.",
+  "purpose": "Fixed cube corners, near endpoints, neutrals, near neutrals, transfer breakpoint and saturated faces, including native display-p3 samples.",
+  "expected_values": "Inputs only. No expected L/C/h or mapping output is fabricated.",
+  "rows": [
+    {
+      "id": "boundary-srgb-black",
+      "gamut": "srgb",
+      "label": "black",
+      "rgb": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "boundary-srgb-white",
+      "gamut": "srgb",
+      "label": "white",
+      "rgb": [
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "id": "boundary-srgb-red",
+      "gamut": "srgb",
+      "label": "red",
+      "rgb": [
+        1,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "boundary-srgb-green",
+      "gamut": "srgb",
+      "label": "green",
+      "rgb": [
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "id": "boundary-srgb-blue",
+      "gamut": "srgb",
+      "label": "blue",
+      "rgb": [
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "id": "boundary-srgb-cyan",
+      "gamut": "srgb",
+      "label": "cyan",
+      "rgb": [
+        0,
+        1,
+        1
+      ]
+    },
+    {
+      "id": "boundary-srgb-magenta",
+      "gamut": "srgb",
+      "label": "magenta",
+      "rgb": [
+        1,
+        0,
+        1
+      ]
+    },
+    {
+      "id": "boundary-srgb-yellow",
+      "gamut": "srgb",
+      "label": "yellow",
+      "rgb": [
+        1,
+        1,
+        0
+      ]
+    },
+    {
+      "id": "boundary-srgb-near-black",
+      "gamut": "srgb",
+      "label": "near-black",
+      "rgb": [
+        0.00392156862745098,
+        0.00392156862745098,
+        0.00392156862745098
+      ]
+    },
+    {
+      "id": "boundary-srgb-near-white",
+      "gamut": "srgb",
+      "label": "near-white",
+      "rgb": [
+        0.996078431372549,
+        0.996078431372549,
+        0.996078431372549
+      ]
+    },
+    {
+      "id": "boundary-srgb-neutral-mid",
+      "gamut": "srgb",
+      "label": "neutral-mid",
+      "rgb": [
+        0.5,
+        0.5,
+        0.5
+      ]
+    },
+    {
+      "id": "boundary-srgb-neutral-low",
+      "gamut": "srgb",
+      "label": "neutral-low",
+      "rgb": [
+        0.18,
+        0.18,
+        0.18
+      ]
+    },
+    {
+      "id": "boundary-srgb-transfer-below",
+      "gamut": "srgb",
+      "label": "transfer-below",
+      "rgb": [
+        0.0404499,
+        0.0404499,
+        0.0404499
+      ]
+    },
+    {
+      "id": "boundary-srgb-transfer-at",
+      "gamut": "srgb",
+      "label": "transfer-at",
+      "rgb": [
+        0.04045,
+        0.04045,
+        0.04045
+      ]
+    },
+    {
+      "id": "boundary-srgb-transfer-above",
+      "gamut": "srgb",
+      "label": "transfer-above",
+      "rgb": [
+        0.0404501,
+        0.0404501,
+        0.0404501
+      ]
+    },
+    {
+      "id": "boundary-srgb-near-neutral-red",
+      "gamut": "srgb",
+      "label": "near-neutral-red",
+      "rgb": [
+        0.500001,
+        0.5,
+        0.5
+      ]
+    },
+    {
+      "id": "boundary-srgb-near-neutral-green",
+      "gamut": "srgb",
+      "label": "near-neutral-green",
+      "rgb": [
+        0.5,
+        0.500001,
+        0.5
+      ]
+    },
+    {
+      "id": "boundary-srgb-near-neutral-blue",
+      "gamut": "srgb",
+      "label": "near-neutral-blue",
+      "rgb": [
+        0.5,
+        0.5,
+        0.500001
+      ]
+    },
+    {
+      "id": "boundary-srgb-near-red",
+      "gamut": "srgb",
+      "label": "near-red",
+      "rgb": [
+        1,
+        0.000001,
+        0.000001
+      ]
+    },
+    {
+      "id": "boundary-srgb-near-green",
+      "gamut": "srgb",
+      "label": "near-green",
+      "rgb": [
+        0.000001,
+        1,
+        0.000001
+      ]
+    },
+    {
+      "id": "boundary-srgb-near-blue",
+      "gamut": "srgb",
+      "label": "near-blue",
+      "rgb": [
+        0.000001,
+        0.000001,
+        1
+      ]
+    },
+    {
+      "id": "boundary-srgb-orange-face",
+      "gamut": "srgb",
+      "label": "orange-face",
+      "rgb": [
+        1,
+        0.5,
+        0
+      ]
+    },
+    {
+      "id": "boundary-srgb-spring-face",
+      "gamut": "srgb",
+      "label": "spring-face",
+      "rgb": [
+        0,
+        1,
+        0.5
+      ]
+    },
+    {
+      "id": "boundary-srgb-violet-face",
+      "gamut": "srgb",
+      "label": "violet-face",
+      "rgb": [
+        0.5,
+        0,
+        1
+      ]
+    },
+    {
+      "id": "boundary-srgb-rose-face",
+      "gamut": "srgb",
+      "label": "rose-face",
+      "rgb": [
+        1,
+        0,
+        0.5
+      ]
+    },
+    {
+      "id": "boundary-srgb-lime-face",
+      "gamut": "srgb",
+      "label": "lime-face",
+      "rgb": [
+        0.5,
+        1,
+        0
+      ]
+    },
+    {
+      "id": "boundary-srgb-azure-face",
+      "gamut": "srgb",
+      "label": "azure-face",
+      "rgb": [
+        0,
+        0.5,
+        1
+      ]
+    },
+    {
+      "id": "boundary-display-p3-black",
+      "gamut": "display-p3",
+      "label": "black",
+      "rgb": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "boundary-display-p3-white",
+      "gamut": "display-p3",
+      "label": "white",
+      "rgb": [
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "id": "boundary-display-p3-red",
+      "gamut": "display-p3",
+      "label": "red",
+      "rgb": [
+        1,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "boundary-display-p3-green",
+      "gamut": "display-p3",
+      "label": "green",
+      "rgb": [
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "id": "boundary-display-p3-blue",
+      "gamut": "display-p3",
+      "label": "blue",
+      "rgb": [
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "id": "boundary-display-p3-cyan",
+      "gamut": "display-p3",
+      "label": "cyan",
+      "rgb": [
+        0,
+        1,
+        1
+      ]
+    },
+    {
+      "id": "boundary-display-p3-magenta",
+      "gamut": "display-p3",
+      "label": "magenta",
+      "rgb": [
+        1,
+        0,
+        1
+      ]
+    },
+    {
+      "id": "boundary-display-p3-yellow",
+      "gamut": "display-p3",
+      "label": "yellow",
+      "rgb": [
+        1,
+        1,
+        0
+      ]
+    },
+    {
+      "id": "boundary-display-p3-near-black",
+      "gamut": "display-p3",
+      "label": "near-black",
+      "rgb": [
+        0.00392156862745098,
+        0.00392156862745098,
+        0.00392156862745098
+      ]
+    },
+    {
+      "id": "boundary-display-p3-near-white",
+      "gamut": "display-p3",
+      "label": "near-white",
+      "rgb": [
+        0.996078431372549,
+        0.996078431372549,
+        0.996078431372549
+      ]
+    },
+    {
+      "id": "boundary-display-p3-neutral-mid",
+      "gamut": "display-p3",
+      "label": "neutral-mid",
+      "rgb": [
+        0.5,
+        0.5,
+        0.5
+      ]
+    },
+    {
+      "id": "boundary-display-p3-neutral-low",
+      "gamut": "display-p3",
+      "label": "neutral-low",
+      "rgb": [
+        0.18,
+        0.18,
+        0.18
+      ]
+    },
+    {
+      "id": "boundary-display-p3-transfer-below",
+      "gamut": "display-p3",
+      "label": "transfer-below",
+      "rgb": [
+        0.0404499,
+        0.0404499,
+        0.0404499
+      ]
+    },
+    {
+      "id": "boundary-display-p3-transfer-at",
+      "gamut": "display-p3",
+      "label": "transfer-at",
+      "rgb": [
+        0.04045,
+        0.04045,
+        0.04045
+      ]
+    },
+    {
+      "id": "boundary-display-p3-transfer-above",
+      "gamut": "display-p3",
+      "label": "transfer-above",
+      "rgb": [
+        0.0404501,
+        0.0404501,
+        0.0404501
+      ]
+    },
+    {
+      "id": "boundary-display-p3-near-neutral-red",
+      "gamut": "display-p3",
+      "label": "near-neutral-red",
+      "rgb": [
+        0.500001,
+        0.5,
+        0.5
+      ]
+    },
+    {
+      "id": "boundary-display-p3-near-neutral-green",
+      "gamut": "display-p3",
+      "label": "near-neutral-green",
+      "rgb": [
+        0.5,
+        0.500001,
+        0.5
+      ]
+    },
+    {
+      "id": "boundary-display-p3-near-neutral-blue",
+      "gamut": "display-p3",
+      "label": "near-neutral-blue",
+      "rgb": [
+        0.5,
+        0.5,
+        0.500001
+      ]
+    },
+    {
+      "id": "boundary-display-p3-near-red",
+      "gamut": "display-p3",
+      "label": "near-red",
+      "rgb": [
+        1,
+        0.000001,
+        0.000001
+      ]
+    },
+    {
+      "id": "boundary-display-p3-near-green",
+      "gamut": "display-p3",
+      "label": "near-green",
+      "rgb": [
+        0.000001,
+        1,
+        0.000001
+      ]
+    },
+    {
+      "id": "boundary-display-p3-near-blue",
+      "gamut": "display-p3",
+      "label": "near-blue",
+      "rgb": [
+        0.000001,
+        0.000001,
+        1
+      ]
+    },
+    {
+      "id": "boundary-display-p3-orange-face",
+      "gamut": "display-p3",
+      "label": "orange-face",
+      "rgb": [
+        1,
+        0.5,
+        0
+      ]
+    },
+    {
+      "id": "boundary-display-p3-spring-face",
+      "gamut": "display-p3",
+      "label": "spring-face",
+      "rgb": [
+        0,
+        1,
+        0.5
+      ]
+    },
+    {
+      "id": "boundary-display-p3-violet-face",
+      "gamut": "display-p3",
+      "label": "violet-face",
+      "rgb": [
+        0.5,
+        0,
+        1
+      ]
+    },
+    {
+      "id": "boundary-display-p3-rose-face",
+      "gamut": "display-p3",
+      "label": "rose-face",
+      "rgb": [
+        1,
+        0,
+        0.5
+      ]
+    },
+    {
+      "id": "boundary-display-p3-lime-face",
+      "gamut": "display-p3",
+      "label": "lime-face",
+      "rgb": [
+        0.5,
+        1,
+        0
+      ]
+    },
+    {
+      "id": "boundary-display-p3-azure-face",
+      "gamut": "display-p3",
+      "label": "azure-face",
+      "rgb": [
+        0,
+        0.5,
+        1
+      ]
+    }
+  ]
+}
