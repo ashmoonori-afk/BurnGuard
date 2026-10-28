@@ -190,6 +190,7 @@ jobs:
           scripts/qa/check-flake-patterns.test.ts
           scripts/qa/check-migration-order.test.ts
           scripts/qa/theme-engine-fixtures.test.ts
+          packages/backend/tests/token-audit-source.test.ts
           scripts/whitespace-base.test.ts
           packages/frontend/tests/artifact-csp.test.ts
           packages/frontend/tests/client.test.ts

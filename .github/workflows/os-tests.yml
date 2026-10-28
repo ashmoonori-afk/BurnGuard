@@ -85,6 +85,7 @@ jobs:
           packages/backend/tests/design-system-starter-entrypoint.test.ts
           packages/backend/tests/design-system-layout-reference.test.ts
           packages/backend/tests/design-system-conformance.test.ts
+          packages/backend/tests/token-audit-source.test.ts
           packages/backend/tests/design-system-pages.test.ts
           packages/backend/tests/design-system-rules.test.ts
           packages/backend/tests/design-md.test.ts
