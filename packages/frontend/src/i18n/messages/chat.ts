@@ -373,6 +373,11 @@ export const chatMessages = defineMessages({
     en: "The AI task could not be completed. Check your request and send it again.",
     "zh-CN": "AI 任务未能完成。请检查请求内容后重新发送。",
   },
+  "chat.error.interrupted": {
+    ko: "작업이 끝나기 전에 BurnGuard가 종료됐어요. 현재 결과를 확인하고 필요하면 요청을 다시 보내 주세요.",
+    en: "BurnGuard stopped before this task finished. Check the current result and send the request again if needed.",
+    "zh-CN": "BurnGuard 在任务完成前停止了。请检查当前结果，如有需要，再次发送请求。",
+  },
   "chat.error.providerAuthRequired": {
     ko: "연결된 AI 계정에 다시 로그인해야 해요. 설정에서 연결 상태를 확인한 뒤 다시 시도해 주세요.",
     en: "Your AI account needs to sign in again. Check the connection in Settings, then try again.",

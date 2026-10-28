@@ -53,6 +53,7 @@ const TURN_ERROR_MESSAGE_KEYS: Record<TurnErrorCode, MessageKey> = {
   publication_failed: "chat.error.publicationFailed",
   operation_conflict: "chat.error.operationConflict",
   operation_cancelled: "chat.error.operationCancelled",
+  interrupted: "chat.error.interrupted",
   turn_failed: "chat.error.turnFailed",
   provider_auth_required: "chat.error.providerAuthRequired",
   provider_usage_limited: "chat.error.providerUsageLimited",
