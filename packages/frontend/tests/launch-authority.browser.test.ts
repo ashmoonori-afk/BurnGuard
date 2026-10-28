@@ -1,13 +1,16 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import type { Browser, Page } from "../../backend/node_modules/playwright-core";
 import { getSqlite } from "../../backend/src/db/sqlite-client";
 import { insertNormalizedEvent } from "../../backend/src/db/events";
+import { getProjectDetail } from "../../backend/src/db/project-read-repository";
 import { projectsDir } from "../../backend/src/lib/paths";
 import { generateLaunchCapability } from "../../backend/src/security/request-authority";
 import { ArtifactCoordinator } from "../../backend/src/services/artifact-coordinator";
 import { launchChromiumViaNode } from "../../backend/src/services/chromium-node-launch";
+import { writeProjectAuditCache } from "../../backend/src/services/design-audit";
+import { unmeasuredAuthorityAudit } from "./fixtures/launch-authority-audit";
 import type { AuthorityBrowserState } from "./fixtures/launch-authority-browser";
 import type { AuthorityServerMessage } from "./fixtures/launch-authority-server";
 
@@ -38,8 +41,10 @@ type RequestRecord = Extract<AuthorityServerMessage, { kind: "request" }> & { ge
 async function startServer(port: number, capability: string, secret: string, requests: RequestRecord[], generation: number) {
   const messages: AuthorityServerMessage[] = [];
   const listeners = new Set<() => void>();
+  // Bun.which uses the startup PATH; isolate tool discovery before spawning.
+  const toolPath = await mkdtemp(join(projectsDir, "f08-tool-path-"));
   const child = Bun.spawn([process.execPath, join(import.meta.dir, "fixtures/launch-authority-server.ts")], {
-    env: { ...process.env, F08_PORT: String(port), F08_CAPABILITY: capability, F08_SECRET: secret },
+    env: { ...Object.fromEntries(Object.entries(process.env).filter(([key]) => key.toUpperCase() !== "PATH")), PATH: toolPath, F08_PORT: String(port), F08_CAPABILITY: capability, F08_SECRET: secret },
     stdout: "pipe", stderr: "pipe",
     ipc(message: AuthorityServerMessage) {
       messages.push(message);
@@ -84,6 +89,9 @@ async function fixture() {
   db.prepare("INSERT INTO projects(id,name,type,dir_path,entrypoint,backend_id,created_at,updated_at) VALUES (?,?,'prototype',?,'index.html','codex',1,1)").run(projectId, "F08 saved project", root);
   db.prepare("INSERT INTO sessions(id,project_id,backend_id,status,created_at,updated_at,last_active_at) VALUES (?,?,'codex','idle',1,1,1)").run(sessionId, projectId);
   await new ArtifactCoordinator(db).initialize(projectId, root);
+  const project = await getProjectDetail(projectId);
+  if (project === null) throw new Error("Missing initialized authority fixture project");
+  await writeProjectAuditCache(root, unmeasuredAuthorityAudit(project));
   await insertNormalizedEvent(sessionId, { id: `${projectId}-message`, ts: 1, type: "chat.user_message", turnId: "saved-turn", text: "F08 saved history", attachmentCount: 0 });
   const requests: RequestRecord[] = [];
   let generation = 1;

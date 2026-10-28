@@ -28,10 +28,17 @@ test("Given the Canvas browser fixture When bundled as a classic IIFE script The
   expect(() => new Script(script)).not.toThrow();
 });
 
+async function launchSystemChrome(timeoutMs = 20000) {
+  const controller = new AbortController();
+  const deadline = setTimeout(() => controller.abort(), timeoutMs);
+  try { return await launchChromiumViaNode({ channel: "chrome" }, controller.signal); }
+  finally { clearTimeout(deadline); }
+}
+
 async function assertCanvasPolicy(
   action: "popup" | "navigation",
   launch: (server: ReturnType<typeof Bun.serve>) => ReturnType<typeof launchChromiumViaNode> =
-    () => launchChromiumViaNode({ channel: "chrome" }, AbortSignal.timeout(20000)),
+    () => launchSystemChrome(),
 ) {
   const source = await readFile(new URL("../src/components/canvas/Canvas.tsx", import.meta.url), "utf8");
   const sandbox = /sandbox="([^"]+)"/.exec(source)?.[1];
@@ -86,7 +93,7 @@ for (const stage of ["launch", "browser close"] as const) test(`Given ${stage} r
       cleanup = async () => { stopped.mockRestore(); await server.stop(true); };
       assertStopped = () => { expect(stopped).toHaveBeenCalledWith(true); };
       if (stage === "launch") throw failure;
-      const browser = await launchChromiumViaNode({ channel: "chrome" }, AbortSignal.timeout(20000));
+      const browser = await launchSystemChrome();
       const close = browser.close.bind(browser);
       browser.close = async () => { await close(); throw failure; };
       return browser;
@@ -107,7 +114,7 @@ test.skipIf(!systemChromeAvailable)("system Chrome routes trusted external click
       ? new Response(script, { headers: { "content-type": "application/javascript" } })
       : new Response('<!doctype html><body><script src="/bridge-fixture.js"></script></body>', { headers: { "content-type": "text/html" } });
   } });
-  const browser = await launchChromiumViaNode({ channel: "chrome" }, AbortSignal.timeout(30_000));
+  const browser = await launchSystemChrome(30_000);
   const context = await browser.newContext();
   try {
     const page = await context.newPage();
