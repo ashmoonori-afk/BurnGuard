@@ -4,6 +4,9 @@ import { CLAUDE_MODELS } from "@bg/shared";
 import type { AdapterRunInput, AdapterRunResult } from "../../../backend/src/adapters/types";
 import * as registry from "../../../backend/src/adapters/registry";
 import * as backends from "../../../backend/src/services/backends";
+import * as checkpoints from "../../../backend/src/services/checkpoints";
+import * as lucideReference from "../../../backend/src/harness/lucide-reference";
+import * as promptBuilder from "../../../backend/src/harness/prompt-builder";
 import { getSqlite } from "../../../backend/src/db/sqlite-client";
 import { insertNormalizedEvent } from "../../../backend/src/db/events";
 import { reconcileArtifactState } from "../../../backend/src/services/artifact-recovery";
@@ -32,11 +35,48 @@ const mark = (phase: string, values: Record<string, string | number | boolean> =
 };
 mark("started");
 
+// Capture originals before module replacement so the observations call real implementations.
+const writePreTurnSnapshot = checkpoints.writePreTurnSnapshot;
+const provisionLucideIconReference = lucideReference.provisionLucideIconReference;
+const buildPrompt = promptBuilder.buildPrompt;
+mock.module("../../../backend/src/services/checkpoints", () => ({
+  ...checkpoints,
+  async writePreTurnSnapshot(...args: Parameters<typeof writePreTurnSnapshot>) {
+    mark("snapshot-enter");
+    const result = await writePreTurnSnapshot(...args);
+    mark("snapshot-complete");
+    return result;
+  },
+}));
+mock.module("../../../backend/src/harness/lucide-reference", () => ({
+  ...lucideReference,
+  async provisionLucideIconReference(...args: Parameters<typeof provisionLucideIconReference>) {
+    mark("lucide-enter");
+    const result = await provisionLucideIconReference(...args);
+    mark("lucide-complete");
+    return result;
+  },
+}));
+mock.module("../../../backend/src/harness/prompt-builder", () => ({
+  ...promptBuilder,
+  async buildPrompt(...args: Parameters<typeof buildPrompt>) {
+    mark("prompt-enter");
+    const result = await buildPrompt(...args);
+    mark("prompt-complete");
+    return result;
+  },
+}));
+
 // Only the external provider boundary is replaced. Routes, turn callbacks, validation,
 // publication, recovery, durable replay and request authority are the production implementations.
 mock.module("../../../backend/src/services/backends", () => ({
   ...backends,
-  detectBackends: async () => ({ backends: [{ id: "claude-code", found: true, binary_path: "fixture-provider", models: CLAUDE_MODELS }] }),
+  detectBackends: async () => {
+    mark("discovery-enter");
+    const result = { backends: [{ id: "claude-code", found: true, binary_path: "fixture-provider", models: CLAUDE_MODELS }] };
+    mark("discovery-exit");
+    return result;
+  },
 }));
 mock.module("../../../backend/src/adapters/registry", () => ({
   ...registry,
@@ -80,6 +120,7 @@ const server = Bun.serve({
     if (pathname === "/fixture.js") return new Response(Bun.file(join(appRoot, "f09-fixture.js")), { headers: { "content-type": "text/javascript; charset=utf-8" } });
     if (pathname === "/fixture.css") return new Response(Bun.file(join(appRoot, "f09-fixture.css")), { headers: { "content-type": "text/css; charset=utf-8" } });
     if (!pathname.startsWith("/api/") && !pathname.startsWith("/runtime/")) return new Response('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/fixture.css"></head><body><div id="root" class="flex h-dvh flex-col"></div><script src="/fixture.js"></script></body></html>', { headers: { "content-type": "text/html; charset=utf-8" } });
+    if (request.method === "POST") mark("post-enter");
     const response = await app.fetch(request);
     if (request.method !== "GET" || response.status >= 400 || pathname.endsWith("/stream")) {
       mark("response", { method: request.method, status: response.status, stream: pathname.endsWith("/stream") });

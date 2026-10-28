@@ -194,10 +194,14 @@ test("Given a backend killed after its real commit When relaunched Then interrup
     await load(page, `${server.origin}/projects/${projectId}#bg-bootstrap:${server.secret}`);
     await page.locator('[data-qa="composer"] textarea').fill("Update the page");
     // Exit is subscribed at spawn, before the real UI callback starts the turn.
-    const crashed = server.exited;
+    const { exited: crashed, mark } = server;
     let crashTimer: ReturnType<typeof setTimeout> | undefined;
     const crashDeadline = new Promise<never>((_, reject) => {
-      crashTimer = setTimeout(() => reject(new Error("Recovery turn did not crash at its committed operation")), 4000);
+      mark("crash-timer-arm");
+      crashTimer = setTimeout(() => {
+        mark("crash-timer-fire");
+        reject(new Error("Recovery turn did not crash at its committed operation"));
+      }, 4000);
     });
     crashDeadline.catch(() => undefined);
     try {
