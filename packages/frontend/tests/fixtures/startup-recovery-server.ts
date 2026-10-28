@@ -15,6 +15,7 @@ import { closeActiveExportBrowsers } from "../../../backend/src/services/export-
 
 export type RecoveryServerMessage =
   | { readonly kind: "ready"; readonly origin: string; readonly recovered: number }
+  | { readonly kind: "provider-entered" }
   | { readonly kind: "terminal"; readonly stopReason: string };
 
 const appRoot = process.env.BG_APP_ROOT;
@@ -81,6 +82,7 @@ mock.module("../../../backend/src/services/backends", () => ({
 mock.module("../../../backend/src/adapters/registry", () => ({
   ...registry,
   async runAdapterTurn(_backend: string, input: AdapterRunInput): Promise<AdapterRunResult> {
+    send({ kind: "provider-entered" });
     mark("provider-entered");
     const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Recovery fixture</title><style>body{margin:0;padding:48px;color:#111;background:#fff;font:20px/1.6 system-ui}main{max-width:720px}h1{font-size:36px}</style></head><body><main data-recovery-result="${generation}"><h1>Recovery fixture</h1><p>Saved output from generation ${generation}.</p></main></body></html>`;
     await Bun.write(join(input.projectDir, "index.html"), html);

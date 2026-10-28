@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdir, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
-import type { Browser, Page } from "../../backend/node_modules/playwright-core";
+import type { Browser, Page, Request, Response as BrowserResponse } from "../../backend/node_modules/playwright-core";
 import { getSqlite } from "../../backend/src/db/sqlite-client";
 import { listSequencedSessionEvents } from "../../backend/src/db/event-sequence-repository";
 import { projectsDir } from "../../backend/src/lib/paths";
@@ -81,6 +81,9 @@ async function startServer(sessionId: string, generation: "first" | "second") {
         const message = received.find(item => item.kind === kind);
         if (message) { cleanup(); resolve(message); }
         else if (stopped) { cleanup(); reject(new Error(`Recovery server exited before ${kind}`)); }
+        else if (kind === "provider-entered" && received.some(item => item.kind === "terminal")) {
+          cleanup(); reject(new Error("Recovery turn ended before provider entry"));
+        }
       };
       const timer = setTimeout(() => { mark(`deadline-${kind}`); cleanup(); reject(new Error(`Recovery server did not report ${kind}`)); }, 5000);
       listeners.add(check);
@@ -195,19 +198,41 @@ test("Given a backend killed after its real commit When relaunched Then interrup
     await page.locator('[data-qa="composer"] textarea').fill("Update the page");
     // Exit is subscribed at spawn, before the real UI callback starts the turn.
     const { exited: crashed, mark } = server;
-    let crashTimer: ReturnType<typeof setTimeout> | undefined;
-    const crashDeadline = new Promise<never>((_, reject) => {
-      mark("crash-timer-arm");
-      crashTimer = setTimeout(() => {
-        mark("crash-timer-fire");
-        reject(new Error("Recovery turn did not crash at its committed operation"));
-      }, 4000);
+    const requestFailure = Promise.withResolvers<never>();
+    const turnUrl = `${server.origin}/api/sessions/${sessionId}/events`;
+    const onResponse = (response: BrowserResponse) => {
+      if (response.url() === turnUrl && response.request().method() === "POST" && !response.ok()) {
+        requestFailure.reject(new Error(`Recovery turn request failed (${response.status()})`));
+      }
+    };
+    const onRequestFailed = (request: Request) => {
+      if (request.url() === turnUrl && request.method() === "POST") {
+        requestFailure.reject(new Error("Recovery turn request was rejected"));
+      }
+    };
+    page.on("response", onResponse);
+    page.on("requestfailed", onRequestFailed);
+    // Acceptance acknowledges staging, not provider entry; HTTP and IPC can arrive in either order.
+    const committedCrash = Promise.race([server.waitFor("provider-entered"), requestFailure.promise]).then(async () => {
+      let crashTimer: ReturnType<typeof setTimeout> | undefined;
+      const crashDeadline = new Promise<never>((_, reject) => {
+        mark("crash-timer-arm");
+        crashTimer = setTimeout(() => {
+          mark("crash-timer-fire");
+          reject(new Error("Recovery turn did not crash at its committed operation"));
+        }, 4000);
+      });
+      try { return await Promise.race([crashed, crashDeadline]); }
+      finally { clearTimeout(crashTimer); }
     });
-    crashDeadline.catch(() => undefined);
+    committedCrash.catch(() => mark("committed-crash-rejected"));
     try {
       await page.locator('[data-qa="composer"] textarea').press("Control+Enter");
-      expect(await Promise.race([crashed, crashDeadline])).not.toBe(0);
-    } finally { clearTimeout(crashTimer); }
+      expect(await committedCrash).toBe(137);
+    } finally {
+      page.off("response", onResponse);
+      page.off("requestfailed", onRequestFailed);
+    }
     const committed = await readFile(join(root, "index.html"), "utf8");
     expect(committed).toContain('data-recovery-result="first"');
     expect(db.query("SELECT status FROM sessions WHERE id=?").get(sessionId)).toEqual({ status: "running" });
