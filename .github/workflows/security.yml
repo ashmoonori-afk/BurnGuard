@@ -227,6 +227,8 @@ jobs:
           packages/backend/tests/runtime-diagnostics.test.ts
           packages/frontend/tests/runtime-diagnostics.test.ts
           packages/shared/tests/runtime-diagnostics.test.ts
+          packages/shared/tests/color.test.ts
+          packages/shared/tests/palette.test.ts
           scripts/qa/har-mask.test.ts
           scripts/qa/task-8-gates.test.ts
           packages/backend/tests/project-bundle-routes.test.ts
