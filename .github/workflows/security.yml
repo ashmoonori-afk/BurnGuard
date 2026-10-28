@@ -191,6 +191,7 @@ jobs:
           scripts/qa/check-migration-order.test.ts
           scripts/qa/theme-engine-fixtures.test.ts
           scripts/qa/theme-engine-oracle.test.ts
+          scripts/qa/theme-engine-measure.test.ts
           scripts/whitespace-base.test.ts
           packages/frontend/tests/artifact-csp.test.ts
           packages/frontend/tests/client.test.ts

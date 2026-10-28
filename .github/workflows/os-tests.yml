@@ -177,6 +177,7 @@ jobs:
           scripts/qa/check-migration-order.test.ts
           scripts/qa/theme-engine-fixtures.test.ts
           scripts/qa/theme-engine-oracle.test.ts
+          scripts/qa/theme-engine-measure.test.ts
           scripts/whitespace-base.test.ts
           packages/backend/tests/mac-updates-version-order.test.ts
           packages/backend/tests/mac-updates.test.ts
