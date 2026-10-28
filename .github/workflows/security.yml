@@ -84,7 +84,6 @@ jobs:
           packages/backend/tests/bundled-seed-themes.test.ts
           packages/backend/tests/northvale-preview-repair.test.ts
           packages/backend/tests/theme-previews.test.ts
-          packages/backend/tests/catalog.test.ts
           packages/backend/tests/artifact-anchor-routes.test.ts
           packages/frontend/tests/quick-comment.test.ts
           packages/frontend/tests/canvas-interaction.test.ts
@@ -226,6 +225,8 @@ jobs:
           packages/backend/tests/logo-deliverables.test.ts
           packages/backend/tests/prompt-logo-set.test.ts
           packages/backend/tests/pipeline-repositories.test.ts
+          packages/backend/tests/catalog.test.ts
+          packages/backend/tests/migration-pipeline-upgrade.test.ts
           packages/backend/tests/runtime-diagnostics.test.ts
           packages/frontend/tests/runtime-diagnostics.test.ts
           packages/shared/tests/runtime-diagnostics.test.ts

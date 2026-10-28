@@ -50,7 +50,7 @@ type ExpectedParity = {
 
 const parityTables: readonly ExpectedParity[] = [
   { table: designSystemTagsTable, checks: [], defaults: {}, namedIndexes: [], primaryKey: ["design_system_id", "tag"], unique: [["design_system_id", "ordinal"]] },
-  { table: designSystemReceiptsTable, checks: ["status in ('prepared','committed','recovering','failed')", "operation in ('content','duplicate','derive','trash','restore','purge')"], defaults: { status: "prepared", operation: "content", metadata_json: "{}" }, namedIndexes: ["idx_design_system_receipt_operation", "idx_design_system_receipts_system", "uq_design_system_nonterminal_receipt"], primaryKey: ["id"], unique: [["design_system_id", "content_revision"]] },
+  { table: designSystemReceiptsTable, checks: ["status in ('prepared','committed','recovering','failed')", "operation in ('content','duplicate','derive','trash','restore','purge')"], defaults: { status: "prepared", operation: "content", metadata_json: "{}" }, namedIndexes: ["idx_design_system_receipt_operation", "idx_design_system_receipts_system", "uq_design_system_pending_receipt"], primaryKey: ["id"], unique: [["design_system_id", "content_revision"]] },
   { table: learningItemsTable, checks: ["kind in ('lesson','example','skill-card')"], defaults: {}, namedIndexes: ["idx_learning_items_kind"], primaryKey: ["id"], unique: [] },
   { table: learningProgressTable, checks: ["state in ('not_started','in_progress','completed')"], defaults: { state: "not_started", revision: "0" }, namedIndexes: [], primaryKey: ["item_id"], unique: [] },
   { table: learningCheckpointsTable, checks: [], defaults: {}, namedIndexes: ["idx_learning_checkpoints_item"], primaryKey: ["id"], unique: [] },

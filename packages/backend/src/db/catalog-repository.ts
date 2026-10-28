@@ -77,7 +77,15 @@ export function getCatalogPreviewProjects(db: Database, id: string) {
 }
 
 export function getContentReceipt(db: Database, id: string): CatalogReceiptRow | null {
-  return db.query<CatalogReceiptRow, [string]>(`${RECEIPT_SELECT} WHERE design_system_id=? AND operation='content' ORDER BY content_revision DESC LIMIT 1`).get(id);
+  return db.query<CatalogReceiptRow, [string]>(`${RECEIPT_SELECT} WHERE design_system_id=? AND operation='content' AND status='committed' AND content_revision>0 ORDER BY content_revision DESC LIMIT 1`).get(id);
+}
+
+export function getCurrentSystemContent(db: Database, id: string): CatalogReceiptRow | null {
+  return getContentReceipt(db, id) ?? getLineageReceipt(db, id);
+}
+
+export function getPendingSystemOperation(db: Database, id: string): CatalogReceiptRow | null {
+  return db.query<CatalogReceiptRow, [string]>(`${RECEIPT_SELECT} WHERE design_system_id=? AND status IN ('prepared','recovering') LIMIT 1`).get(id);
 }
 
 export function getLineageReceipt(db: Database, id: string): CatalogReceiptRow | null {
@@ -85,6 +93,7 @@ export function getLineageReceipt(db: Database, id: string): CatalogReceiptRow |
 }
 
 export function listPendingCatalogReceipts(db: Database): readonly CatalogReceiptRow[] {
+  // This is the lifecycle recovery dispatch list, not the system pending guard.
   return db.query<CatalogReceiptRow, []>(`${RECEIPT_SELECT} WHERE operation!='content' AND status IN ('prepared','recovering') ORDER BY design_system_id,created_at,id`).all();
 }
 
@@ -95,6 +104,7 @@ export function getLatestCatalogOperation(db: Database, id: string, operation: C
 export function updateCatalogMetadata(db: Database, input: MetadataInput): void {
   const tags = [...new Set(input.tags.map((tag) => tag.normalize("NFC").trim().toLowerCase()).filter(Boolean))].sort();
   db.transaction(() => {
+    if (getPendingSystemOperation(db, input.id) !== null) throw new CatalogRepositoryError("operation_conflict", input.id);
     const changed = db.prepare(`UPDATE design_systems SET name=?,description=?,status=?,catalog_kind=?,provenance_state=?,license_state=?,lifecycle=?,archived_at=?,
       metadata_revision=metadata_revision+1,updated_at=? WHERE id=? AND metadata_revision=?`).run(
         input.name, input.description, input.status, input.kind, input.provenance, input.license, input.lifecycle,
@@ -111,6 +121,7 @@ export function createCatalogChild(db: Database, parent: CatalogRow, childId: st
   const receiptId = `catalog-${input.operation}-${childId}-${randomUUID()}`;
   try {
     db.transaction(() => {
+      if (getPendingSystemOperation(db, parent.id) !== null) throw new CatalogRepositoryError("operation_conflict", parent.id);
       db.prepare(`INSERT INTO design_systems(id,name,description,status,source_type,source_uri,is_template,dir_path,skill_md_path,tokens_css_path,readme_md_path,thumbnail_path,
         created_at,updated_at,metadata_revision,catalog_kind,catalog_owner,lifecycle,provenance_state,license_state)
         VALUES (?,?,?,?,?,?,0,?,?,?,?,?,?,?,0,?,'local','active',?,?)`).run(
@@ -129,7 +140,7 @@ export function createCatalogChild(db: Database, parent: CatalogRow, childId: st
 
 export function prepareCatalogOperation(db: Database, input: OperationInput): string {
   const receiptId = `catalog-${input.operation}-${input.systemId}-${randomUUID()}`;
-  try { insertOperation(db, receiptId, input); }
+  try { db.transaction(() => insertOperation(db, receiptId, input))(); }
   catch (error) {
     if (error instanceof Error && "code" in error && error.code === "SQLITE_CONSTRAINT") throw new CatalogRepositoryError("operation_conflict", input.systemId);
     throw error;
@@ -139,15 +150,16 @@ export function prepareCatalogOperation(db: Database, input: OperationInput): st
 
 export function commitCatalogOperation(db: Database, receiptId: string, lifecycle: "active" | "trashed", now: number): void {
   db.transaction(() => {
-    const receipt = db.query<{ readonly designSystemId: string; readonly operation: string }, [string]>("SELECT design_system_id designSystemId,operation FROM design_system_receipts WHERE id=? AND status IN ('prepared','recovering')").get(receiptId);
+    const receipt = db.query<{ readonly designSystemId: string; readonly operation: string }, [string]>("SELECT design_system_id designSystemId,operation FROM design_system_receipts WHERE id=? AND operation!='content' AND status IN ('prepared','recovering')").get(receiptId);
     if (receipt === null) throw new CatalogRepositoryError("operation_conflict", receiptId);
-    db.prepare("UPDATE design_system_receipts SET status='committed',updated_at=? WHERE id=?").run(now, receiptId);
+    const changed = db.prepare("UPDATE design_system_receipts SET status='committed',updated_at=? WHERE id=? AND operation!='content' AND status IN ('prepared','recovering')").run(now, receiptId).changes;
+    if (changed !== 1) throw new CatalogRepositoryError("operation_conflict", receiptId);
     db.prepare("UPDATE design_systems SET lifecycle=?,trashed_at=?,updated_at=? WHERE id=?").run(lifecycle, lifecycle === "trashed" ? now : null, now, receipt.designSystemId);
   })();
 }
 
 export function failCatalogOperation(db: Database, receiptId: string, now: number): void {
-  db.prepare("UPDATE design_system_receipts SET status='failed',updated_at=? WHERE id=? AND status IN ('prepared','recovering')").run(now, receiptId);
+  db.prepare("UPDATE design_system_receipts SET status='failed',updated_at=? WHERE id=? AND operation!='content' AND status IN ('prepared','recovering')").run(now, receiptId);
 }
 
 export function deleteCatalogSystem(db: Database, id: string): void {
@@ -155,6 +167,7 @@ export function deleteCatalogSystem(db: Database, id: string): void {
 }
 
 function insertOperation(db: Database, receiptId: string, input: OperationInput): void {
+  if (getPendingSystemOperation(db, input.systemId) !== null) throw new CatalogRepositoryError("operation_conflict", input.systemId);
   const ordinal = db.query<{ readonly count: number }, [string]>("SELECT COUNT(*) count FROM design_system_receipts WHERE design_system_id=? AND operation!='content'").get(input.systemId)?.count ?? 0;
   db.prepare(`INSERT INTO design_system_receipts(id,design_system_id,status,content_revision,schema_version,digest,manifest_json,
     provenance_json,created_at,updated_at,operation,parent_system_id,parent_receipt_id,parent_digest,reason,metadata_json,source_path,destination_path)

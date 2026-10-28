@@ -28,7 +28,6 @@ packages/backend/tests/bundled-fonts.test.ts
 packages/backend/tests/cancelled-audit-process.test.ts
 packages/backend/tests/canonical-preview-render.test.ts
 packages/backend/tests/catalog-preview-review.test.ts
-packages/backend/tests/catalog.test.ts
 packages/backend/tests/chart-render-text-floor.test.ts
 packages/backend/tests/charts.test.ts
 packages/backend/tests/claude-code-parser.test.ts
@@ -124,7 +123,6 @@ packages/backend/tests/logo-svg-validation.test.ts
 packages/backend/tests/logo-template.test.ts
 packages/backend/tests/lucide-icons.test.ts
 packages/backend/tests/mass-research.test.ts
-packages/backend/tests/migration-pipeline-upgrade.test.ts
 packages/backend/tests/model-profile.test.ts
 packages/backend/tests/multi-provider-backends.test.ts
 packages/backend/tests/original-samples.test.ts

@@ -1,12 +1,15 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { createHash } from "node:crypto";
+import { cp, mkdtemp, readdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import type { NormalizedEvent, TurnErrorCode, TurnRejectionReason, UserEvent } from "@bg/shared/events";
 import { requiredArray, requiredBoolean, stringArray } from "@bg/shared/contract-parser";
 import { parseLearningContract } from "@bg/shared/learning-contract";
 import { drizzle } from "drizzle-orm/bun-sqlite";
 import { createArtifactOperation, transitionArtifactOperation } from "../src/db/artifact-operation-repository";
+import { CatalogRepositoryError, commitCatalogOperation, getContentReceipt, getCurrentSystemContent, getPendingSystemOperation, prepareCatalogOperation } from "../src/db/catalog-repository";
 import { commitDesignSystemReceipt, getDesignSystemPipeline, prepareDesignSystemReceipt, updateDesignSystemMetadata } from "../src/db/design-system-repository";
 import { insertSequencedEvent, listSequencedSessionEvents, parsePersistedNormalizedEvent, parsePersistedUserEvent } from "../src/db/event-sequence-repository";
 import { persistNormalizedEvent } from "../src/db/events";
@@ -81,10 +84,300 @@ describe("design system repository", () => {
   test("Given a corrupted receipt payload When catalog state is read Then a typed JSON code is returned", () => {
     // Given
     prepareDesignSystemReceipt(db, { id: "r1", designSystemId: "ds", contentRevision: 1, schemaVersion: 1, digest: "digest", manifest: {}, provenance: { state: "unknown" }, createdAt: 2 });
+    commitDesignSystemReceipt(db, { id: "r1", digest: "digest", updatedAt: 2 });
     sqlite.exec("UPDATE design_system_receipts SET manifest_json='{' WHERE id='r1'");
 
     // When / Then
     try { getDesignSystemPipeline(db, "ds"); } catch (error) { expect(repositoryError(error).code).toBe("corrupt_json"); }
+  });
+
+  test.each(["prepared", "recovering", "failed"] as const)("Given a committed head and a newer %s attempt When current content is read Then the committed identity wins", (status) => {
+    // Given
+    prepareDesignSystemReceipt(db, { id: "head", designSystemId: "ds", contentRevision: 1, schemaVersion: 1, digest: "extraction-digest", manifest: { files: [] }, provenance: { state: "observed" }, createdAt: 2 });
+    commitDesignSystemReceipt(db, { id: "head", digest: "extraction-digest", updatedAt: 2 });
+    const head = getCurrentSystemContent(sqlite, "ds");
+    prepareDesignSystemReceipt(db, { id: "attempt", designSystemId: "ds", contentRevision: 2, schemaVersion: 1, digest: "candidate-digest", manifest: {}, provenance: {}, createdAt: 3 });
+    sqlite.prepare("UPDATE design_system_receipts SET status=? WHERE id='attempt'").run(status);
+    const before = sqlite.serialize();
+
+    // When
+    const current = getCurrentSystemContent(sqlite, "ds");
+    const pipeline = getDesignSystemPipeline(db, "ds");
+
+    // Then
+    expect(current).toEqual(head);
+    expect(getContentReceipt(sqlite, "ds")).toEqual(head);
+    expect(pipeline.receipt).toMatchObject({ id: "head", contentRevision: 1, digest: "extraction-digest" });
+    expect(getPendingSystemOperation(sqlite, "ds")?.id ?? null).toBe(status === "failed" ? null : "attempt");
+    expect(sqlite.serialize()).toEqual(before);
+  });
+
+  test("Given no receipts When current content is read Then the legacy baseline is explicitly null", () => {
+    // Given / When
+    const current = getCurrentSystemContent(sqlite, "ds");
+
+    // Then
+    expect(current).toBeNull();
+    expect(getPendingSystemOperation(sqlite, "ds")).toBeNull();
+    expect(getDesignSystemPipeline(db, "ds").receipt).toBeNull();
+  });
+
+  test.each(["duplicate", "derive"] as const)("Given committed %s lineage and newer uncommitted rows When current content is read Then latest committed lineage is the fallback", (operation) => {
+    // Given
+    sqlite.prepare(`INSERT INTO design_system_receipts
+      (id,design_system_id,status,content_revision,schema_version,digest,manifest_json,provenance_json,created_at,updated_at,operation,parent_system_id,parent_receipt_id,parent_digest)
+      VALUES ('older','ds','committed',-1,1,'old','{}','{}',2,2,'duplicate','parent','parent-old','old'),
+        ('lineage','ds','committed',-2,1,'inherited','{}','{}',3,3,?,'parent','parent-head','inherited'),
+        ('failed','ds','failed',1,1,'failed','{}','{}',4,4,'content',NULL,NULL,NULL),
+        ('pending','ds','prepared',-3,1,'pending','{}','{}',5,5,'derive','parent','parent-next','pending')`).run(operation);
+
+    // When
+    const current = getCurrentSystemContent(sqlite, "ds");
+
+    // Then
+    expect(current).toMatchObject({ id: "lineage", operation, parentReceiptId: "parent-head", parentDigest: "inherited" });
+    expect(getContentReceipt(sqlite, "ds")).toBeNull();
+    expect(getDesignSystemPipeline(db, "ds").receipt).toMatchObject({ id: "lineage", digest: "inherited" });
+  });
+
+  test("Given out-of-order committed revisions and newer lineage When current content is read Then highest positive content revision wins", () => {
+    // Given
+    sqlite.exec(`INSERT INTO design_system_receipts
+      (id,design_system_id,status,content_revision,schema_version,digest,manifest_json,provenance_json,created_at,updated_at,operation)
+      VALUES ('head','ds','committed',3,1,'third','{}','{}',2,2,'content'),
+        ('older','ds','committed',1,1,'first','{}','{}',3,3,'content'),
+        ('zero','ds','committed',0,1,'zero','{}','{}',4,4,'content'),
+        ('lineage','ds','committed',-1,1,'inherited','{}','{}',5,5,'derive')`);
+
+    // When / Then
+    expect(getCurrentSystemContent(sqlite, "ds")).toMatchObject({ id: "head", contentRevision: 3 });
+  });
+
+  test.each(["prepared", "recovering", "committed"] as const)("Given the same %s receipt When prepare is retried Then its identity and stored bytes are unchanged", (status) => {
+    // Given
+    const input = { id: "r1", designSystemId: "ds", contentRevision: 1, schemaVersion: 1, digest: "digest", manifest: {}, provenance: {}, createdAt: 2 };
+    const receipt = prepareDesignSystemReceipt(db, input);
+    sqlite.prepare("UPDATE design_system_receipts SET status=? WHERE id='r1'").run(status);
+    const before = sqlite.serialize();
+
+    // When / Then
+    expect(prepareDesignSystemReceipt(db, input)).toEqual(receipt);
+    expect(sqlite.serialize()).toEqual(before);
+  });
+
+  test.each(["content", "trash"] as const)("Given a pending %s owner When another content receipt prepares Then a typed conflict preserves both authority and rows", (operation) => {
+    // Given
+    sqlite.prepare(`INSERT INTO design_system_receipts
+      (id,design_system_id,status,content_revision,schema_version,digest,manifest_json,provenance_json,created_at,updated_at,operation)
+      VALUES ('owner','ds','recovering',?,1,'owner','{}','{}',2,2,?)`).run(operation === "content" ? 1 : -1, operation);
+    const before = sqlite.serialize();
+
+    // When / Then
+    expect(() => prepareDesignSystemReceipt(db, { id: "r2", designSystemId: "ds", contentRevision: 2, schemaVersion: 1, digest: "other", manifest: {}, provenance: {}, createdAt: 3 })).toThrow(new PipelineRepositoryError("content_receipt_mismatch", "ds"));
+    expect(sqlite.serialize()).toEqual(before);
+  });
+
+  test("Given an older committed receipt and a different pending owner When the old prepare repeats Then idempotency cannot bypass ownership", () => {
+    // Given
+    const input = { id: "head", designSystemId: "ds", contentRevision: 1, schemaVersion: 1, digest: "digest", manifest: {}, provenance: {}, createdAt: 2 };
+    prepareDesignSystemReceipt(db, input);
+    commitDesignSystemReceipt(db, { id: "head", digest: "digest", updatedAt: 2 });
+    prepareDesignSystemReceipt(db, { ...input, id: "pending", contentRevision: 2, createdAt: 3 });
+
+    // When / Then
+    expect(() => prepareDesignSystemReceipt(db, input)).toThrow(new PipelineRepositoryError("content_receipt_mismatch", "ds"));
+    expect(getPendingSystemOperation(sqlite, "ds")?.id).toBe("pending");
+  });
+
+  test.each(["prepared", "recovering"] as const)("Given %s content ownership When lifecycle preparation runs Then it cannot acquire the system", (status) => {
+    // Given
+    prepareDesignSystemReceipt(db, { id: "owner", designSystemId: "ds", contentRevision: 1, schemaVersion: 1, digest: "digest", manifest: {}, provenance: {}, createdAt: 2 });
+    sqlite.prepare("UPDATE design_system_receipts SET status=? WHERE id='owner'").run(status);
+    const before = sqlite.serialize();
+
+    // When / Then
+    expect(() => prepareCatalogOperation(sqlite, { systemId: "ds", operation: "trash", digest: "digest", manifestJson: "{}", provenanceJson: "{}", parentSystemId: "ds", parentReceiptId: "owner", parentDigest: "digest", reason: null, metadata: {}, sourcePath: "/missing/ds", destinationPath: "/missing/trash/ds", now: 3 })).toThrow(new CatalogRepositoryError("operation_conflict", "ds"));
+    expect(sqlite.serialize()).toEqual(before);
+  });
+
+  test("Given prepared content When startup marks recovery and commit succeeds Then pending ownership releases without rewriting its digest", () => {
+    // Given
+    prepareDesignSystemReceipt(db, { id: "r1", designSystemId: "ds", contentRevision: 1, schemaVersion: 1, digest: "extraction-digest", manifest: { tree_digest: "different-tree-digest" }, provenance: { state: "observed" }, createdAt: 2 });
+
+    // When
+    reconcilePipelineRows(db, 3);
+    const recovering = getPendingSystemOperation(sqlite, "ds");
+    commitDesignSystemReceipt(db, { id: "r1", digest: "extraction-digest", updatedAt: 4 });
+
+    // Then
+    expect(recovering).toMatchObject({ id: "r1", status: "recovering" });
+    expect(getPendingSystemOperation(sqlite, "ds")).toBeNull();
+    expect(getCurrentSystemContent(sqlite, "ds")).toMatchObject({ id: "r1", schemaVersion: 1, digest: "extraction-digest", manifestJson: '{"tree_digest":"different-tree-digest"}' });
+    expect(() => commitDesignSystemReceipt(db, { id: "r1", digest: "extraction-digest", updatedAt: 5 })).toThrow(new PipelineRepositoryError("content_receipt_mismatch", "r1"));
+  });
+
+  test("Given content ownership When the lifecycle committer receives its ID Then the pending content and lifecycle remain untouched", () => {
+    // Given
+    prepareDesignSystemReceipt(db, { id: "owner", designSystemId: "ds", contentRevision: 1, schemaVersion: 1, digest: "digest", manifest: {}, provenance: {}, createdAt: 2 });
+    const before = sqlite.serialize();
+
+    // When / Then
+    expect(() => commitCatalogOperation(sqlite, "owner", "trashed", 3)).toThrow(new CatalogRepositoryError("operation_conflict", "owner"));
+    expect(sqlite.serialize()).toEqual(before);
+  });
+
+  test("Given a pending lifecycle receipt When the content committer receives its ID Then it cannot commit another owner's operation", () => {
+    // Given
+    const receiptId = prepareCatalogOperation(sqlite, { systemId: "ds", operation: "trash", digest: "digest", manifestJson: "{}", provenanceJson: "{}", parentSystemId: "ds", parentReceiptId: "head", parentDigest: "digest", reason: null, metadata: {}, sourcePath: "/missing/ds", destinationPath: "/missing/trash/ds", now: 2 });
+    const before = sqlite.serialize();
+
+    // When / Then
+    expect(() => commitDesignSystemReceipt(db, { id: receiptId, digest: "digest", updatedAt: 3 })).toThrow(new PipelineRepositoryError("content_receipt_mismatch", receiptId));
+    expect(sqlite.serialize()).toEqual(before);
+  });
+
+  test.each(["prepared", "recovering"] as const)("Given a %s lifecycle owner When its lifecycle commits Then content authority survives and pending ownership releases", (status) => {
+    // Given
+    prepareDesignSystemReceipt(db, { id: "head", designSystemId: "ds", contentRevision: 1, schemaVersion: 1, digest: "digest", manifest: {}, provenance: {}, createdAt: 2 });
+    commitDesignSystemReceipt(db, { id: "head", digest: "digest", updatedAt: 2 });
+    const receiptId = prepareCatalogOperation(sqlite, { systemId: "ds", operation: "trash", digest: "digest", manifestJson: "{}", provenanceJson: "{}", parentSystemId: "ds", parentReceiptId: "head", parentDigest: "digest", reason: null, metadata: {}, sourcePath: "/missing/ds", destinationPath: "/missing/trash/ds", now: 3 });
+    sqlite.prepare("UPDATE design_system_receipts SET status=? WHERE id=?").run(status, receiptId);
+
+    // When
+    commitCatalogOperation(sqlite, receiptId, "trashed", 4);
+
+    // Then
+    expect(getCurrentSystemContent(sqlite, "ds")?.id).toBe("head");
+    expect(getPendingSystemOperation(sqlite, "ds")).toBeNull();
+    expect(sqlite.query("SELECT lifecycle FROM design_systems WHERE id='ds'").get()).toEqual({ lifecycle: "trashed" });
+  });
+
+  test("Given a pending content receipt When commit supplies the wrong digest Then ownership and the legacy baseline remain unchanged", () => {
+    // Given
+    prepareDesignSystemReceipt(db, { id: "owner", designSystemId: "ds", contentRevision: 1, schemaVersion: 1, digest: "digest", manifest: {}, provenance: {}, createdAt: 2 });
+    const before = sqlite.serialize();
+
+    // When / Then
+    expect(() => commitDesignSystemReceipt(db, { id: "owner", digest: "wrong", updatedAt: 3 })).toThrow(new PipelineRepositoryError("content_receipt_mismatch", "owner"));
+    expect(getCurrentSystemContent(sqlite, "ds")).toBeNull();
+    expect(sqlite.serialize()).toEqual(before);
+  });
+});
+
+describe("system pending receipt migration", () => {
+  test.each([
+    ["content", "content", "prepared"], ["content", "content", "recovering"],
+    ["content", "trash", "prepared"], ["content", "trash", "recovering"],
+    ["trash", "content", "prepared"], ["trash", "content", "recovering"],
+  ] as const)("Given %s ownership When SQL inserts %s in %s state Then the migrated unique index rejects it", (ownerOperation, operation, status) => {
+    // Given
+    sqlite.prepare(`INSERT INTO design_system_receipts
+      (id,design_system_id,status,content_revision,schema_version,digest,manifest_json,provenance_json,created_at,updated_at,operation)
+      VALUES ('owner','ds','prepared',?,1,'digest','{}','{}',2,2,?)`).run(ownerOperation === "content" ? 1 : -1, ownerOperation);
+    const before = sqlite.serialize();
+
+    // When / Then
+    expect(() => sqlite.prepare(`INSERT INTO design_system_receipts
+      (id,design_system_id,status,content_revision,schema_version,digest,manifest_json,provenance_json,created_at,updated_at,operation)
+      VALUES ('contender','ds',?,?,1,'other','{}','{}',3,3,?)`).run(status, operation === "content" ? 2 : -2, operation)).toThrow("UNIQUE constraint failed: design_system_receipts.design_system_id");
+    expect(sqlite.serialize()).toEqual(before);
+  });
+
+  test("Given a failed receipt and a new pending owner When SQL revives the failed receipt Then uniqueness also guards recovery transitions", () => {
+    // Given
+    prepareDesignSystemReceipt(db, { id: "failed", designSystemId: "ds", contentRevision: 1, schemaVersion: 1, digest: "first", manifest: {}, provenance: {}, createdAt: 2 });
+    sqlite.exec("UPDATE design_system_receipts SET status='failed' WHERE id='failed'");
+    prepareDesignSystemReceipt(db, { id: "owner", designSystemId: "ds", contentRevision: 2, schemaVersion: 1, digest: "second", manifest: {}, provenance: {}, createdAt: 3 });
+    const before = sqlite.serialize();
+
+    // When / Then
+    expect(() => sqlite.exec("UPDATE design_system_receipts SET status='recovering' WHERE id='failed'")).toThrow("UNIQUE constraint failed: design_system_receipts.design_system_id");
+    expect(sqlite.serialize()).toEqual(before);
+  });
+
+  test("Given valid legacy pending operations When publication migrations run Then one strict index guards both operation classes and the obsolete index is removed", async () => {
+    // Given
+    const directory = await mkdtemp(path.join(tmpdir(), "burnguard-pending-receipt-upgrade-"));
+    const historical = new Database(":memory:");
+    try {
+      historical.exec("PRAGMA foreign_keys = ON");
+      for (const file of (await readdir(migrations)).filter((name) => name.endsWith(".sql") && name < "0023")) {
+        await cp(path.join(migrations, file), path.join(directory, file));
+      }
+      await runMigrationsFrom(historical, directory);
+      historical.exec(`
+        INSERT INTO design_systems (id,name,status,dir_path,created_at,updated_at) VALUES
+          ('content-owner','Content','draft','/missing/content-owner',1,1),
+          ('lifecycle-owner','Lifecycle','draft','/missing/lifecycle-owner',1,1);
+        INSERT INTO design_system_receipts
+          (id,design_system_id,status,content_revision,schema_version,digest,manifest_json,provenance_json,created_at,updated_at,operation) VALUES
+          ('content','content-owner','prepared',1,1,'content-digest','{}','{}',2,2,'content'),
+          ('lifecycle','lifecycle-owner','recovering',-1,1,'lifecycle-digest','{}','{}',2,2,'trash')`);
+      const rows = historical.query("SELECT * FROM design_system_receipts ORDER BY id").all();
+
+      // When
+      await runMigrationsFrom(historical, migrations);
+
+      // Then
+      expect(historical.query(`SELECT name,"unique" AS is_unique,partial
+        FROM pragma_index_list('design_system_receipts') WHERE origin='c' AND "unique"=1 ORDER BY name`).all()).toEqual([
+        { name: "uq_design_system_pending_receipt", is_unique: 1, partial: 1 },
+      ]);
+      expect(historical.query("SELECT name FROM pragma_index_info('uq_design_system_pending_receipt') ORDER BY seqno").all()).toEqual([
+        { name: "design_system_id" },
+      ]);
+      for (const [systemId, revision, operation] of [
+        ["content-owner", -1, "trash"],
+        ["lifecycle-owner", 1, "content"],
+      ] as const) {
+        expect(() => historical.prepare(`INSERT INTO design_system_receipts
+          (id,design_system_id,status,content_revision,schema_version,digest,manifest_json,provenance_json,created_at,updated_at,operation)
+          VALUES ('contender',?,'prepared',?,1,'candidate','{}','{}',3,3,?)`).run(systemId, revision, operation)).toThrow("UNIQUE constraint failed: design_system_receipts.design_system_id");
+      }
+      expect(historical.query("SELECT * FROM design_system_receipts ORDER BY id").all()).toEqual(rows);
+      expect(historical.query("SELECT id FROM schema_migrations WHERE id IN ('0023_system_content_publication.sql','0024_system_content_publication_cleanup.sql') ORDER BY id").all()).toEqual([
+        { id: "0023_system_content_publication.sql" },
+        { id: "0024_system_content_publication_cleanup.sql" },
+      ]);
+      expect(historical.query("PRAGMA foreign_keys").get()).toEqual({ foreign_keys: 1 });
+      expect(historical.query("PRAGMA foreign_key_check").all()).toEqual([]);
+    } finally {
+      historical.close();
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  test.each(["content", "trash"] as const)("Given historical content and %s pending rows When the forward migration runs Then explicit failure preserves database bytes and rows", async (operation) => {
+    // Given: apply only actual pre-0023 migrations to a fresh connection.
+    const directory = await mkdtemp(path.join(tmpdir(), "burnguard-pending-receipt-migration-"));
+    const historical = new Database(":memory:");
+    try {
+      historical.exec("PRAGMA foreign_keys = ON");
+      for (const file of (await readdir(migrations)).filter((name) => name.endsWith(".sql") && name < "0023")) {
+        await cp(path.join(migrations, file), path.join(directory, file));
+      }
+      await runMigrationsFrom(historical, directory);
+      historical.exec(`
+        INSERT INTO design_systems (id,name,status,dir_path,created_at,updated_at)
+          VALUES ('ds','Original','draft','/missing/ds',1,1);
+        INSERT INTO design_system_receipts
+          (id,design_system_id,status,content_revision,schema_version,digest,manifest_json,provenance_json,created_at,updated_at)
+          VALUES ('owner','ds','prepared',1,1,'old-extraction-digest','{"files":[]}','{"state":"observed"}',2,2)`);
+      historical.prepare(`INSERT INTO design_system_receipts
+        (id,design_system_id,status,content_revision,schema_version,digest,manifest_json,provenance_json,created_at,updated_at,operation)
+        VALUES ('conflict','ds','recovering',?,1,'preserve-me','{}','{}',3,3,?)`).run(operation === "content" ? 2 : -1, operation);
+      const before = historical.serialize();
+      const rows = historical.query("SELECT * FROM design_system_receipts ORDER BY id").all();
+
+      // When / Then
+      await expect(runMigrationsFrom(historical, migrations)).rejects.toThrow("UNIQUE constraint failed: design_system_receipts.design_system_id");
+      expect(historical.serialize()).toEqual(before);
+      expect(historical.query("SELECT * FROM design_system_receipts ORDER BY id").all()).toEqual(rows);
+      expect(historical.query("PRAGMA foreign_keys").get()).toEqual({ foreign_keys: 1 });
+    } finally {
+      historical.close();
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 });
 

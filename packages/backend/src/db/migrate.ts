@@ -71,7 +71,9 @@ export async function runMigrationsFrom(
     for (const file of pending) {
       const sql = await readFile(path.join(migrationsDir, file), "utf8");
       const txn = db.transaction(() => {
-        db.exec(sql);
+        // Bun 1.3.14 can swallow errors with trailing whitespace.
+        // Trimming protects single-statement migrations, not arbitrary SQL batches.
+        db.exec(sql.trim());
         // With foreign keys off nothing else notices orphans a rebuild leaves behind.
         if (db.query("PRAGMA foreign_key_check").all().length > 0) {
           throw new MigrationError(MIGRATION_FOREIGN_KEY_VIOLATION);

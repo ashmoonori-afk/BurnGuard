@@ -138,6 +138,26 @@ describe("production API route registration", () => {
 });
 
 describe("catalog query and metadata", () => {
+  test.each(["prepared", "recovering", "failed"] as const)("Given a newer %s content attempt When catalog detail is read Then committed extraction identity remains current", async (status) => {
+    // Given
+    const systemId = await seedSystem(`head-${status}`, { receipt: true });
+    const db = getSqlite();
+    db.prepare(`INSERT INTO design_system_receipts
+      (id,design_system_id,status,content_revision,schema_version,digest,manifest_json,provenance_json,created_at,updated_at)
+      SELECT ?,design_system_id,?,2,schema_version,'candidate-digest',manifest_json,provenance_json,101,101
+      FROM design_system_receipts WHERE id=?`).run(`attempt-${systemId}`, status, `receipt-${systemId}`);
+    const before = db.query("SELECT * FROM design_system_receipts WHERE design_system_id=? ORDER BY id").all(systemId);
+    const sidecar = await readFile(path.join(systemsDir, systemId, "extraction-provenance.json"));
+
+    // When
+    const result = await request("GET", `/api/design-systems/${systemId}`);
+
+    // Then
+    expect(result).toMatchObject({ status: 200, json: { data: { content: { revision: 1, receipt_id: `receipt-${systemId}`, digest: contentDigest(systemId) } } } });
+    expect(db.query("SELECT * FROM design_system_receipts WHERE design_system_id=? ORDER BY id").all(systemId)).toEqual(before);
+    expect(await readFile(path.join(systemsDir, systemId, "extraction-provenance.json"))).toEqual(sidecar);
+  });
+
   test("Given an unknown system When every catalog surface is called Then typed 404 responses preserve route registration", async () => {
     const missing = id("missing-catalog");
     const results = [];
@@ -307,6 +327,32 @@ describe("catalog query and metadata", () => {
 });
 
 describe("catalog lineage and lifecycle", () => {
+  test.each(["trash", "duplicate", "archive"] as const)("Given pending content ownership When catalog %s starts Then rows and live bytes remain unchanged", async (operation) => {
+    // Given
+    const systemId = await seedSystem(`pending-${operation}`, { receipt: true });
+    const db = getSqlite();
+    db.prepare(`INSERT INTO design_system_receipts
+      (id,design_system_id,status,content_revision,schema_version,digest,manifest_json,provenance_json,created_at,updated_at)
+      SELECT ?,design_system_id,'recovering',2,schema_version,digest,manifest_json,provenance_json,101,101
+      FROM design_system_receipts WHERE id=?`).run(`pending-${systemId}`, `receipt-${systemId}`);
+    const before = db.query("SELECT * FROM design_system_receipts WHERE design_system_id=? ORDER BY id").all(systemId);
+    const system = db.query("SELECT * FROM design_systems WHERE id=?").get(systemId);
+    const tree = await inspectCatalogTree(path.join(systemsDir, systemId));
+    const child = id(`blocked-${operation}`);
+
+    // When
+    const result = operation === "archive"
+      ? await request("PATCH", `/api/design-systems/${systemId}`, { expected_revision: 0, lifecycle: "archived" })
+      : await request("POST", `/api/design-systems/${systemId}/${operation}`, operation === "duplicate" ? { id: child, name: child } : {});
+
+    // Then
+    expect(result).toMatchObject({ status: 409, json: { error: { code: "operation_conflict" } } });
+    expect(db.query("SELECT * FROM design_system_receipts WHERE design_system_id=? ORDER BY id").all(systemId)).toEqual(before);
+    expect(db.query("SELECT * FROM design_systems WHERE id=?").get(systemId)).toEqual(system);
+    expect(db.query("SELECT id FROM design_systems WHERE id=?").get(child)).toBeNull();
+    expect(await inspectCatalogTree(path.join(systemsDir, systemId))).toEqual(tree);
+  });
+
   test("Given an out-of-root catalog row When paths resolve Then containment rejects before mutation", async () => {
     await expect(catalogPaths(systemsDir, "safe-id", path.dirname(systemsDir))).rejects.toMatchObject({ code: "unsafe_catalog_path" });
     await expect(catalogPaths(systemsDir, "safe-id", path.join(systemsDir, "different-id"))).rejects.toMatchObject({ code: "unsafe_catalog_path" });

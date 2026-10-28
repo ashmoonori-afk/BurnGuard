@@ -141,6 +141,8 @@ jobs:
           packages/backend/tests/logo-deliverables.test.ts
           packages/backend/tests/prompt-logo-set.test.ts
           packages/backend/tests/pipeline-repositories.test.ts
+          packages/backend/tests/catalog.test.ts
+          packages/backend/tests/migration-pipeline-upgrade.test.ts
           packages/backend/tests/runtime-diagnostics.test.ts
           packages/frontend/tests/runtime-diagnostics.test.ts
           packages/shared/tests/runtime-diagnostics.test.ts

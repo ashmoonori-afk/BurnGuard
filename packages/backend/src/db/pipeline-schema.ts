@@ -43,7 +43,7 @@ export const designSystemReceiptsTable = sqliteTable(
     unique().on(table.designSystemId, table.contentRevision),
     index("idx_design_system_receipts_system").on(table.designSystemId, desc(table.contentRevision)),
     index("idx_design_system_receipt_operation").on(table.designSystemId, table.operation, table.createdAt),
-    uniqueIndex("uq_design_system_nonterminal_receipt").on(table.designSystemId).where(sql`${table.operation} != 'content' AND ${table.status} IN ('prepared','recovering')`),
+    uniqueIndex("uq_design_system_pending_receipt").on(table.designSystemId).where(sql`${table.status} IN ('prepared','recovering')`),
   ],
 );
 

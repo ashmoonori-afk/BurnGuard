@@ -1,5 +1,6 @@
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import type { drizzle } from "drizzle-orm/bun-sqlite";
+import { getCurrentSystemContent, getPendingSystemOperation } from "./catalog-repository";
 import { PipelineRepositoryError, parseJsonRecord } from "./pipeline-repository";
 import { designSystemReceiptsTable, designSystemTagsTable } from "./pipeline-schema";
 
@@ -48,12 +49,14 @@ export function updateDesignSystemMetadata(db: PipelineDatabase, input: Metadata
 
 export function prepareDesignSystemReceipt(db: PipelineDatabase, input: ReceiptInput): Receipt {
   return db.transaction((tx) => {
+    const pending = getPendingSystemOperation(db.$client, input.designSystemId);
+    if (pending !== null && pending.id !== input.id) throw new PipelineRepositoryError("content_receipt_mismatch", input.designSystemId);
     const current = tx.select().from(designSystemReceiptsTable).where(and(
       eq(designSystemReceiptsTable.designSystemId, input.designSystemId),
       eq(designSystemReceiptsTable.contentRevision, input.contentRevision),
     )).limit(1).all()[0];
     if (current !== undefined) {
-      if (current.id !== input.id || current.digest !== input.digest || current.schemaVersion !== input.schemaVersion) {
+      if (current.operation !== "content" || current.id !== input.id || current.digest !== input.digest || current.schemaVersion !== input.schemaVersion) {
         throw new PipelineRepositoryError("content_receipt_mismatch", input.designSystemId);
       }
       return parseReceipt(current);
@@ -77,11 +80,12 @@ export function prepareDesignSystemReceipt(db: PipelineDatabase, input: ReceiptI
 export function commitDesignSystemReceipt(db: PipelineDatabase, input: { readonly id: string; readonly digest: string; readonly updatedAt: number }): Receipt {
   db.update(designSystemReceiptsTable).set({ status: "committed", updatedAt: input.updatedAt }).where(and(
     eq(designSystemReceiptsTable.id, input.id),
+    eq(designSystemReceiptsTable.operation, "content"),
     sql`${designSystemReceiptsTable.status} IN ('prepared','recovering')`,
     eq(designSystemReceiptsTable.digest, input.digest),
   )).run();
   const changed = db.get<readonly [number]>(sql`SELECT changes()`);
-  if (changed?.[0] === 0) throw new PipelineRepositoryError("content_receipt_mismatch", input.id);
+  if (changed?.[0] !== 1) throw new PipelineRepositoryError("content_receipt_mismatch", input.id);
   const row = db.select().from(designSystemReceiptsTable).where(eq(designSystemReceiptsTable.id, input.id)).limit(1).all()[0];
   if (row === undefined) throw new PipelineRepositoryError("not_found", input.id);
   return parseReceipt(row);
@@ -103,11 +107,11 @@ export function getDesignSystemPipeline(db: PipelineDatabase, id: string): { rea
   if (tags.some((tag) => tag.length === 0 || tag.trim() !== tag || tag.normalize("NFC") !== tag)) {
     throw new PipelineRepositoryError("corrupt_tag", id);
   }
-  const row = db.select().from(designSystemReceiptsTable).where(and(eq(designSystemReceiptsTable.designSystemId, id), eq(designSystemReceiptsTable.operation, "content"))).orderBy(desc(designSystemReceiptsTable.contentRevision)).limit(1).all()[0];
-  return { metadataRevision: system[0], tags, receipt: row === undefined ? null : parseReceipt(row) };
+  const row = getCurrentSystemContent(db.$client, id);
+  return { metadataRevision: system[0], tags, receipt: row === null ? null : parseReceipt(row) };
 }
 
-function parseReceipt(row: typeof designSystemReceiptsTable.$inferSelect): Receipt {
+function parseReceipt(row: Pick<typeof designSystemReceiptsTable.$inferSelect, "id" | "contentRevision" | "schemaVersion" | "digest" | "manifestJson" | "provenanceJson">): Receipt {
   return {
     id: row.id,
     contentRevision: row.contentRevision,
