@@ -25,7 +25,6 @@ packages/backend/tests/broker.test.ts
 packages/backend/tests/build-binary-host.test.ts
 packages/backend/tests/bundled-font-reference.test.ts
 packages/backend/tests/bundled-fonts.test.ts
-packages/backend/tests/cancelled-audit-process.test.ts
 packages/backend/tests/canonical-preview-render.test.ts
 packages/backend/tests/catalog-preview-review.test.ts
 packages/backend/tests/chart-render-text-floor.test.ts

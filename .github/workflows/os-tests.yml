@@ -241,6 +241,7 @@ jobs:
           packages/frontend/tests/project-first-message.browser.test.ts
           packages/frontend/tests/launch-authority.browser.test.ts
           packages/frontend/tests/startup-recovery.browser.test.ts
+          packages/backend/tests/cancelled-audit-process.test.ts
           packages/frontend/tests/design-system-pin.browser.test.ts
           packages/frontend/tests/northvale-previews.browser.test.ts
           packages/frontend/tests/workspace-controls.browser.test.ts
