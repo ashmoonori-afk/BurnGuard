@@ -1,6 +1,7 @@
 import path from "node:path";
 import type { Browser, BrowserContext, Page } from "../../../backend/node_modules/playwright-core";
 import type {} from "../fixtures/workspace-controls-browser";
+import { appFontResponse } from "./app-font";
 
 export async function compileWorkspaceControls(): Promise<{ script: string; css: string }> {
   const frontend = path.resolve(import.meta.dir, "../..");
@@ -32,6 +33,8 @@ export async function withWorkspaceControls(
     hostname: "127.0.0.1", port: 0,
     fetch(request) {
       const pathname = new URL(request.url).pathname;
+      const font = appFontResponse(pathname);
+      if (font) return font;
       if (request.method !== "GET") mutations.push(`${request.method} ${pathname}`);
       if (pathname === "/") return new Response(
         `<!doctype html><html data-theme="${assets.dark ? "dark" : "light"}"><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${assets.css}</style></head><body><div id="root"></div><script src="/fixture.js"></script></body></html>`,
@@ -54,6 +57,7 @@ export async function withWorkspaceControls(
     page.on("pageerror", error => errors.push(error.message));
     await page.goto(server.url.href);
     await page.evaluate(() => globalThis.workspaceControlsTest.mount("en"));
+    await page.evaluate(() => document.fonts.ready);
     await action(page, mutations);
     if (errors.length > 0) throw new Error(`workspace_browser_errors: ${errors.join("; ")}`);
   } finally {

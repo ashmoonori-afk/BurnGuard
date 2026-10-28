@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { createApp } from "../../../backend/src/server";
 import { insertNormalizedEvent } from "../../../backend/src/db/events";
 import { sequencedBroker } from "../../../backend/src/services/broker";
+import { appFontResponse } from "../helpers/app-font";
 
 export type AuthorityServerMessage =
   | { kind: "ready"; origin: string; pid: number }
@@ -19,6 +20,8 @@ const server = Bun.serve({
   hostname: "127.0.0.1", port: Number(process.env.F08_PORT ?? 0),
   async fetch(request) {
     const path = new URL(request.url).pathname;
+    const font = appFontResponse(path);
+    if (font) return font;
     if (path === "/fixture.js") return new Response(Bun.file(join(appRoot, "f08-fixture.js")), { headers: { "content-type": "text/javascript" } });
     if (path === "/fixture.css") return new Response(Bun.file(join(appRoot, "f08-fixture.css")), { headers: { "content-type": "text/css" } });
     if (!path.startsWith("/api/")) return new Response('<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/fixture.css"></head><body><div id="root" class="flex h-dvh flex-col"></div><script src="/fixture.js"></script></body></html>', { headers: { "content-type": "text/html" } });
