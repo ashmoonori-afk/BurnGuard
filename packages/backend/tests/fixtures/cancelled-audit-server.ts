@@ -23,6 +23,7 @@ let snapshot: (() => object) | undefined;
 prototype.initializePlaywright = async function () {
   const result = await initialize.call(this);
   const browser = result._initializer.preLaunchedBrowser._object;
+  process.send?.({ kind: "browser_connected" });
   const send = this.onmessage;
   this.onmessage = (message) => {
     if (!held && message.method === "continue") {
@@ -48,8 +49,18 @@ await writeFile(path.join(root, "index.html"), '<!doctype html><html><body><p da
 getSqlite().prepare("INSERT INTO projects(id,name,type,dir_path,entrypoint,backend_id,created_at,updated_at) VALUES (?,?,'prototype',?,'index.html','codex',1,1)").run(projectId, "Cancellation", root);
 await new ArtifactCoordinator(getSqlite()).initialize(projectId, root);
 const app = createApp();
-const server = Bun.serve({ hostname: "127.0.0.1", port: 0, async fetch(request) {
+const server = Bun.serve({ hostname: "127.0.0.1", port: 0, idleTimeout: 255, async fetch(request) {
   const response = await app.fetch(request);
+  if (!held && new URL(request.url).pathname === `/api/projects/${projectId}/design-audit`) {
+    let errorcode: string | undefined;
+    if (response.status >= 400) {
+      const body: unknown = await response.clone().json();
+      const error = typeof body === "object" && body !== null && "error" in body ? body.error : undefined;
+      const code = typeof error === "object" && error !== null && "code" in error ? error.code : undefined;
+      errorcode = typeof code === "string" && ["audit_unavailable", "project_not_found", "project_path_unavailable", "stale_artifact_identity"].includes(code) ? code : "unclassified";
+    }
+    process.send?.({ kind: "response_before_held", status: response.status, ...(errorcode === undefined ? {} : { errorcode }) });
+  }
   if (request.signal.aborted) process.send?.({ kind: "audit_settled", status: response.status, body: await response.clone().json(), resources: snapshot?.() });
   return response;
 } });
