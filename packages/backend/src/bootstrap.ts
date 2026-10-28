@@ -36,7 +36,7 @@ import { reconcileExportState } from "./services/export-recovery";
 import { createProductionResearchRecoveryDependencies } from "./routes/research";
 import { reconcileResearchState, type ResearchRecoveryDependencies } from "./services/research-recovery";
 import { recoverVisualAlternatives } from "./services/visual-alternative-recovery";
-import { bundledThemeHistory, installedThemeState, recoverBundledTheme, refreshBundledTheme, type BundledThemeHistory, type BundledThemeRefresh } from "./services/bundled-theme-refresh";
+import { bundledThemeHistory, recoverBundledTheme, refreshBundledTheme, type BundledThemeHistory, type BundledThemeRefresh } from "./services/bundled-theme-refresh";
 import { reapPersistedSessionProcesses } from "./services/session-process-recovery";
 import { repairNorthvalePreviews } from "./services/northvale-preview-repair";
 
@@ -86,11 +86,9 @@ export async function seedBundledDesignSystems(
       try {
         await recoverBundledTheme(destination);
         if (await exists(destination)) {
-          // An untouched copy from an older release takes the installed bundle; edited copies stay as they are.
+          // Refresh only app-owned additions; legacy bytes must survive until old projects pin them.
           const source = path.join(themesSource, slug);
-          if (await installedThemeState(destination, source, slug, themeHistory) === "outdated") {
-            await refresh(bundledDesignSystemId(slug), source, destination, (stage) => copyBundledFonts(stage, repoRoot));
-          }
+          await refresh(bundledDesignSystemId(slug), source, destination, themeHistory);
           return;
         }
       } catch (error) {
