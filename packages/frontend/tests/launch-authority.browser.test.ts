@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import type { Browser, Page } from "../../backend/node_modules/playwright-core";
 import { getSqlite } from "../../backend/src/db/sqlite-client";
@@ -38,8 +38,10 @@ type RequestRecord = Extract<AuthorityServerMessage, { kind: "request" }> & { ge
 async function startServer(port: number, capability: string, secret: string, requests: RequestRecord[], generation: number) {
   const messages: AuthorityServerMessage[] = [];
   const listeners = new Set<() => void>();
+  // Bun.which uses the startup PATH; isolate tool discovery before spawning.
+  const toolPath = await mkdtemp(join(projectsDir, "f08-tool-path-"));
   const child = Bun.spawn([process.execPath, join(import.meta.dir, "fixtures/launch-authority-server.ts")], {
-    env: { ...process.env, F08_PORT: String(port), F08_CAPABILITY: capability, F08_SECRET: secret },
+    env: { ...Object.fromEntries(Object.entries(process.env).filter(([key]) => key.toUpperCase() !== "PATH")), PATH: toolPath, F08_PORT: String(port), F08_CAPABILITY: capability, F08_SECRET: secret },
     stdout: "pipe", stderr: "pipe",
     ipc(message: AuthorityServerMessage) {
       messages.push(message);
