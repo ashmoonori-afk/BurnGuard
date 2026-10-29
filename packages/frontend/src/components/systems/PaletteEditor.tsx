@@ -60,7 +60,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import "./palette-preview.css";
 
 export type PaletteEditorText =
   | "workspaceLabel"
@@ -3749,7 +3748,7 @@ export default function PaletteEditor(props: PaletteEditorProps): React.ReactEle
           }
         }}
       >
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="palette-import-dialog sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{text.importDialogTitle}</DialogTitle>
             <DialogDescription>

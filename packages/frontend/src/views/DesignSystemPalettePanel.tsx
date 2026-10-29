@@ -32,6 +32,7 @@ function initialDraft(saved: PaletteState | null): { readonly history: PaletteHi
 
 export default function DesignSystemPalettePanel({ systemId }: { readonly systemId: string }) {
   const t = useT();
+  const [reloadVersion, setReloadVersion] = useState(0);
   const query = useQuery({
     queryKey: ["design-systems", "palette", systemId],
     queryFn: () => getDesignSystemPalette(systemId),
@@ -39,19 +40,32 @@ export default function DesignSystemPalettePanel({ systemId }: { readonly system
     refetchOnWindowFocus: false,
     refetchOnMount: "always",
   });
+  const reload = async () => {
+    const refreshed = await query.refetch();
+    if (refreshed.isSuccess) setReloadVersion(current => current + 1);
+  };
   return <section id="system-palette" className="my-5 min-w-0 scroll-mt-6">
     <div className="mb-4">
       <h2 className="text-lg font-semibold">{t("palette.title")}</h2>
       <p className="mt-1 text-sm text-muted-foreground">{t("palette.help")}</p>
     </div>
-    {query.isPending || query.isFetching
-      ? <p role="status">{t("palette.loading")}</p>
-      : query.isError || query.data === undefined
+    {query.data === undefined
+      ? query.isPending
+        ? <p role="status" data-palette-loading="">{t("palette.loading")}</p>
+        : <div role="alert" className="space-y-3">
+          <p>{t("palette.loadFailed")}</p>
+          <Button variant="outline" onClick={() => void query.refetch()}>{t("palette.retry")}</Button>
+        </div>
+      : <>
+        {query.isFetching ? <p role="status" data-palette-loading="">{t("palette.loading")}</p> : null}
+        {query.isError
         ? <div role="alert" className="space-y-3">
           <p>{t("palette.loadFailed")}</p>
           <Button variant="outline" onClick={() => void query.refetch()}>{t("palette.retry")}</Button>
         </div>
-        : <PaletteWorkspace systemId={systemId} saved={query.data} reload={() => void query.refetch()} />}
+        : null}
+        <PaletteWorkspace key={`${systemId}:${reloadVersion}`} systemId={systemId} saved={query.data} reload={() => void reload()} />
+      </>}
   </section>;
 }
 
@@ -65,28 +79,33 @@ function PaletteWorkspace({
   const t = useT();
   const text = usePaletteEditorText();
   const client = useQueryClient();
+  const [base, setBase] = useState(saved);
   const [initial] = useState(() => initialDraft(saved.state));
   const [history, setHistory] = useState(initial.history);
   const [preview, setPreview] = useState<PaletteState | null>(null);
   const [status, setStatus] = useState<Status>(initial.status);
-  const [conflicted, setConflicted] = useState(false);
+  const [rejectedDigest, setRejectedDigest] = useState(false);
   useEffect(() => {
     if (window.location.hash.startsWith("#bg-palette=")) {
       window.history.replaceState(window.history.state, "", window.location.pathname + window.location.search);
     }
   }, []);
   const draft = preview ?? history.present;
-  const dirty = saved.state === null || serializePalette(draft) !== serializePalette(saved.state);
+  const dirty = base.state === null || serializePalette(draft) !== serializePalette(base.state);
+  const conflicted = rejectedDigest || saved.expected_digest !== base.expected_digest;
+  const visibleStatus: Status = conflicted ? { tone: "error", key: "palette.conflict" } : status;
   const save = useMutation({
-    mutationFn: (state: PaletteState) => saveDesignSystemPalette(systemId, { expected_digest: saved.expected_digest, state }),
-    onSuccess: (response) => {
+    mutationFn: (state: PaletteState) => saveDesignSystemPalette(systemId, { expected_digest: base.expected_digest, state }),
+    onSuccess: async (response) => {
+      await client.cancelQueries({ queryKey: ["design-systems", "palette", systemId] });
+      setBase(response);
       client.setQueryData(["design-systems", "palette", systemId], response);
-      setConflicted(false);
+      setRejectedDigest(false);
       setStatus({ tone: "success", key: "palette.stateSaved" });
     },
     onError: (error) => {
       const stale = error instanceof ApiError && error.code === "expected_digest_conflict";
-      setConflicted(stale);
+      setRejectedDigest(stale);
       setStatus({ tone: "error", key: stale ? "palette.conflict" : "palette.saveFailed" });
     },
   });
@@ -120,7 +139,7 @@ function PaletteWorkspace({
     }
   };
   return <>
-    {saved.state === null && status === null
+    {base.state === null && status === null
       ? <p className="mb-3 text-sm text-muted-foreground">{t("palette.previewOnly")}</p> : null}
     {conflicted ? <div className="mb-3 space-y-2 rounded-control border border-border p-3">
       <p className="text-sm">{t("palette.reloadHelp")}</p>
@@ -128,9 +147,9 @@ function PaletteWorkspace({
     </div> : null}
     <PaletteEditor
       state={draft} text={text} dirty={dirty} saving={save.isPending}
-      saved={saved.state !== null && !dirty} unavailable={conflicted}
+      saved={base.state !== null && !dirty} unavailable={conflicted}
       canUndo={history.past.length > 0} canRedo={history.future.length > 0}
-      status={status === null ? null : { tone: status.tone, message: t(status.key) }}
+      status={visibleStatus === null ? null : { tone: visibleStatus.tone, message: t(visibleStatus.key) }}
       onGestureStart={() => setPreview(null)} onGestureCancel={() => setPreview(null)}
       onChange={change}
       onSave={() => { if (dirty && !save.isPending && !conflicted) save.mutate(draft); }}

@@ -59,6 +59,7 @@ test("Given the real palette workspace When inputs, history, saves and conflicts
   let browser: Browser | undefined;
   const stored: { state: PaletteState | null; revision: number } = { state: null, revision: 0 };
   let hold: ReturnType<typeof deferred<void>> | null = null;
+  let readHold: ReturnType<typeof deferred<void>> | null = null;
   let seen: ReturnType<typeof deferred<SaveDesignSystemPaletteRequest>> | null = null;
   const gates: ReturnType<typeof deferred<void>>[] = [];
   const requests: SaveDesignSystemPaletteRequest[] = [];
@@ -76,7 +77,12 @@ test("Given the real palette workspace When inputs, history, saves and conflicts
       if (url.pathname === "/api/bootstrap") return Response.json({ data: { capability: "palette-editor-test" } });
       if (url.pathname !== "/api/design-systems/palette-editor/palette") return new Response(null, { status: 404 });
       if (request.headers.get("x-burnguard-capability") !== "palette-editor-test") return new Response(null, { status: 403 });
-      if (request.method === "GET") return response();
+      if (request.method === "GET") {
+        const pending = readHold;
+        readHold = null;
+        if (pending !== null) await pending.promise;
+        return response();
+      }
       if (request.method !== "PUT") return new Response(null, { status: 405 });
       let parsed: SaveDesignSystemPaletteRequest;
       try { parsed = parseSaveDesignSystemPaletteRequest(await request.json()); }
@@ -187,6 +193,42 @@ test("Given the real palette workspace When inputs, history, saves and conflicts
     await settleState(page);
     expect(await page.locator(input("curve-amount")).inputValue()).toBe("60");
     expect(serializePalette(stored.state)).toBe(serializePalette({ ...prior, curve: { ...prior.curve, amount: 0.6 } }));
+
+    await edit(page, input("curve-width"), "0.37");
+    await edit(page, input("curve-amount"), "");
+    readHold = deferred<void>();
+    gates.push(readHold);
+    const background = readHold;
+    const refreshing = page.locator("[data-palette-loading]").waitFor({ state: "visible" });
+    await page.locator("#palette-refresh-fixture").click();
+    await refreshing;
+    expect(await page.locator(input("curve-width")).count()).toBe(1);
+    expect(await page.locator(input("curve-width")).inputValue()).toBe("0.37");
+    expect(await page.locator(input("curve-amount")).inputValue()).toBe("");
+    expect(await page.locator(action("undo")).isEnabled()).toBe(true);
+    background.resolve();
+    await page.locator("[data-palette-loading]").waitFor({ state: "hidden" });
+    expect(await page.locator(input("curve-width")).inputValue()).toBe("0.37");
+    expect(await page.locator(input("curve-amount")).inputValue()).toBe("");
+    await armState(page, "saved");
+    await page.locator(action("undo")).click();
+    await settleState(page);
+    expect(await page.locator(input("curve-width")).inputValue()).toBe(String(stored.state.curve.width));
+
+    await edit(page, input("curve-width"), "0.41");
+    stored.state = { ...stored.state, curve: { ...stored.state.curve, width: 0.52 } };
+    stored.revision += 1;
+    const requestCount = requests.length;
+    await armState(page, "unavailable");
+    await page.locator("#palette-refresh-fixture").click();
+    await settleState(page);
+    expect(await page.locator(input("curve-width")).inputValue()).toBe("0.41");
+    expect(await page.locator(action("save")).isDisabled()).toBe(true);
+    expect(requests).toHaveLength(requestCount);
+    await armState(page, "saved");
+    await page.locator(action("reload")).click();
+    await settleState(page);
+    expect(await page.locator(input("curve-width")).inputValue()).toBe("0.52");
   } finally {
     for (const gate of gates) gate.resolve();
     await browser?.close();

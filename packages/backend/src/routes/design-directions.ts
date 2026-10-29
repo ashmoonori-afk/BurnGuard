@@ -1,9 +1,10 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { Hono } from "hono";
 import { parseGenerationStyle, UpgradeContractError, type GenerationStyle, type DirectionDesignSystem, type ApiErrorBody, type ApiSuccess, type DesignBriefV1, type ProjectType } from "@bg/shared";
 import { getLatestProjectSession, getProjectDetail } from "../db/project-read-repository";
-import { projectsDir, resolveManagedPath } from "../lib/paths";
+import { projectsDir, resolveManagedPath, systemsDir } from "../lib/paths";
+import { getSqlite } from "../db/sqlite-client";
 import { PathBoundaryError, assertSafeName } from "../security/path-boundary";
 import { rawFileHeaders } from "../security/raw-file-response";
 import { isUserTurnRunning } from "../services/turns";
@@ -11,8 +12,10 @@ import { getLatestDirectionState } from "../services/design-direction-state";
 import { DesignDirectionWorkflow, DesignDirectionWorkflowError, directionPreviewPath } from "../services/design-direction-workflow";
 import { parseStoredProjectOptions } from "../services/project-options";
 
-import { getDesignSystemDetail } from "../db/seed";
-import { readDesignSystemLayout } from "../services/design-system-layout";
+import { readObservedDesignSystemLayout } from "../services/design-system-layout";
+import { withSystemContentAccess } from "../services/system-content-access";
+import { observeSystemContent } from "../services/system-content-publication";
+import { SystemContentError } from "../services/system-content-format";
 
 let workflow = new DesignDirectionWorkflow();
 export const designDirectionRoutes = new Hono();
@@ -58,8 +61,19 @@ async function generationContext(projectId: string, includeSystem = false): Prom
   const session = await getLatestProjectSession(projectId);
   if (session?.status === "running" || isUserTurnRunning(value.sessionId)) return { response: Response.json(fail("session_busy", "Cannot generate directions while a user turn is running"), { status: 409 }) };
   if (includeSystem && value.designSystemId) {
-    const system = await getDesignSystemDetail(value.designSystemId);
-    if (system) return { value: { ...value, designSystem: { id: system.id, name: system.name, layout: await readDesignSystemLayout(system) } } };
+    try {
+      const db = getSqlite();
+      const systemId = value.designSystemId;
+      const system = await withSystemContentAccess(db, systemsDir, [systemId], async lease => {
+        const base = await observeSystemContent({ db, systemsRoot: systemsDir, operationId: randomUUID, now: Date.now, validators: {} }, systemId, lease);
+        return base.row === null ? null : { id: base.row.id, name: base.row.name, layout: await readObservedDesignSystemLayout(base) };
+      });
+      if (system === null) return { response: Response.json(fail("design_system_not_found", "Design system not found"), { status: 404 }) };
+      return { value: { ...value, designSystem: system } };
+    } catch (error) {
+      if (error instanceof SystemContentError) return { response: Response.json(fail(error.code, "Design system content is unavailable"), { status: error.code === "system_content_failed" ? 500 : 409 }) };
+      throw error;
+    }
   }
   return { value };
 }

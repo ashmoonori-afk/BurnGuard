@@ -18,3 +18,13 @@
   --accent-foreground: 17 17 17;
   --ring: 109 149 255;
 }
+
+@media (max-width: 639px) {
+  #system-palette button,
+  [data-palette-state] button,
+  [data-palette-state] input[type="range"],
+  .palette-import-dialog button {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+  }
+}

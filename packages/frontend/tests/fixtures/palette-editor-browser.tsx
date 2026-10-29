@@ -13,6 +13,7 @@ const client = new QueryClient({
 void bootstrapApiAuthority().then(() => {
   createRoot(root).render(
     <QueryClientProvider client={client}>
+      <button id="palette-refresh-fixture" onClick={() => void client.invalidateQueries({ queryKey: ["design-systems"] })}>Refresh catalog fixture</button>
       <DesignSystemPalettePanel systemId="palette-editor" />
     </QueryClientProvider>,
   );
