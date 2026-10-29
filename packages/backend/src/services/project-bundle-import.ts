@@ -343,6 +343,7 @@ async function writeEntries(input: WriteEntriesInput): Promise<void> {
 async function importWarnings(families: readonly string[], missingBuiltin: string | null): Promise<readonly ProjectBundleImportWarning[]> {
   const warnings: ProjectBundleImportWarning[] = [];
   if (missingBuiltin) warnings.push({ code: "missing_builtin_design_system", reference: missingBuiltin });
+  if (families.length === 0) return warnings;
   let installed: readonly string[] = [];
   try { installed = (await getLocalFonts()).families; }
   catch (error) {

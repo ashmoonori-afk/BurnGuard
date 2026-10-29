@@ -176,6 +176,7 @@ function catalogContentType(file: string): string {
 }
 
 function catalogError(c: Context, error: unknown): Response {
+  if (error instanceof PathBoundaryError) return c.json(fail("unsafe_catalog_path", "Catalog path is outside its managed root"), 409);
   if (error instanceof SystemContentError) return c.json(fail(error.code === "system_content_failed" ? "catalog_operation_failed" : error.code, "System content is unavailable"),
     error.code === "expected_digest_conflict" ? 412 : error.code === "system_content_failed" ? 500 : 409);
   if (error instanceof CatalogQueryError) return c.json(fail(error.code, error.message, { field: error.field }), 400);
