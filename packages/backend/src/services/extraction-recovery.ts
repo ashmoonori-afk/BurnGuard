@@ -35,7 +35,12 @@ export async function reconcileExtractionState(now = Date.now()): Promise<Extrac
            r.digest AS digest, r.manifest_json AS manifestJson, d.dir_path AS dirPath
       FROM design_system_receipts r
       JOIN design_systems d ON d.id = r.design_system_id
-     WHERE r.operation = 'content' AND r.status IN ('prepared','recovering')
+     WHERE r.operation = 'content' AND r.schema_version = 1 AND r.status IN ('prepared','recovering')
+       AND NOT EXISTS (
+         SELECT 1 FROM design_system_receipts newer
+          WHERE newer.design_system_id = r.design_system_id
+            AND (newer.schema_version != 1 OR newer.operation IN ('derive','duplicate'))
+       )
      ORDER BY r.design_system_id, r.content_revision
   `).all();
   let committed = 0;
@@ -81,10 +86,16 @@ export async function reconcileExtractionState(now = Date.now()): Promise<Extrac
       FROM design_systems d
       LEFT JOIN design_system_receipts r ON r.id = (
         SELECT latest.id FROM design_system_receipts latest
-         WHERE latest.design_system_id = d.id AND latest.operation = 'content'
+         WHERE latest.design_system_id = d.id AND latest.operation = 'content' AND latest.schema_version = 1
          ORDER BY latest.content_revision DESC LIMIT 1
       )
      WHERE d.source_type IN ('github','website','figma','upload')
+       AND NOT EXISTS (
+         SELECT 1 FROM design_system_receipts owned
+          WHERE owned.design_system_id = d.id
+            AND (owned.schema_version != 1 OR owned.operation IN ('derive','duplicate')
+              OR (owned.operation != 'content' AND owned.status IN ('prepared','recovering')))
+       )
      ORDER BY d.id
   `).all();
   const snapshots = await Promise.all(extractionRows.map(async (row): Promise<ExtractionRecoverySnapshot> => {

@@ -45,8 +45,19 @@ export async function fixture(root: string, mode: "replace" | "create") {
   }
   return { db, dbPath, systemsRoot, live };
 }
+export const expectedDigestTraces = new Map<number, "queued_or_lock_io" | "observing_tree" | "releasing_lock">();
+let nextTrace = 0;
 export async function expectedDigest(env: ContentEnvironment): Promise<string> {
-  return withSystemContentAccess(env.db, env.systemsRoot, ["test-system"], async (lease) => contentObservationDigest(await observeSystemContent(env, "test-system", lease)));
+  const id = ++nextTrace;
+  expectedDigestTraces.set(id, "queued_or_lock_io");
+  const pending = withSystemContentAccess(env.db, env.systemsRoot, ["test-system"], async lease => {
+    expectedDigestTraces.set(id, "observing_tree");
+    const digest = contentObservationDigest(await observeSystemContent(env, "test-system", lease));
+    expectedDigestTraces.set(id, "releasing_lock");
+    return digest;
+  });
+  void pending.then(() => expectedDigestTraces.delete(id), () => expectedDigestTraces.delete(id));
+  return pending;
 }
 export function createInput(mode: "replace" | "create") {
   return mode === "create" ? { create: { name: "Test", description: null, skillMdPath: null, tokensCssPath: null, readmeMdPath: null } } : {};

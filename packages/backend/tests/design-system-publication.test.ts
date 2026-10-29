@@ -37,10 +37,10 @@ async function root(): Promise<string> {
   return value;
 }
 
-async function awaitBounded<T>(operation: Promise<T>): Promise<T> {
+async function awaitBounded<T>(operation: Promise<T>, milliseconds = 10_000): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_resolve, reject) => {
-    timer = setTimeout(() => reject(new Error("bounded child exit deadline exceeded")), 10_000);
+    timer = setTimeout(() => reject(new Error("bounded child exit deadline exceeded")), milliseconds);
   });
   try {
     return await Promise.race([operation, timeout]);
@@ -118,6 +118,62 @@ describe("bounded extraction acquisition", () => {
 });
 
 describe("seeded extraction restart reconciliation", () => {
+  test.each(["publish", "hold"] as const)(
+    "Given a missing splash live tree with a v2 %s transaction When actual bootstrap recovers Then seeders preserve its authority",
+    async outcome => {
+      const home = await root();
+      const output = path.join(home, "startup-content.json");
+      const environment = Object.fromEntries(
+        ["PATH", "TMPDIR", "NODE_PATH"].flatMap(key => {
+          const value = process.env[key];
+          return value === undefined ? [] : [[key, value]];
+        }),
+      );
+      const run = async (phase: string) => {
+        const child = Bun.spawn([process.execPath, path.join(import.meta.dir, "fixtures/startup-content-recovery-probe.ts"), phase, output, outcome], {
+          env: { ...environment, BG_APP_ROOT: path.join(home, "profile"), HOME: home, USERPROFILE: home, BG_NO_OPEN: "1" },
+          stdout: "ignore", stderr: "pipe",
+        });
+        const exited = child.exited;
+        try {
+          const [code, stderr] = await Promise.all([awaitBounded(exited, 90_000), new Response(child.stderr).text()]);
+          expect(code, stderr).toBe(phase === "prepare" ? 77 : 0);
+        } finally {
+          child.kill();
+          await child.exited;
+        }
+      };
+      // Subscribe to each real child's exit, then reopen the very same owned profile.
+      await run("prepare");
+      await run("recover");
+      const result: unknown = JSON.parse(await readFile(output, "utf8"));
+      if (typeof result !== "object" || result === null || !("baseline" in result) ||
+        typeof result.baseline !== "object" || result.baseline === null ||
+        !("extraction" in result.baseline) || !("metadata" in result.baseline) || !("before" in result.baseline) || !Array.isArray(result.baseline.before) ||
+        !("extraction" in result) || !("metadata" in result)) throw new Error("Invalid startup probe result");
+      expect(result.extraction).toEqual(result.baseline.extraction);
+      expect(result).toMatchObject({
+        v2_only_row_preserved: true, v2_only_live_missing: true, v2_only_backup_preserved: true,
+      });
+      // A v2 head on an extraction-source row must not be interpreted as v1 or removed.
+      if (outcome === "hold") {
+        expect(result).toMatchObject({ present: false, pending: { status: "recovering" }, backup: true });
+        expect(result.metadata).toEqual(result.baseline.metadata);
+      } else {
+        expect(result).toMatchObject({
+          present: true, pending: null, backup: false, fonts: ["custom.woff2", "empty", "fonts.css"],
+          head: { status: "committed", schemaVersion: 2, contentRevision: 2 },
+        });
+        if (!("saved_json" in result) || !("expected_json" in result) || !("inventory" in result) || !Array.isArray(result.inventory)) {
+          throw new Error("Missing published probe bytes");
+        }
+        expect(result.saved_json).toBe(result.expected_json);
+        expect(result.inventory.filter((entry: unknown) => Array.isArray(entry) && typeof entry[1] === "string" && !entry[1].startsWith("palette")))
+          .toEqual(result.baseline.before);
+      }
+    }, 120_000,
+  );
+
   test("Given real migrated crash rows When startup reconciliation runs Then rows, markers, receipts, and sentinels converge", async () => {
     // Given
     const home = await root();

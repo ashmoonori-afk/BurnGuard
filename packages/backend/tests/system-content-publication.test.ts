@@ -12,7 +12,7 @@ import { contentHash, parseContentJournal, parseContentProvenance, type ContentJ
 import { publishSystemContent, recoverSystemContent, SYSTEM_CONTENT_BOUNDARIES, type ContentBoundary } from "../src/services/system-content-publication";
 import { contentPaths, inspectContentTree, pathStat } from "../src/services/system-content-tree";
 import { buildExtractionProvenance } from "../src/services/extraction-provenance";
-import { createInput, environment, expectedDigest, fixture, NEW_RULES, OLD_RULES, OPERATION_ID, rulesAdapter } from "./fixtures/system-content-fixture";
+import { createInput, environment, expectedDigest, expectedDigestTraces, fixture, NEW_RULES, OLD_RULES, OPERATION_ID, rulesAdapter } from "./fixtures/system-content-fixture";
 
 const roots: string[] = [];
 const databases: Database[] = [];
@@ -24,6 +24,7 @@ async function setup(mode: "replace" | "create" = "replace") {
   return f;
 }
 afterEach(async () => {
+  if (expectedDigestTraces.size > 0) process.stderr.write(`SYSTEM_CONTENT_PENDING_TRACE ${JSON.stringify([...expectedDigestTraces])}\n`);
   for (const db of databases.splice(0)) db.close();
   for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
 });

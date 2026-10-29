@@ -1,19 +1,49 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { cp, mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { afterEach, describe, expect, spyOn, test } from "bun:test";
+import * as fsp from "node:fs/promises";
+import { cp, mkdir, mkdtemp, open, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { seedBundledDesignSystems } from "../src/bootstrap";
+import { seedBundledDesignSystems as seedBundled } from "../src/bootstrap";
 import { bundledDesignSystemId, bundledDesignSystems } from "../src/data/bundled-design-systems";
 import { resolveRepoRoot, systemsDir } from "../src/lib/paths";
 import { getSqlite } from "../src/db/sqlite-client";
 import { ensureProjectDesignSystemPin, inspectProjectDesignSystemPin } from "../src/services/project-design-system-pin";
 import { reconcileExtractionPublications } from "../src/services/extraction-publication";
+import { recoverSystemContent } from "../src/services/system-content-publication";
+import { getCurrentSystemContent } from "../src/db/catalog-repository";
+import { validateCatalogReceiptTree } from "../src/services/catalog-files";
+import { parseContentJournal } from "../src/services/system-content-format";
+import { DEFAULT_CANONICAL_TREE_LIMITS } from "../src/services/canonical-tree-manifest";
 import {
-  bundledThemeHistory, readThemeFiles, recoverBundledTheme, refreshBundledTheme, themeAdditiveDigest, themeFileHash, themeTreeDigest, type BundledThemeHistory, type BundledThemeRefresh,
+  bundledAdditionValidator, bundledThemeHistory, readThemeFiles, recoverBundledTheme, refreshBundledTheme, themeAdditiveDigest, themeFileHash, themeTreeDigest, type BundledThemeHistory, type BundledThemeRefresh,
 } from "../src/services/bundled-theme-refresh";
 
 const roots: string[] = [];
-afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });
+const ownedIds: string[] = [];
+afterEach(async () => {
+  for (const id of ownedIds.splice(0)) {
+    getSqlite().query("DELETE FROM design_system_receipts WHERE design_system_id=?").run(id);
+    getSqlite().query("DELETE FROM design_systems WHERE id=?").run(id);
+  }
+  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
+});
+
+// The fixture's shipped hashes are trusted build data, in the same existing history format.
+async function fixtureHistory(repo: string, history: BundledThemeHistory): Promise<BundledThemeHistory> {
+  const files = await readThemeFiles(path.join(repo, "design system themes", SLUG));
+  if (files === null) throw new Error("Unsafe shipped fixture");
+  const additive = Object.fromEntries(["palette", "canonical"].map(directory => {
+    const name = directory === "palette" ? "palette" : "canonical";
+    return [name, [...(history.additive?.[SLUG]?.[name] ?? []), themeAdditiveDigest(files, name)]];
+  }));
+  return { ...history, additive: { ...history.additive, [SLUG]: additive } };
+}
+async function seedBundledDesignSystems(
+  repo: string, systems: string, history: BundledThemeHistory, refresh: BundledThemeRefresh = refreshBundledTheme,
+) {
+  await seedBundled(repo, systems, await fixtureHistory(repo, history), refresh);
+}
 
 const SLUG = "light";
 const source = path.join(resolveRepoRoot(), "design system themes", SLUG);
@@ -47,6 +77,12 @@ async function upgradedProfile(files: Readonly<Record<string, string>>) {
     await mkdir(path.dirname(path.join(installed, relative)), { recursive: true });
     await writeFile(path.join(installed, relative), text);
   }
+  const id = bundledDesignSystemId(SLUG);
+  getSqlite().query(`INSERT INTO design_systems(id,name,status,source_type,is_template,dir_path,skill_md_path,tokens_css_path,readme_md_path,created_at,updated_at)
+    VALUES (?,?,'published','sample',0,?,?,?,?,1,1)`).run(
+    id, "Light", installed, ...["SKILL.md", "colors_and_type.css", "README.md"].map(file => path.join(installed, file)),
+  );
+  ownedIds.push(id);
   return { systems, installed, repoRoot, shipped };
 }
 
@@ -55,7 +91,18 @@ const legacyHistory: BundledThemeHistory = {
   retired: { "liquid-glass/liquid-glass.mjs": [themeFileHash(Buffer.from(retiredRuntime))] },
 };
 
-const hidden = async (systems: string) => (await readdir(systems)).filter((name) => name.startsWith("."));
+const hidden = async (systems: string) => {
+  const names: string[] = [];
+  for (const name of await readdir(systems)) {
+    if (name === ".catalog-locks") { expect(await readdir(path.join(systems, name))).toEqual([]); continue; }
+    if (name === ".system-content") {
+      for (const operation of await readdir(path.join(systems, name))) names.push(path.join(name, operation, "previous"));
+      continue;
+    }
+    if (name.startsWith(".")) names.push(name);
+  }
+  return names;
+};
 
 /** A real refresh whose numbered directory renames fail, as a folder held open by another process does on Windows. */
 function lockedRefresh(...failing: number[]): BundledThemeRefresh {
@@ -68,6 +115,93 @@ function lockedRefresh(...failing: number[]): BundledThemeRefresh {
 }
 
 describe("bundled theme refresh on upgrade", () => {
+  test("Given excluded payload exceeds the whole-copy budget When recognizing a bundle Then no payload is read into memory", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "bg-bundle-budget-"));
+    roots.push(root);
+    await mkdir(path.join(root, ".git"));
+    const payload = path.join(root, ".git", "oversized");
+    const handle = await open(payload, "w");
+    try { await handle.truncate(DEFAULT_CANONICAL_TREE_LIMITS.bytes + 1); }
+    finally { await handle.close(); }
+    let payloadReads = 0;
+    const originalRead = fsp.readFile;
+    const originalOpen = fsp.open;
+    const read = spyOn(fsp, "readFile").mockImplementation((async (...args: Parameters<typeof fsp.readFile>) => {
+      if (args[0] === payload) { payloadReads += 1; throw new Error("OVER_BUDGET_PAYLOAD_READ"); }
+      return originalRead(...args);
+    }) as typeof fsp.readFile);
+    const opened = spyOn(fsp, "open").mockImplementation(async (...args: Parameters<typeof fsp.open>) => {
+      if (args[0] === payload) { payloadReads += 1; throw new Error("OVER_BUDGET_PAYLOAD_READ"); }
+      return originalOpen(...args);
+    });
+    try {
+      expect(await readThemeFiles(root)).toBeNull();
+      expect(payloadReads).toBe(0);
+    } finally { read.mockRestore(); opened.mockRestore(); }
+  });
+
+  test.each(["metadata", "held-lock"] as const)(
+    "Given a missing live bundle protected by %s When standalone seeding runs Then it is not recreated",
+    async protection => {
+      const { systems, installed, repoRoot } = await upgradedProfile(legacyTheme);
+      const id = bundledDesignSystemId(SLUG);
+      const saved = path.join(path.dirname(systems), "preserved-system");
+      await rename(installed, saved);
+      if (protection === "metadata") {
+        getSqlite().query("UPDATE design_systems SET metadata_revision=1,name='User metadata' WHERE id=?").run(id);
+      } else await mkdir(path.join(systems, ".catalog-locks", id), { recursive: true });
+      const row = getSqlite().query("SELECT * FROM design_systems WHERE id=?").get(id);
+      const before = await readThemeFiles(saved);
+
+      await seedBundled(repoRoot, systems, legacyHistory, refreshBundledTheme, "create-missing");
+
+      expect(existsSync(installed)).toBe(false);
+      expect(await readThemeFiles(saved)).toEqual(before);
+      expect(getSqlite().query("SELECT * FROM design_systems WHERE id=?").get(id)).toEqual(row);
+      if (protection === "held-lock") expect(existsSync(path.join(systems, ".catalog-locks", id))).toBe(true);
+    },
+  );
+
+  test("Given a receipt-owned bundle When recognized additions advance Then a real next receipt preserves every legacy byte", async () => {
+    const { systems, installed, repoRoot, shipped } = await upgradedProfile(legacyTheme);
+    await mkdir(path.join(installed, "fonts/user-empty"));
+    const legacyBytes = await Promise.all(Object.keys(legacyTheme).map(file => readFile(path.join(installed, file))));
+    await seedBundledDesignSystems(repoRoot, systems, legacyHistory);
+    const first = getCurrentSystemContent(getSqlite(), bundledDesignSystemId(SLUG));
+    if (first === null) throw new Error("Missing first content authority");
+    const firstFiles = await readThemeFiles(installed);
+    if (firstFiles === null) throw new Error("Unsafe fixture");
+    await writeFile(path.join(shipped, "palette/SKILL.md"), "# Next additive instructions\n");
+    const history: BundledThemeHistory = { ...legacyHistory, additive: { [SLUG]: {
+      palette: [themeAdditiveDigest(firstFiles, "palette")],
+      canonical: [themeAdditiveDigest(firstFiles, "canonical")],
+    } } };
+
+    await seedBundledDesignSystems(repoRoot, systems, history);
+
+    const next = getCurrentSystemContent(getSqlite(), bundledDesignSystemId(SLUG));
+    if (next === null) throw new Error("Missing next content authority");
+    expect(next).toMatchObject({ schemaVersion: 2, status: "committed", contentRevision: 2, parentReceiptId: first.id, parentDigest: first.digest });
+    expect(next.id).not.toBe(first.id);
+    expect(JSON.parse(next.provenanceJson)).toMatchObject({ writer: "bundled-addition", source_extraction: null });
+    expect(parseContentJournal(JSON.parse(next.metadataJson))).toMatchObject({
+      write_set: ["palette/SKILL.md"], palette_history: null, cleanup: "complete",
+    });
+    await expect(bundledAdditionValidator(await fixtureHistory(repoRoot, history))(installed, {
+      ...parseContentJournal(JSON.parse(next.metadataJson)), write_set: ["README.md"],
+    })).rejects.toMatchObject({ code: "system_content_corrupt" });
+    await validateCatalogReceiptTree(installed, next);
+    expect(await Promise.all(Object.keys(legacyTheme).map(file => readFile(path.join(installed, file))))).toEqual(legacyBytes);
+    expect(await readdir(path.join(installed, "fonts/user-empty"))).toEqual([]);
+  });
+
+  test("Given unrecognized shipped additions When refresh runs Then no receipt or files are manufactured", async () => {
+    const { installed, shipped } = await upgradedProfile(legacyTheme);
+    const before = await readThemeFiles(installed);
+    await refreshBundledTheme(bundledDesignSystemId(SLUG), shipped, installed, legacyHistory);
+    expect(await readThemeFiles(installed)).toEqual(before);
+    expect(getCurrentSystemContent(getSqlite(), bundledDesignSystemId(SLUG))).toBeNull();
+  });
   test("Given historical legacy bytes When the bundle has no additions Then startup preserves the installed tree", async () => {
     const { systems, installed } = await upgradedProfile(legacyTheme);
     const before = await readThemeFiles(installed);
@@ -119,8 +253,6 @@ describe("bundled theme refresh on upgrade", () => {
     const artifact = Buffer.from('<link rel="stylesheet" href="legacy.css"><p>Saved artwork</p>');
     await writeFile(path.join(projectDir, "index.html"), artifact);
     await writeFile(path.join(projectDir, "legacy.css"), legacyTheme["colors_and_type.css"]);
-    db.prepare("INSERT INTO design_systems(id,name,status,source_type,is_template,dir_path,skill_md_path,tokens_css_path,readme_md_path,created_at,updated_at) VALUES (?,?,'published','sample',0,?,?,?,?,1,1)")
-      .run(systemId, "Light", installed, ...["SKILL.md", "colors_and_type.css", "README.md"].map(file => path.join(installed, file)));
     db.prepare("INSERT INTO projects(id,name,type,design_system_id,dir_path,backend_id,created_at,updated_at) VALUES (?,?,'prototype',?,?,'codex',1,1)").run(id, "Historical", systemId, projectDir);
     try {
       const baseline = await ensureProjectDesignSystemPin(id);
@@ -132,7 +264,6 @@ describe("bundled theme refresh on upgrade", () => {
       expect(await readFile(path.join(projectDir, "legacy.css"), "utf8")).toBe(legacyTheme["colors_and_type.css"]);
     } finally {
       db.prepare("DELETE FROM projects WHERE id=?").run(id);
-      db.prepare("DELETE FROM design_systems WHERE id=?").run(systemId);
     }
   });
 
@@ -205,6 +336,11 @@ describe("bundled theme refresh on upgrade", () => {
     expect(existsSync(installed)).toBe(false);
     expect(kept).toHaveLength(1);
     expect(await readThemeFiles(path.join(systems, kept[0]!))).toEqual(before);
+    // A standalone seed pass must not turn the publisher's missing live path into a fresh install.
+    await seedBundledDesignSystems(repoRoot, systems, legacyHistory);
+    expect(existsSync(installed)).toBe(false);
+    expect(await hidden(systems)).toEqual(kept);
+    expect(await readThemeFiles(path.join(systems, kept[0]!))).toEqual(before);
   });
 
   test("Given a theme already upgraded When startup seeds themes again Then nothing is rewritten", async () => {
@@ -225,6 +361,10 @@ describe("bundled theme refresh on upgrade", () => {
     expect(existsSync(installed)).toBe(false);
 
     await reconcileExtractionPublications(systems);
+    await recoverSystemContent({
+      db: getSqlite(), systemsRoot: systems, operationId: crypto.randomUUID, now: () => 2,
+      validators: { "bundled-addition": bundledAdditionValidator(await fixtureHistory(repoRoot, legacyHistory)) },
+    });
     await seedBundledDesignSystems(repoRoot, systems, legacyHistory);
 
     expect(await readFile(path.join(installed, "fonts", "Brand.woff2"), "utf8")).toBe("brand font bytes");
