@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, expect, spyOn, test } from "bun:test";
 import JSZip from "jszip";
@@ -9,9 +10,9 @@ import { getSqlite } from "../src/db/sqlite-client";
 import { projectsDir, systemsDir } from "../src/lib/paths";
 import { getProjectDetail } from "../src/db/project-read-repository";
 import { getDesignSystemDetail } from "../src/db/seed";
-import { getContentReceipt } from "../src/db/catalog-repository";
+import { getContentReceipt, getCurrentSystemContent, getPendingSystemOperation } from "../src/db/catalog-repository";
 import { validateCatalogReceiptTree } from "../src/services/catalog-files";
-import { projectBundleImportReceiptsDir, projectBundlePayloadStage, reconcileProjectBundleImports, writeBundleImportOwnerMarker, writeProjectBundleImportReceipt } from "../src/services/project-bundle-import-receipt";
+import { projectBundleImportReceiptsDir, projectBundlePayloadStage, projectBundleSystemStage, reconcileProjectBundleImports, writeBundleImportOwnerMarker, writeProjectBundleImportReceipt } from "../src/services/project-bundle-import-receipt";
 import { rmdir, symlink, unlink } from "node:fs/promises";
 import { canCreateSymlink, SYMLINK_SKIP_REASON } from "./helpers/platform";
 import { readdir } from "node:fs/promises";
@@ -22,6 +23,13 @@ import { ArtifactCoordinator } from "../src/services/artifact-coordinator";
 import { reconcileArtifactState } from "../src/services/artifact-recovery";
 import { listSessionAttachments } from "../src/db/attachments";
 import { selectContextAttachments } from "../src/services/context";
+import { createDefaultPalette, emitPaletteCss, serializePalette } from "@bg/shared/palette";
+import { readDesignSystemPalette, saveDesignSystemPalette } from "../src/services/design-system-palette";
+import { upsertDesignSystemColorToken } from "../src/services/design-system-extract";
+import { authoringContentEnvironment } from "../src/services/design-system-authoring";
+import { withCatalogSnapshot } from "../src/services/catalog-snapshot";
+import { isArtifactProjectBusy } from "../src/services/artifact-project-lock";
+import { ProjectBundleError } from "../src/services/project-bundle-error";
 
 // Bun's `rm` fails with EFAULT on a Windows directory link; remove the link itself (never the target) per platform.
 const removeDirectoryLink = (link: string): Promise<void> => (process.platform === "win32" ? rmdir(link) : unlink(link));
@@ -34,6 +42,40 @@ const sourceProjectDir = path.join(projectsDir, sourceProjectId);
 const sourceSystemDir = path.join(systemsDir, sourceSystemId);
 const createdProjectIds: string[] = [];
 const createdSystemIds: string[] = [];
+
+function signal() {
+  let resolve = () => {};
+  const promise = new Promise<void>(done => { resolve = done; });
+  return { resolve, promise };
+}
+
+async function bounded<T>(promise: Promise<T>, milliseconds = 15_000): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([promise, new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => reject(new Error("Bundle event deadline exceeded")), milliseconds);
+    })]);
+  } finally { if (timer !== undefined) clearTimeout(timer); }
+}
+
+async function exists(target: string): Promise<boolean> {
+  return stat(target).then(() => true, error => {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") return false;
+    throw error;
+  });
+}
+
+async function bundleFixture() {
+  const exported = await exportProjectBundle(sourceProjectId);
+  const restored = await importProjectBundleFile(new File([exported.bytes], exported.filename), "Consumer fixture");
+  createdProjectIds.push(restored.id);
+  const project = await getProjectDetail(restored.id);
+  if (!project?.design_system_id) throw new Error("Missing bundle fixture system");
+  createdSystemIds.push(project.design_system_id);
+  const system = await getDesignSystemDetail(project.design_system_id);
+  if (system === null) throw new Error("Missing bundle fixture row");
+  return { project, system };
+}
 
 beforeAll(async () => {
   await runMigrations();
@@ -90,6 +132,330 @@ afterAll(async () => {
     if (row) await rm(row.dir_path, { recursive: true, force: true });
   }
 });
+
+test.each(["collection", "materialized"] as const)(
+  "Given bundle %s paused under system access When palette publication queues Then old and following archives contain complete revisions",
+  async boundary => {
+    // Given
+    const originalSource = await inspectCanonicalTree(sourceSystemDir);
+    const { project, system } = await bundleFixture();
+    const initial = await readDesignSystemPalette(system.id);
+    const oldState = createDefaultPalette();
+    const old = await saveDesignSystemPalette(system.id, { expected_digest: initial.expected_digest, state: oldState });
+    if (old.receipt_id === null) throw new Error("Missing old palette receipt");
+    const nextState = { ...oldState, display: { ...oldState.display, appearance: "dark" as const } };
+    const pin = readProjectDesignSystemPin(project.id);
+    const entered = signal(), release = signal(), queued = signal();
+    const pause = async () => {
+      expect(isArtifactProjectBusy(getSqlite(), project.id)).toBe(true);
+      entered.resolve();
+      await release.promise;
+    };
+    const exporting = exportProjectBundle(project.id, boundary === "collection"
+      ? { afterSystemRead: pause } : { onSnapshot: pause });
+    let saving: ReturnType<typeof saveDesignSystemPalette> | undefined;
+    let confirmation: Promise<ReturnType<typeof getCurrentSystemContent>> | undefined;
+    try {
+      await bounded(Promise.race([entered.promise, exporting.then(() => { throw new Error("Missing bundle snapshot barrier"); })]));
+      // When: a following real scheduler event proves Save has also requested access.
+      saving = saveDesignSystemPalette(system.id, { expected_digest: old.expected_digest, state: nextState });
+      confirmation = withCatalogSnapshot(getSqlite(), systemsDir, system.id,
+        async () => getCurrentSystemContent(getSqlite(), system.id), { onAccessQueued: queued.resolve });
+      await bounded(queued.promise);
+      expect(getCurrentSystemContent(getSqlite(), system.id)?.id).toBe(old.receipt_id);
+    } finally { release.resolve(); }
+    const [oldArchive, saved, confirmed] = await bounded(Promise.all([exporting, saving, confirmation]));
+    if (saved === undefined || saved.receipt_id === null) throw new Error("Missing palette save");
+    expect(confirmed?.id).toBe(saved.receipt_id);
+    const following = await exportProjectBundle(project.id);
+    // Then: archive bytes were owned before release; neither JSON/CSS pair lazily reopens live paths.
+    for (const [archive, state] of [[oldArchive, oldState], [following, nextState]] as const) {
+      const zip = await JSZip.loadAsync(archive.bytes);
+      expect(await zip.file("design-system/palette/state.json")?.async("text")).toBe(serializePalette(state));
+      expect(await zip.file("design-system/palette/scales.css")?.async("text")).toBe(emitPaletteCss(state));
+      const portable = archive.manifest.design_system.pin;
+      expect(portable).toEqual(pin === null ? null : { revision: pin.revision, digest: pin.digest, context: pin.context, tokens: pin.tokens });
+      if (portable !== null) {
+        expect(portable.digest).toBe(createHash("sha256").update(JSON.stringify([portable.context, portable.tokens])).digest("hex"));
+      }
+    }
+    expect(await inspectCanonicalTree(sourceSystemDir)).toEqual(originalSource);
+    expect(isArtifactProjectBusy(getSqlite(), project.id)).toBe(false);
+  },
+);
+
+test.each(["metadata", "pin"] as const)(
+  "Given bundle bytes collected When external %s changes before confirmation Then export rejects the inconsistent snapshot",
+  async kind => {
+    const { project, system } = await bundleFixture();
+    await expect(exportProjectBundle(project.id, { afterSystemRead: async () => {
+      if (kind === "metadata") getSqlite().prepare("UPDATE design_systems SET name=? WHERE id=?").run("Changed metadata", system.id);
+      else {
+        const pin = readProjectDesignSystemPin(project.id);
+        if (pin === null) throw new Error("Missing fixture pin");
+        const tokens = `${pin.tokens}\n/* concurrent pin */`;
+        const digest = createHash("sha256").update(JSON.stringify([pin.context, tokens])).digest("hex");
+        getSqlite().prepare("UPDATE project_design_system_pins SET tokens=?,digest=? WHERE project_id=?").run(tokens, digest, project.id);
+      }
+    } })).rejects.toMatchObject({ code: "project_bundle_unavailable" });
+    expect(isArtifactProjectBusy(getSqlite(), project.id)).toBe(false);
+  },
+);
+
+test.each(["system-restored", "before-commit", "outer-committed", "owner-removed"] as const)(
+  "Given an import paused at %s When an ordinary token writer queues Then only the committed outer import releases its reserved ID",
+  async boundary => {
+    // Given
+    const originalSource = await inspectCanonicalTree(sourceSystemDir);
+    const exported = await exportProjectBundle(sourceProjectId);
+    const entered = signal(), release = signal(), queued = signal();
+    let systemId: string | null = null;
+    const importing = importProjectBundleFile(new File([exported.bytes], exported.filename), "Reserved import", {
+      atBoundary: async (name, owner) => {
+        if (name !== boundary) return;
+        systemId = owner.systemId;
+        expect(isArtifactProjectBusy(getSqlite(), owner.projectId)).toBe(true);
+        entered.resolve();
+        await release.promise;
+      },
+    });
+    let editing: ReturnType<typeof upsertDesignSystemColorToken> | undefined;
+    let pendingReceiptId: string | undefined;
+    try {
+      await bounded(Promise.race([entered.promise, importing.then(() => { throw new Error("Missing import reservation barrier"); })]));
+      if (systemId === null) throw new Error("Missing reserved ID");
+      const pending = getPendingSystemOperation(getSqlite(), systemId);
+      expect(pending).toMatchObject({ status: "prepared", schemaVersion: 1, contentRevision: 1 });
+      pendingReceiptId = pending?.id;
+      // When
+      editing = upsertDesignSystemColorToken(systemId, { name: "reserved-brand", value: "#abcdef" }, {
+        ...authoringContentEnvironment(), onAccessQueued: queued.resolve,
+      });
+      await bounded(queued.promise);
+      expect(getCurrentSystemContent(getSqlite(), systemId)).toBeNull();
+      expect(getPendingSystemOperation(getSqlite(), systemId)?.id).toBe(pendingReceiptId);
+    } finally { release.resolve(); }
+    const [restored, updated] = await bounded(Promise.all([importing, editing]));
+    createdProjectIds.push(restored.id);
+    const project = await getProjectDetail(restored.id);
+    if (!project?.design_system_id) throw new Error("Missing imported system");
+    createdSystemIds.push(project.design_system_id);
+    // Then
+    expect(updated?.colors).toContainEqual({ name: "reserved-brand", value: "#abcdef" });
+    expect(getSqlite().query("SELECT status,schema_version FROM design_system_receipts WHERE id=?").get(pendingReceiptId ?? "missing"))
+      .toEqual({ status: "committed", schema_version: 1 });
+    expect(getCurrentSystemContent(getSqlite(), project.design_system_id)).toMatchObject({ schemaVersion: 2, contentRevision: 2, status: "committed" });
+    const pin = readProjectDesignSystemPin(restored.id);
+    expect(pin?.digest).toBe(createHash("sha256").update(JSON.stringify([pin?.context, pin?.tokens])).digest("hex"));
+    expect(await exists(path.join(systemsDir, project.design_system_id, ".meta", "bundle-import-owner.json"))).toBe(false);
+    expect(await inspectCanonicalTree(sourceSystemDir)).toEqual(originalSource);
+  },
+);
+
+test("Given a reserved import with failed row cleanup When the request fails Then its prepared v1 owner blocks edits until outer recovery", async () => {
+  const exported = await exportProjectBundle(sourceProjectId);
+  const originalSource = await inspectCanonicalTree(sourceSystemDir);
+  let systemId: string | null = null;
+  let operationId: string | null = null;
+  let preserved: Awaited<ReturnType<typeof inspectCanonicalTree>> | undefined;
+  const db = getSqlite();
+  try {
+    await expect(importProjectBundleFile(new File([exported.bytes], exported.filename), "Held cleanup", {
+      atBoundary: async (name, owner) => {
+        if (name !== "before-commit" || owner.systemId === null) return;
+        systemId = owner.systemId;
+        operationId = owner.operationId;
+        preserved = await inspectCanonicalTree(path.join(systemsDir, owner.systemId));
+        db.exec(`CREATE TEMP TRIGGER consumer_hold_bundle_cleanup BEFORE DELETE ON design_systems
+          WHEN OLD.id='${owner.systemId}' BEGIN SELECT RAISE(ABORT,'fixture cleanup hold'); END`);
+        throw new ProjectBundleError("project_bundle_digest");
+      },
+    })).rejects.toMatchObject({ code: "project_bundle_unavailable" });
+    if (systemId === null || operationId === null || preserved === undefined) throw new Error("Missing held import ownership");
+    expect(getPendingSystemOperation(db, systemId)).toMatchObject({ schemaVersion: 1, status: "prepared" });
+    expect(await inspectCanonicalTree(path.join(systemsDir, systemId))).toEqual(preserved);
+    expect(await exists(path.join(projectBundleImportReceiptsDir(), `${operationId}.json`))).toBe(true);
+    await expect(upsertDesignSystemColorToken(systemId, { name: "blocked-brand", value: "#abcdef" }))
+      .rejects.toMatchObject({ code: "system_content_unavailable" });
+  } finally {
+    db.exec("DROP TRIGGER IF EXISTS consumer_hold_bundle_cleanup");
+    await reconcileProjectBundleImports(db);
+  }
+  if (systemId === null) throw new Error("Missing recovered ID");
+  expect(await getDesignSystemDetail(systemId)).toBeNull();
+  expect(await exists(path.join(systemsDir, systemId))).toBe(false);
+  expect(await inspectCanonicalTree(sourceSystemDir)).toEqual(originalSource);
+});
+
+test("Given a reserved import with a queued editor When publication fails before outer commit Then rollback removes only the new owner", async () => {
+  const exported = await exportProjectBundle(sourceProjectId);
+  const originalSource = await inspectCanonicalTree(sourceSystemDir);
+  const entered = signal(), release = signal(), queued = signal();
+  let owner: { readonly systemId: string; readonly projectId: string; readonly operationId: string } | undefined;
+  const failing = importProjectBundleFile(new File([exported.bytes], exported.filename), "Rollback import", {
+    atBoundary: async (name, value) => {
+      if (name !== "before-commit" || value.systemId === null) return;
+      owner = { ...value, systemId: value.systemId };
+      entered.resolve();
+      await release.promise;
+      throw new ProjectBundleError("project_bundle_digest");
+    },
+  }).then(() => { throw new Error("Failed import unexpectedly committed"); }, error => {
+    expect(error).toMatchObject({ code: "project_bundle_digest" });
+  });
+  let editing: Promise<void> | undefined;
+  try {
+    await bounded(Promise.race([entered.promise, failing.then(() => { throw new Error("Missing rollback barrier"); })]));
+    if (owner === undefined) throw new Error("Missing rollback ownership");
+    editing = upsertDesignSystemColorToken(owner.systemId, { name: "queued-brand", value: "#abcdef" }, {
+      ...authoringContentEnvironment(), onAccessQueued: queued.resolve,
+    }).then(() => { throw new Error("Editor entered a rolled-back import"); }, error => {
+      expect(error).toMatchObject({ code: "design_system_not_found" });
+    });
+    await bounded(queued.promise);
+    expect(getPendingSystemOperation(getSqlite(), owner.systemId)).toMatchObject({ schemaVersion: 1, status: "prepared" });
+  } finally { release.resolve(); }
+  await bounded(Promise.all([failing, editing]));
+  if (owner === undefined) throw new Error("Missing completed rollback ownership");
+  expect(await getProjectDetail(owner.projectId)).toBeNull();
+  expect(await getDesignSystemDetail(owner.systemId)).toBeNull();
+  expect(getContentReceipt(getSqlite(), owner.systemId)).toBeNull();
+  expect(await exists(path.join(projectsDir, owner.projectId))).toBe(false);
+  expect(await exists(path.join(systemsDir, owner.systemId))).toBe(false);
+  expect(await exists(projectBundleSystemStage(owner.systemId))).toBe(false);
+  expect(await exists(path.join(projectBundleImportReceiptsDir(), `${owner.operationId}.json`))).toBe(false);
+  expect(await inspectCanonicalTree(sourceSystemDir)).toEqual(originalSource);
+});
+
+test("Given an occupied generated destination When import publication reaches it Then rollback preserves the unowned tree", async () => {
+  const exported = await exportProjectBundle(sourceProjectId);
+  let occupied: string | undefined;
+  let reservedId: string | undefined;
+  try {
+    await expect(importProjectBundleFile(new File([exported.bytes], exported.filename), "Occupied import", {
+      atBoundary: async (name, owner) => {
+        if (name !== "system-reserved" || owner.systemId === null) return;
+        reservedId = owner.systemId;
+        occupied = path.join(systemsDir, owner.systemId);
+        await mkdir(occupied);
+        await writeFile(path.join(occupied, "sentinel.txt"), "unowned bytes\r\n");
+      },
+    })).rejects.toMatchObject({ code: "project_bundle_unavailable" });
+    if (occupied === undefined || reservedId === undefined) throw new Error("Missing collision evidence");
+    expect(await readFile(path.join(occupied, "sentinel.txt"), "utf8")).toBe("unowned bytes\r\n");
+    expect(await getDesignSystemDetail(reservedId)).toBeNull();
+    expect(await exists(projectBundleSystemStage(reservedId))).toBe(false);
+  } finally { if (occupied !== undefined) await rm(occupied, { recursive: true, force: true }); }
+});
+
+test("Given a durable outer commit When finalization fails Then the imported owner is retained rather than rolled back", async () => {
+  const exported = await exportProjectBundle(sourceProjectId);
+  let owner: { readonly systemId: string; readonly projectId: string } | undefined;
+  let manifest: Awaited<ReturnType<typeof inspectCanonicalTree>> | undefined;
+  await expect(importProjectBundleFile(new File([exported.bytes], exported.filename), "Committed finalization", {
+    atBoundary: async (name, value) => {
+      if (name !== "outer-committed" || value.systemId === null) return;
+      owner = { systemId: value.systemId, projectId: value.projectId };
+      createdProjectIds.push(value.projectId);
+      createdSystemIds.push(value.systemId);
+      manifest = await inspectCanonicalTree(path.join(systemsDir, value.systemId));
+      throw new ProjectBundleError("project_bundle_unavailable");
+    },
+  })).rejects.toMatchObject({ code: "project_bundle_unavailable" });
+  if (owner === undefined || manifest === undefined) throw new Error("Missing committed ownership");
+  await reconcileProjectBundleImports(getSqlite());
+  expect(await getProjectDetail(owner.projectId)).not.toBeNull();
+  expect(await getDesignSystemDetail(owner.systemId)).not.toBeNull();
+  expect(await inspectCanonicalTree(path.join(systemsDir, owner.systemId))).toEqual(manifest);
+  expect(getPendingSystemOperation(getSqlite(), owner.systemId)).toMatchObject({ status: "prepared", schemaVersion: 1 });
+  await expect(upsertDesignSystemColorToken(owner.systemId, { name: "blocked-brand", value: "#abcdef" }))
+    .rejects.toMatchObject({ code: "system_content_unavailable" });
+});
+
+test.each(["system-reserved", "system-restored", "outer-committed", "owner-removed"] as const)(
+  "Given a real import stopped at %s When its process exits Then outer-first startup recovers only its owned project and v1 system",
+  async boundary => {
+    const exported = await exportProjectBundle(sourceProjectId);
+    const originalSource = await inspectCanonicalTree(sourceSystemDir);
+    const home = await mkdtemp(path.join(tmpdir(), "bg-bundle-consumer-"));
+    const archive = path.join(home, "input.burnguard-project");
+    const output = path.join(home, "result.json");
+    await writeFile(archive, exported.bytes);
+    const probe = path.join(import.meta.dir, "fixtures/bundle-consumer-recovery-probe.ts");
+    const environment = Object.fromEntries(["PATH", "TMPDIR", "NODE_PATH"].flatMap(key => {
+      const value = process.env[key];
+      return value === undefined ? [] : [[key, value]];
+    }));
+    const env = { ...environment, BG_APP_ROOT: path.join(home, "profile"), HOME: home, USERPROFILE: home, BG_NO_OPEN: "1" };
+    const creator = Bun.spawn([process.execPath, probe, "prepare", boundary, archive, output], {
+      env, stdin: "pipe", stdout: "pipe", stderr: "pipe",
+    });
+    const creatorExit = creator.exited;
+    const creatorErrors = new Response(creator.stderr).text();
+    const reader = creator.stdout.getReader();
+    const run = async (phase: string) => {
+      const child = Bun.spawn([process.execPath, probe, phase, boundary, archive, output], { env, stdout: "ignore", stderr: "pipe" });
+      const exited = child.exited;
+      try {
+        const [code, errors] = await bounded(Promise.all([exited, new Response(child.stderr).text()]), 90_000);
+        expect(code, errors).toBe(0);
+      } finally { child.kill(); await child.exited; }
+    };
+    try {
+      // Given: consume the exact durable event, not a clock or a filesystem poll.
+      let event = "";
+      while (!event.split(/\r?\n/u).includes("BUNDLE_BOUNDARY")) {
+        const chunk = await bounded(reader.read());
+        if (chunk.done) throw new Error(`Import ended before its boundary: ${await creatorErrors}`);
+        event += new TextDecoder().decode(chunk.value);
+      }
+      const before: unknown = JSON.parse(await readFile(output, "utf8"));
+      if (typeof before !== "object" || before === null || !("system_manifest" in before) ||
+        !("project_manifest" in before) || !("pin" in before) || !("sidecar" in before)) {
+        throw new Error("Invalid import boundary evidence");
+      }
+      await run("edit");
+      // When: a real exit bypasses the import's catch, owner cleanup and both lock releases.
+      creator.stdin.write("exit\n");
+      creator.stdin.end();
+      expect(await bounded(creatorExit), await creatorErrors).toBe(77);
+      await run("edit");
+      await run("recover");
+      const result: unknown = JSON.parse(await readFile(output, "utf8"));
+      // Then
+      expect(result).toMatchObject({
+        before, pending: null, outer_present: false, payload_present: false, stage_present: false, lock_present: false,
+      });
+      if (boundary === "system-reserved" || boundary === "system-restored") {
+        expect(result).toMatchObject({
+          first: { system: null, project: null, head: null, pin: null },
+          system: null, project: null, head: null, pin: null,
+          system_present: false, project_present: false, system_owner: false, project_owner: false,
+        });
+      } else {
+        expect(result).toMatchObject({
+          first: {
+            head: { schemaVersion: 1, contentRevision: 1, status: "committed" },
+            system_manifest: before.system_manifest, project_manifest: before.project_manifest, pin: before.pin,
+          },
+          head: { schemaVersion: 1, contentRevision: 1, status: "committed" },
+          system_manifest: before.system_manifest, project_manifest: before.project_manifest,
+          pin: before.pin, sidecar: before.sidecar, system_present: true, project_present: true,
+          // Existing committed-outer recovery preserves live owner evidence if exit preceded its removal.
+          system_owner: boundary === "outer-committed", project_owner: boundary === "outer-committed",
+        });
+      }
+      expect(await inspectCanonicalTree(sourceSystemDir)).toEqual(originalSource);
+    } finally {
+      creator.kill();
+      await creatorExit;
+      await reader.cancel();
+      reader.releaseLock();
+      await creatorErrors;
+      await rm(home, { recursive: true, force: true });
+    }
+  }, 120_000,
+);
 
 test("Given a project with retained sources, checkpoints, a custom system, and a pin When bundled and imported Then a new editable project restores every portable part", async () => {
   // Given
@@ -172,7 +538,7 @@ test("Given a bundle that references an unavailable builtin system When imported
     },
   };
   zip.file(PROJECT_BUNDLE_MANIFEST_PATH, JSON.stringify(manifest));
-  const file = new File([await zip.generateAsync({ type: "uint8array", compression: "DEFLATE" })], "missing-system.burnguard-project");
+  const file = new File([new Uint8Array(await zip.generateAsync({ type: "uint8array", compression: "DEFLATE" }))], "missing-system.burnguard-project");
 
   // When
   const restored = await importProjectBundleFile(file, "Missing builtin");
@@ -206,7 +572,7 @@ async function rewrittenBundle(mutate: (manifest: ProjectBundleManifest, zip: JS
   if (!entry) throw new Error("missing manifest");
   const manifest = mutate(parseProjectBundleManifest(JSON.parse(await entry.async("text"))), zip);
   zip.file(PROJECT_BUNDLE_MANIFEST_PATH, JSON.stringify(manifest));
-  return new File([await zip.generateAsync({ type: "uint8array", compression: "DEFLATE" })], "rewritten.burnguard-project");
+  return new File([new Uint8Array(await zip.generateAsync({ type: "uint8array", compression: "DEFLATE" }))], "rewritten.burnguard-project");
 }
 
 test("Given archived options with unknown fields When imported Then only allowlisted project options are stored", async () => {

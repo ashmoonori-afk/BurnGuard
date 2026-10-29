@@ -16,6 +16,9 @@ import { persistCanonicalExtraction } from "./design-system-extract";
 import { DesignSystemAssetEditError } from "./extraction-asset-errors";
 import type { ExtractionDiscovery } from "./extraction-provenance";
 import type { SourceAnalysis } from "./extraction-local-tree";
+import { getSqlite } from "../db/sqlite-client";
+import { systemsDir } from "../lib/paths";
+import { withCatalogSnapshot, type CatalogAccessEvents } from "./catalog-snapshot";
 
 const COLOR = /^(?:#[0-9a-f]{3,8}|(?:rgb|rgba|hsl|hsla|oklch|oklab|lab|lch|color)\([^)]*\))$/iu;
 
@@ -34,7 +37,9 @@ const LAYOUT_HEADINGS: Readonly<Record<string, string>> = {
 };
 
 /** Any registered system, bundled themes included, as one portable Markdown file. */
-export async function exportDesignMd(systemId: string): Promise<{ readonly filename: string; readonly markdown: string }> {
+export async function exportDesignMd(systemId: string, events: CatalogAccessEvents = {}): Promise<{ readonly filename: string; readonly markdown: string }> {
+  if (!await getDesignSystemDetail(systemId)) throw new DesignSystemAssetEditError("design_system_not_found", "Design system not found");
+  return withCatalogSnapshot(getSqlite(), systemsDir, systemId, async () => {
   const detail = await getDesignSystemDetail(systemId);
   if (!detail) throw new DesignSystemAssetEditError("design_system_not_found", "Design system not found");
   const tokens = Object.fromEntries(DESIGN_MD_TOKEN_GROUPS.map((group) => [group, {} as Record<string, string>])) as Record<DesignMdTokenGroup, Record<string, string>>;
@@ -58,6 +63,7 @@ export async function exportDesignMd(systemId: string): Promise<{ readonly filen
   };
   const slug = detail.name.normalize("NFKD").replace(/[^\w-]+/gu, "-").replace(/^-+|-+$/gu, "").toLowerCase() || "design-system";
   return { filename: `${slug}.DESIGN.md`, markdown: renderDesignMd(doc) };
+  }, events);
 }
 
 function analysisFromDesignMd(doc: DesignMd): SourceAnalysis {

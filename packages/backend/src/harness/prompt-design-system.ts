@@ -10,6 +10,11 @@ import path from "node:path";
 import { readDesignSystemSurface } from "../services/design-system-surface";
 import { readDesignSystemRules } from "../services/design-system-rules";
 import type { buildSessionContext } from "../services/context";
+import { mkdir } from "node:fs/promises";
+import { getSqlite } from "../db/sqlite-client";
+import { systemsDir } from "../lib/paths";
+import { assertSystemContentLease, type SystemContentLease } from "../services/system-content-access";
+import { withCatalogSnapshot, type CatalogAccessEvents } from "../services/catalog-snapshot";
 
 type SessionContext = NonNullable<
   Awaited<ReturnType<typeof buildSessionContext>>
@@ -199,7 +204,15 @@ export async function appendDesignSystemContext(
   contextMode: "compact" | "full",
   surface: DesignSurface,
   pinned = false,
+  lease?: SystemContentLease,
+  events: CatalogAccessEvents = {},
 ): Promise<void> {
+  if (lease === undefined) {
+    await mkdir(systemsDir, { recursive: true });
+    return withCatalogSnapshot(getSqlite(), systemsDir, designSystem.id,
+      owned => appendDesignSystemContext(lines, designSystem, contextMode, surface, pinned, owned), events);
+  }
+  assertSystemContentLease(lease, systemsDir, designSystem.id);
   lines.push("## Design system");
   lines.push(`- name: ${designSystem.name}`);
   if (!pinned) lines.push(`- directory: ${designSystem.dir_path}`);

@@ -8,6 +8,9 @@ import { getProjectDetail } from "../db/project-read-repository";
 import { systemsDir, resolveManagedPath } from "../lib/paths";
 import { appendDesignSystemContext } from "../harness/prompt-design-system";
 import { readDesignSystemSourceFile } from "./design-system-layout";
+import { assertSystemContentLease, type SystemContentLease } from "./system-content-access";
+import { withCatalogSnapshot, type CatalogAccessEvents } from "./catalog-snapshot";
+import { SystemContentError } from "./system-content-format";
 
 export type DesignSystemPin = { system_id: string; revision: number; digest: string; context: string; tokens: string };
 export class DesignSystemPinError extends Error {
@@ -21,26 +24,36 @@ export function readProjectDesignSystemPin(projectId: string): DesignSystemPin |
   return pin;
 }
 
-async function candidate(projectId: string): Promise<Omit<DesignSystemPin, "revision"> | null> {
+async function candidate(projectId: string, lease?: SystemContentLease, events: CatalogAccessEvents = {}): Promise<Omit<DesignSystemPin, "revision"> | null> {
   const project = await getProjectDetail(projectId);
   if (!project) throw new DesignSystemPinError("pin_unavailable");
   if (!project.design_system_id) return null;
+  if (lease === undefined) {
+    try {
+      return await withCatalogSnapshot(getSqlite(), systemsDir, project.design_system_id,
+        owned => candidate(projectId, owned), events);
+    } catch (error) {
+      if (error instanceof SystemContentError) throw new DesignSystemPinError("pin_unavailable");
+      throw error;
+    }
+  }
+  assertSystemContentLease(lease, systemsDir, project.design_system_id);
   const system = await getDesignSystemDetail(project.design_system_id);
   if (!system || system.archived_at !== null) throw new DesignSystemPinError("pin_unavailable");
   resolveManagedPath(systemsDir, system.dir_path);
   const tokens = system.tokens_css_path ? await readDesignSystemSourceFile(system.dir_path, path.relative(system.dir_path, system.tokens_css_path)) : "";
   const lines: string[] = [];
-  await appendDesignSystemContext(lines, system, "full", surfaceForProjectType(project.type), true);
+  await appendDesignSystemContext(lines, system, "full", surfaceForProjectType(project.type), true, lease);
   const context = lines.join("\n");
   if (context.length > 100_000) throw new DesignSystemPinError("pin_unavailable");
   return { system_id: system.id, digest: hash(context, tokens), context, tokens };
 }
 
 /** New projects pin at creation; older projects pin on their first use after upgrade. */
-export async function ensureProjectDesignSystemPin(projectId: string): Promise<DesignSystemPin | null> {
+export async function ensureProjectDesignSystemPin(projectId: string, lease?: SystemContentLease, events: CatalogAccessEvents = {}): Promise<DesignSystemPin | null> {
   const existing = readProjectDesignSystemPin(projectId);
   if (existing) return existing;
-  const next = await candidate(projectId);
+  const next = await candidate(projectId, lease, events);
   if (!next) return null;
   getSqlite().prepare("INSERT OR IGNORE INTO project_design_system_pins(project_id,system_id,revision,digest,context,tokens) VALUES (?,?,1,?,?,?)")
     .run(projectId, next.system_id, next.digest, next.context, next.tokens);
@@ -52,10 +65,10 @@ function withoutRuleBlock(context: string): string {
   return context.replace(/<selected_design_system_rules>\n[^\n]*\n<\/selected_design_system_rules>\n[^\n]*\n\n?/gu, "");
 }
 
-export async function inspectProjectDesignSystemPin(projectId: string): Promise<ProjectDesignSystemPin | null> {
+export async function inspectProjectDesignSystemPin(projectId: string, events: CatalogAccessEvents = {}): Promise<ProjectDesignSystemPin | null> {
   const current = await ensureProjectDesignSystemPin(projectId);
   if (!current) return null;
-  const next = await candidate(projectId);
+  const next = await candidate(projectId, undefined, events);
   if (!next || next.system_id !== current.system_id) throw new DesignSystemPinError("pin_conflict");
   return { revision: current.revision, digest: current.digest, candidate_digest: next.digest,
     rules_changed: current.context !== next.context, tokens_changed: current.tokens !== next.tokens,

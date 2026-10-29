@@ -43,6 +43,7 @@ import { canCreateSeedSystem, preserveSystemFromSeed } from "./services/startup-
 import { reconcileSystemContentLocks } from "./services/system-content-access";
 import { recoverSystemContent } from "./services/system-content-publication";
 import { paletteContentEnvironment } from "./services/design-system-palette";
+import { authoringContentValidators } from "./services/design-system-authoring";
 
 async function exists(target: string): Promise<boolean> {
   try {
@@ -170,7 +171,7 @@ export async function bootstrapLocalAppData(researchRecovery?: ResearchRecoveryD
   const contentEnvironment = paletteContentEnvironment();
   await recoverSystemContent({
     ...contentEnvironment,
-    validators: { ...contentEnvironment.validators, "bundled-addition": bundledAdditionValidator() },
+    validators: { ...contentEnvironment.validators, ...authoringContentValidators, "bundled-addition": bundledAdditionValidator() },
   });
   for (const { slug } of bundledDesignSystems) {
     const id = bundledDesignSystemId(slug);
@@ -183,6 +184,8 @@ export async function bootstrapLocalAppData(researchRecovery?: ResearchRecoveryD
   }
   await reconcileCatalogState(getSqlite(), systemsDir);
   await reconcileExtractionState();
+  // Legacy create owners can be released only after their v1 recovery has settled.
+  await reconcileSystemContentLocks(getSqlite(), systemsDir);
   await seedSampleDesignSystems();
   await seedCoreData();
   await seedTutorialsOnce();

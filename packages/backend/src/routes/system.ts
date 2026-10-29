@@ -220,6 +220,7 @@ systemRoutes.get("/api/design-systems/:id/tokens", async (c) => {
     const tokens = await readDesignSystemTokens(id);
     return c.json(ok(tokens satisfies DesignSystemTokensResponse));
   } catch (err) {
+    if (err instanceof SystemContentError && err.code !== "system_content_failed") return c.json(fail(err.code, "System content is unavailable"), systemContentStatus(err));
     if (err instanceof DesignSystemAssetEditError) {
       return c.json(fail(err.code, err.message), err.code === "design_system_not_found" ? 404 : 400);
     }
@@ -240,6 +241,7 @@ systemRoutes.patch("/api/design-systems/:id/colors", async (c) => {
     const tokens = await upsertDesignSystemColorToken(id, body);
     return c.json(ok(tokens satisfies DesignSystemTokensResponse));
   } catch (err) {
+    if (err instanceof SystemContentError && err.code !== "system_content_failed") return c.json(fail(err.code, "System content is unavailable"), systemContentStatus(err));
     if (err instanceof DesignSystemAssetEditError) {
       return c.json(fail(err.code, err.message), designSystemEditStatus(err));
     }
@@ -254,6 +256,7 @@ systemRoutes.post("/api/design-systems/:id/rules", async (c) => {
     const rules = await addDesignSystemRule(c.req.param("id"), { kind: Reflect.get(body, "kind"), text: Reflect.get(body, "text"), origin: Reflect.get(body, "origin") });
     return c.json(ok(rules satisfies DesignSystemRules), 201);
   } catch (err) {
+    if (err instanceof SystemContentError && err.code !== "system_content_failed") return c.json(fail(err.code, "System content is unavailable"), systemContentStatus(err));
     if (err instanceof DesignSystemAssetEditError) return c.json(fail(err.code, err.message), designSystemEditStatus(err));
     return c.json(unexpectedFailure("design_system_rule_save_failed", "Design system rule could not be saved", err), 500);
   }
@@ -264,6 +267,7 @@ systemRoutes.delete("/api/design-systems/:id/rules/:ruleId", async (c) => {
     const rules = await deleteDesignSystemRule(c.req.param("id"), c.req.param("ruleId"));
     return c.json(ok(rules satisfies DesignSystemRules));
   } catch (err) {
+    if (err instanceof SystemContentError && err.code !== "system_content_failed") return c.json(fail(err.code, "System content is unavailable"), systemContentStatus(err));
     if (err instanceof DesignSystemAssetEditError) return c.json(fail(err.code, err.message), designSystemEditStatus(err));
     return c.json(unexpectedFailure("design_system_rule_delete_failed", "Design system rule could not be deleted", err), 500);
   }
@@ -333,9 +337,14 @@ systemRoutes.post("/api/design-systems/:id/fonts", async (c) => {
     });
     return c.json(ok(uploaded satisfies DesignSystemFontUploadResponse), 201);
   } catch (err) {
+    if (err instanceof SystemContentError && err.code !== "system_content_failed") return c.json(fail(err.code, "System content is unavailable"), systemContentStatus(err));
     if (err instanceof DesignSystemAssetEditError) {
       return c.json(fail(err.code, err.message), designSystemEditStatus(err));
     }
     return c.json(unexpectedFailure("design_system_font_upload_failed", "Design system font could not be uploaded", err), 500);
   }
 });
+
+function systemContentStatus(error: SystemContentError): 409 | 412 | 500 {
+  return error.code === "expected_digest_conflict" ? 412 : error.code === "system_content_failed" ? 500 : 409;
+}

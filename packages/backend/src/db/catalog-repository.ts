@@ -109,7 +109,7 @@ export function updateCatalogMetadata(db: Database, input: MetadataInput): void 
   db.transaction(() => {
     if (getPendingSystemOperation(db, input.id) !== null) throw new CatalogRepositoryError("operation_conflict", input.id);
     const changed = db.prepare(`UPDATE design_systems SET name=?,description=?,status=?,catalog_kind=?,provenance_state=?,license_state=?,lifecycle=?,archived_at=?,
-      metadata_revision=metadata_revision+1,updated_at=? WHERE id=? AND metadata_revision=?`).run(
+      metadata_revision=metadata_revision+1,updated_at=? WHERE id=? AND metadata_revision=? AND lifecycle IN ('active','archived')`).run(
         input.name, input.description, input.status, input.kind, input.provenance, input.license, input.lifecycle,
         input.lifecycle === "archived" ? input.updatedAt : null, input.updatedAt, input.id, input.expectedRevision,
       ).changes;

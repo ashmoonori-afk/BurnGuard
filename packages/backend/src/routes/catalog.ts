@@ -1,20 +1,19 @@
-import { stat } from "node:fs/promises";
 import path from "node:path";
 import { Hono } from "hono";
 import type { Context } from "hono";
-import type { ApiErrorBody, ApiSuccess, DesignSystemPreview } from "@bg/shared";
+import type { ApiErrorBody, ApiSuccess } from "@bg/shared";
 import { getSqlite } from "../db/sqlite-client";
-import { CatalogRepositoryError, getCatalogRow, getCatalogTags, getCatalogUsage, updateCatalogMetadata } from "../db/catalog-repository";
+import { CatalogRepositoryError, getCatalogRow, getCatalogUsage, getPendingSystemOperation } from "../db/catalog-repository";
 import { systemsDir } from "../lib/paths";
-import { CatalogFileError, catalogPaths, inspectCatalogTree } from "../services/catalog-files";
-import { assertSafeName, resolveWithin } from "../security/path-boundary";
+import { CatalogFileError } from "../services/catalog-files";
+import { PathBoundaryError } from "../security/path-boundary";
 import { rawFileHeaders } from "../security/raw-file-response";
-import { BUNDLED_SLIDES_PREVIEW, BUNDLED_WEBSITE_PREVIEW, hasBundledSlidesPreview, hasBundledSystemPreview, readBundledSystemPreview } from "../services/bundled-system-preview";
 import {
   CatalogLifecycleError, copyCatalogSystem, purgeCatalogSystem, restoreCatalogSystem, trashCatalogSystem,
 } from "../services/catalog-lifecycle";
 import { CatalogQueryError, parseCatalogQuery } from "../services/catalog-query";
-import { getCatalogSystem, listCatalogSystems } from "../services/catalog-service";
+import { getCatalogSystem, listCatalogSystems, patchCatalogSystem, readCatalogFile, readCatalogPreviews } from "../services/catalog-service";
+import { SystemContentError } from "../services/system-content-format";
 import { CatalogInputError, parseChildRequest, parseEmptyBody, parseMetadataPatch } from "./catalog-input";
 
 function ok<T>(data: T, meta?: { readonly total: number; readonly limit: number; readonly offset: number }): ApiSuccess<T> {
@@ -29,15 +28,13 @@ export const catalogRoutes = new Hono();
 catalogRoutes.get("/api/design-systems/:id/previews", async (c) => {
   try {
     const id = c.req.param("id");
-    const row = getCatalogRow(getSqlite(), id);
-    if (row === null || row.lifecycle === "trashed") return c.json(fail("design_system_not_found", "Design system not found"), 404);
-    const paths = await catalogPaths(systemsDir, id, row.dirPath);
-    const tree = await inspectCatalogTree(paths.live);
-    const previews: DesignSystemPreview[] = tree.files.filter((file) => /^(?:preview\/[^/]+|preview)\.html?$/i.test(file)).map((file) => ({ path: file }));
-    if (!previews.some(preview => preview.path === BUNDLED_WEBSITE_PREVIEW) && await hasBundledSystemPreview(id)) previews.unshift({ path: BUNDLED_WEBSITE_PREVIEW });
-    if (!previews.some(preview => preview.path === BUNDLED_SLIDES_PREVIEW) && hasBundledSlidesPreview(id)) previews.push({ path: BUNDLED_SLIDES_PREVIEW });
+    const previews = await readCatalogPreviews(getSqlite(), systemsDir, id);
+    if (previews === null) return c.json(fail("design_system_not_found", "Design system not found"), 404);
     return c.json(ok(previews));
-  } catch (error) { return catalogError(c, error); }
+  } catch (error) {
+    if (error instanceof SystemContentError && error.code === "system_content_unavailable" && isTrashed(c.req.param("id"))) return c.json(fail("design_system_not_found", "Design system not found"), 404);
+    return catalogError(c, error);
+  }
 });
 
 catalogRoutes.get("/api/design-systems", async (c) => {
@@ -55,19 +52,18 @@ catalogRoutes.get("/api/design-systems/:id/files/*", async (c) => {
   const prefix = `/api/design-systems/${id}/files/`;
   let relPath = "";
   try {
-    const row = getCatalogRow(getSqlite(), id);
-    if (row === null || row.lifecycle === "trashed") return c.json(fail("design_system_file_not_found", "Design system file not found"), 404);
     const rawPath = new URL(c.req.url).pathname;
     relPath = rawPath.startsWith(prefix) ? decodeURIComponent(rawPath.slice(prefix.length)) : "";
-    const paths = await catalogPaths(systemsDir, id, row.dirPath);
-    const candidate = resolveWithin(paths.live, ...relPath.replaceAll("\\", "/").split("/").map(assertSafeName));
-    const info = await stat(candidate).catch((error: NodeJS.ErrnoException) => { if (error.code === "ENOENT") return null; throw error; });
-    const bundled = info === null ? await readBundledSystemPreview(id, relPath) : null;
-    if (!info?.isFile() && bundled === null) return c.json(fail("design_system_file_not_found", "Design system file not found"), 404);
+    const bytes = await readCatalogFile(getSqlite(), systemsDir, id, relPath);
+    if (bytes === null) return c.json(fail("design_system_file_not_found", "Design system file not found"), 404);
     const type = catalogContentType(relPath);
-    return new Response(bundled ?? Bun.file(candidate), { headers: { ...rawFileHeaders(c.req.raw, { contentType: type, filename: path.basename(candidate) }), "Content-Type": type, "Cache-Control": "no-cache" } });
+    return new Response(bytes, { headers: { ...rawFileHeaders(c.req.raw, { contentType: type, filename: path.basename(relPath.replaceAll("\\", "/")) }), "Content-Type": type, "Cache-Control": "no-cache" } });
   } catch (error) {
-    if (error instanceof Error) return c.json(fail("design_system_file_not_found", "Design system file not found", { id, path: relPath }), 404);
+    if (error instanceof SystemContentError && error.code === "system_content_unavailable" && isTrashed(id)) return c.json(fail("design_system_file_not_found", "Design system file not found"), 404);
+    if (error instanceof SystemContentError) return catalogError(c, error);
+    if (error instanceof PathBoundaryError || error instanceof URIError) return c.json(fail("design_system_file_not_found", "Design system file not found"), 404);
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") return c.json(fail("design_system_file_not_found", "Design system file not found"), 404);
+    if (error instanceof Error) return catalogError(c, error);
     throw error;
   }
 });
@@ -86,25 +82,8 @@ catalogRoutes.get("/api/design-systems/:id", async (c) => {
 catalogRoutes.patch("/api/design-systems/:id", async (c) => {
   try {
     const id = c.req.param("id");
-    const row = getCatalogRow(getSqlite(), id);
-    if (row === null) return c.json(fail("design_system_not_found", "Design system not found"), 404);
-    if (row.lifecycle === "trashed") return c.json(fail("invalid_lifecycle", "Restore the system before editing metadata"), 409);
     const patch = parseMetadataPatch(await jsonBody(c.req.raw));
-    updateCatalogMetadata(getSqlite(), {
-      id,
-      expectedRevision: patch.expectedRevision,
-      name: patch.name ?? row.name,
-      description: patch.description === undefined ? row.description : patch.description,
-      status: patch.status ?? row.status,
-      tags: patch.tags ?? getCatalogTags(getSqlite(), id),
-      kind: patch.kind ?? row.kind,
-      provenance: patch.provenance ?? row.provenance,
-      license: patch.license ?? row.license,
-      lifecycle: patch.lifecycle ?? (row.lifecycle === "archived" ? "archived" : "active"),
-      updatedAt: Date.now(),
-    });
-    const result = await getCatalogSystem(getSqlite(), systemsDir, id);
-    if (result === null) return c.json(fail("design_system_not_found", "Design system not found"), 404);
+    const result = await patchCatalogSystem(getSqlite(), systemsDir, id, patch);
     return c.json(ok(result));
   } catch (error) {
     return catalogError(c, error);
@@ -197,26 +176,32 @@ function catalogContentType(file: string): string {
 }
 
 function catalogError(c: Context, error: unknown): Response {
+  if (error instanceof SystemContentError) return c.json(fail(error.code === "system_content_failed" ? "catalog_operation_failed" : error.code, "System content is unavailable"),
+    error.code === "expected_digest_conflict" ? 412 : error.code === "system_content_failed" ? 500 : 409);
   if (error instanceof CatalogQueryError) return c.json(fail(error.code, error.message, { field: error.field }), 400);
   if (error instanceof CatalogInputError) return c.json(fail(error.code, error.message, { field: error.field }), 400);
   if (error instanceof CatalogRepositoryError) {
-    if (error.code === "expected_revision_conflict") return c.json(fail(error.code, error.message), 412);
-    if (error.code === "not_found") return c.json(fail("design_system_not_found", error.message), 404);
-    return c.json(fail(error.code, error.message), 409);
+    if (error.code === "expected_revision_conflict") return c.json(fail(error.code, "Catalog metadata changed"), 412);
+    if (error.code === "not_found") return c.json(fail("design_system_not_found", "Design system not found"), 404);
+    return c.json(fail(error.code, "Catalog operation conflicts with current state"), 409);
   }
   if (error instanceof CatalogLifecycleError) {
     if (error.code === "design_system_not_found") return c.json(fail(error.code, error.message), 404);
-    if (error.code === "catalog_operation_failed") return c.json(fail(error.code, error.message), 500);
+    if (error.code === "catalog_operation_failed") return c.json(fail(error.code, "Catalog operation failed"), 500);
     if (error.code === "has_active_projects") {
       const id = c.req.param("id");
       const projectRefs = id === undefined ? [] : getCatalogUsage(getSqlite(), id);
       return c.json(fail(error.code, error.message, { project_refs: projectRefs }), 409);
     }
-    return c.json(fail(error.code, error.message), 409);
+    return c.json(fail(error.code, "Catalog operation conflicts with current state"), 409);
   }
   if (error instanceof CatalogFileError) {
     return c.json(fail(error.code, "Catalog operation failed"), error.code === "unsafe_catalog_path" || error.code === "catalog_digest_mismatch" || error.code === "catalog_manifest_unverifiable" ? 409 : 500);
   }
   console.warn("[catalog] request failed", error instanceof Error ? String(Reflect.get(error, "code") ?? error.name) : "unknown");
   return c.json(fail("catalog_operation_failed", "Catalog operation failed"), 500);
+}
+
+function isTrashed(id: string): boolean {
+  return getCatalogRow(getSqlite(), id)?.lifecycle === "trashed" && getPendingSystemOperation(getSqlite(), id) === null;
 }

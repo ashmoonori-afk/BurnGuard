@@ -1,13 +1,23 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
+import * as fsp from "node:fs/promises";
 import { createHash } from "node:crypto";
-import { mkdir, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
+import { link, mkdir, open, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { createDefaultPalette, serializePalette } from "@bg/shared/palette";
+import { getCatalogRow, getCurrentSystemContent, getLineageReceipt, updateCatalogMetadata } from "../src/db/catalog-repository";
 import { runMigrations } from "../src/db/migrate-local";
 import { getSqlite } from "../src/db/sqlite-client";
 import { systemsDir } from "../src/lib/paths";
 import { classifyApiRoute, createApp } from "../src/server";
-import { catalogPaths, inspectCatalogTree } from "../src/services/catalog-files";
-import { reconcileCatalogState } from "../src/services/catalog-lifecycle";
+import { catalogPaths, inspectCatalogTree, validateCatalogReceiptTree } from "../src/services/catalog-files";
+import { copyCatalogSystem, reconcileCatalogState, restoreCatalogSystem, trashCatalogSystem } from "../src/services/catalog-lifecycle";
+import { getCatalogSystem, patchCatalogSystem, readCatalogFile } from "../src/services/catalog-service";
+import { paletteContentEnvironment, readDesignSystemPalette, saveDesignSystemPalette } from "../src/services/design-system-palette";
+import { readDesignSystemTokens, upsertDesignSystemColorToken } from "../src/services/design-system-extract";
+import { authoringContentEnvironment } from "../src/services/design-system-authoring";
+import { withSystemContentAccess, withSystemContentLocks } from "../src/services/system-content-access";
+import { inspectContentTree } from "../src/services/system-content-tree";
+import { readBundledSystemPreview } from "../src/services/bundled-system-preview";
 import { canCreateSymlink } from "./helpers/platform";
 
 const app = createApp();
@@ -21,7 +31,7 @@ function id(label: string): string {
   return value;
 }
 
-async function seedSystem(label: string, options: { readonly receipt?: boolean; readonly name?: string; readonly exactId?: string } = {}): Promise<string> {
+async function seedSystem(label: string, options: { readonly receipt?: boolean; readonly name?: string; readonly exactId?: string; readonly files?: Readonly<Record<string, string>> } = {}): Promise<string> {
   const systemId = options.exactId ?? id(label);
   const dir = path.join(systemsDir, systemId);
   await mkdir(dir);
@@ -36,6 +46,10 @@ async function seedSystem(label: string, options: { readonly receipt?: boolean; 
     writeFile(path.join(dir, "fonts", "fonts.css"), ""),
     writeFile(path.join(dir, "extraction-provenance.json"), JSON.stringify({ schema_version: 1, digest_algorithm: "sha256", content_digest: digest, content: provenanceContent, generated_at: 100 })),
   ]);
+  for (const [relative, text] of Object.entries(options.files ?? {})) {
+    await mkdir(path.dirname(path.join(dir, relative)), { recursive: true });
+    await writeFile(path.join(dir, relative), text);
+  }
   const now = 100;
   getSqlite().prepare(`INSERT INTO design_systems
     (id,name,status,source_type,is_template,dir_path,skill_md_path,tokens_css_path,readme_md_path,created_at,updated_at)
@@ -46,7 +60,7 @@ async function seedSystem(label: string, options: { readonly receipt?: boolean; 
   ids.push(systemId);
   if (options.receipt === true) {
     const files = await Promise.all([
-      "README.md", "SKILL.md", "colors_and_type.css", "extraction-provenance.json", "fonts/fonts.css",
+      "README.md", "SKILL.md", "colors_and_type.css", "extraction-provenance.json", "fonts/fonts.css", ...Object.keys(options.files ?? {}),
     ].sort((left, right) => left < right ? -1 : left > right ? 1 : 0).map(async (relativePath) => {
       const bytes = await readFile(path.join(dir, relativePath));
       return { path: relativePath, size: bytes.byteLength, sha256: createHash("sha256").update(bytes).digest("hex") };
@@ -172,13 +186,14 @@ describe("catalog query and metadata", () => {
 
     // Then
     expect(result).toMatchObject({ status: 200, json: { data: { content: { revision: 1, receipt_id: `receipt-${systemId}`, digest: contentDigest(systemId) } } } });
+    expect(result.json).toMatchObject({ data: status === "failed" ? { lifecycle: "active", warning: null } : { lifecycle: "partial", warning: { code: "partial_operation" }, preview: null } });
     expect(db.query("SELECT * FROM design_system_receipts WHERE design_system_id=? ORDER BY id").all(systemId)).toEqual(before);
     expect(await readFile(path.join(systemsDir, systemId, "extraction-provenance.json"))).toEqual(sidecar);
   });
 
   test("Given an unknown system When every catalog surface is called Then typed 404 responses preserve route registration", async () => {
     const missing = id("missing-catalog");
-    const results = [];
+    const results: Awaited<ReturnType<typeof request>>[] = [];
     results.push(await request("GET", `/api/design-systems/${missing}`));
     results.push(await request("PATCH", `/api/design-systems/${missing}`, { expected_revision: 0, name: "missing" }));
     results.push(await request("POST", `/api/design-systems/${missing}/duplicate`, { id: `${missing}-copy`, name: "missing" }));
@@ -294,11 +309,11 @@ describe("catalog query and metadata", () => {
     expect(await inspectCatalogTree(root)).toEqual(before);
     expect(getSqlite().query("SELECT * FROM design_systems WHERE id=?").get(systemId)).toEqual(rowBefore);
     expect(getSqlite().query("SELECT * FROM design_system_receipts WHERE design_system_id=?").get(systemId)).toEqual(receiptBefore);
-    await mkdir(path.join(root, "preview"));
-    await writeFile(path.join(root, "preview/website.html"), "<h1>Authored preview</h1>");
-    expect(await (await app.request(`${base}/files/preview/website.html`)).text()).toBe("<h1>Authored preview</h1>");
-    await writeFile(path.join(root, "preview/slides.html"), "<h1>Authored slides</h1>");
-    expect(await (await app.request(`${base}/files/preview/slides.html`)).text()).toBe("<h1>Authored slides</h1>");
+    const authored = await seedSystem("authored-bundled-preview", { exactId: "builtin-theme-stone-court", receipt: true, files: {
+      "preview/website.html": "<h1>Authored preview</h1>", "preview/slides.html": "<h1>Authored slides</h1>",
+    } });
+    expect(await (await app.request(`/api/design-systems/${authored}/files/preview/website.html`)).text()).toBe("<h1>Authored preview</h1>");
+    expect(await (await app.request(`/api/design-systems/${authored}/files/preview/slides.html`)).text()).toBe("<h1>Authored slides</h1>");
   });
 
   test("Given persisted detail fields When catalog detail is read Then the complete runtime contract is returned", async () => {
@@ -573,6 +588,516 @@ describe("catalog lineage and lifecycle", () => {
     expect(result).toMatchObject({ status: 409, json: { error: { code: "unsafe_catalog_path" } } });
     expect(await readFile(sentinel, "utf8")).toBe("keep");
     await rm(sentinel, { force: true });
+  });
+});
+
+function signal() {
+  let resolve = () => {};
+  const promise = new Promise<void>(done => { resolve = done; });
+  return { promise, resolve };
+}
+
+async function bounded<T>(pending: Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([pending, new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error("Catalog event deadline exceeded")), 10_000);
+    })]);
+  } finally { clearTimeout(timer); }
+}
+
+async function rejectsWithCode(pending: Promise<unknown>, code: string): Promise<void> {
+  try { await pending; }
+  catch (error) { expect(error).toMatchObject({ code }); return; }
+  throw new Error(`Expected ${code} rejection`);
+}
+
+function trackChild(child: string): void {
+  ids.push(child);
+  directories.push(path.join(systemsDir, child));
+}
+
+function childInput(child: string) {
+  return { id: child, name: child, operation: "duplicate" as const, reason: null, metadata: {} };
+}
+
+describe("shared catalog content access", () => {
+  test.each(["copy", "trash", "metadata"] as const)("Given palette Save staging When catalog %s queues Then it observes the committed new base", async operation => {
+    // Given
+    const parent = await seedSystem(`save-${operation}`, { receipt: true });
+    const db = getSqlite(), env = paletteContentEnvironment();
+    const original = getCurrentSystemContent(db, parent);
+    const before = await readDesignSystemPalette(parent, env);
+    const entered = signal(), release = signal(), queued = signal();
+    const saved = saveDesignSystemPalette(parent, { expected_digest: before.expected_digest, state: createDefaultPalette() }, {
+      ...env, atBoundary: async name => { if (name === "stage-synced") { entered.resolve(); await release.promise; } },
+    });
+    const child = id(`save-${operation}-child`);
+    const events = { onAccessQueued: queued.resolve };
+    let action: Promise<unknown> | undefined;
+    try {
+      await bounded(Promise.race([entered.promise, saved.then(() => { throw new Error("Missing palette stage event"); })]));
+      // When
+      action = operation === "copy" ? copyCatalogSystem(db, systemsDir, parent, childInput(child), events)
+        : operation === "trash" ? trashCatalogSystem(db, systemsDir, parent, events)
+        : patchCatalogSystem(db, systemsDir, parent, { expectedRevision: 0, name: "Queued metadata", tags: ["queued"] }, events);
+      await bounded(queued.promise);
+      expect(getCurrentSystemContent(db, parent)).toEqual(original);
+    } finally { release.resolve(); }
+    const [palette] = await bounded(Promise.all([saved, action]));
+    // Then
+    const head = getCurrentSystemContent(db, parent);
+    if (head === null) throw new Error("Missing saved head");
+    expect(head).toMatchObject({ id: palette.receipt_id });
+    const target = operation === "trash" ? path.join(systemsDir, ".catalog-trash", parent) : path.join(systemsDir, parent);
+    await validateCatalogReceiptTree(target, head);
+    expect(await readFile(path.join(target, "palette/state.json"), "utf8")).toBe(serializePalette(createDefaultPalette()));
+    if (operation === "copy") {
+      trackChild(child);
+      const lineage = getLineageReceipt(db, child);
+      expect(lineage).toMatchObject({ schemaVersion: 2, contentRevision: -1, parentReceiptId: head.id, parentDigest: head.digest });
+      if (lineage === null) throw new Error("Missing copied lineage");
+      await validateCatalogReceiptTree(path.join(systemsDir, child), lineage);
+    }
+    if (operation === "metadata") expect(getCatalogRow(db, parent)).toMatchObject({ name: "Queued metadata", metadataRevision: 1 });
+    expect(db.query("SELECT digest FROM design_system_receipts WHERE id=?").get(`receipt-${parent}`)).toEqual({ digest: contentDigest(parent) });
+  });
+
+  test("Given a derive queued behind Save When its requested parent head becomes stale Then no child is prepared", async () => {
+    // Given
+    const parent = await seedSystem("queued-stale-parent", { receipt: true });
+    const child = id("stale-head-child"), db = getSqlite();
+    const before = await readDesignSystemPalette(parent);
+    const entered = signal(), release = signal(), queued = signal();
+    const saved = saveDesignSystemPalette(parent, { expected_digest: before.expected_digest, state: createDefaultPalette() }, {
+      ...paletteContentEnvironment(), atBoundary: async name => { if (name === "stage-synced") { entered.resolve(); await release.promise; } },
+    });
+    let rejected: Promise<unknown> | undefined;
+    try {
+      await bounded(Promise.race([entered.promise, saved.then(() => { throw new Error("Missing palette stage event"); })]));
+      // When
+      rejected = rejectsWithCode(copyCatalogSystem(db, systemsDir, parent, {
+        ...childInput(child), operation: "derive", parentReceiptId: `receipt-${parent}`, parentDigest: contentDigest(parent), reason: "test",
+      }, { onAccessQueued: queued.resolve }), "lineage_parent_mismatch");
+      await bounded(queued.promise);
+    } finally { release.resolve(); }
+    await bounded(Promise.all([saved, rejected]));
+    // Then
+    expect(getCatalogRow(db, child)).toBeNull();
+    expect((await readdir(systemsDir)).filter(name => name === child || name.startsWith(`.${child}.catalog-staging-`))).toEqual([]);
+  });
+
+  test("Given copy waiting for its parent When the owning lease updates metadata Then the child uses the reread row", async () => {
+    // Given
+    const parent = await seedSystem("queued-parent-row", { receipt: true });
+    const child = id("queued-parent-row-child"), db = getSqlite();
+    const entered = signal(), change = signal(), queued = signal();
+    const owner = withSystemContentAccess(db, systemsDir, [parent], async () => {
+      entered.resolve();
+      await change.promise;
+      updateCatalogMetadata(db, { id: parent, expectedRevision: 0, name: "Updated parent", description: "new description", status: "review",
+        tags: [], kind: "pattern-library", provenance: "observed", license: "unknown", lifecycle: "active", updatedAt: 200 });
+    });
+    let copied: Promise<string> | undefined;
+    try {
+      await bounded(entered.promise);
+      // When
+      copied = copyCatalogSystem(db, systemsDir, parent, childInput(child), { onAccessQueued: queued.resolve });
+      await bounded(queued.promise);
+    } finally { change.resolve(); }
+    await bounded(Promise.all([owner, copied]));
+    trackChild(child);
+    // Then
+    expect(getCatalogRow(db, child)).toMatchObject({ description: "new description", status: "review", kind: "pattern-library" });
+  });
+
+  test("Given two metadata patches queued at one revision When the first wins Then stale metadata cannot restore its old fields", async () => {
+    // Given
+    const parent = await seedSystem("queued-metadata");
+    const entered = signal(), release = signal(), firstQueued = signal(), secondQueued = signal(), db = getSqlite();
+    const owner = withSystemContentLocks(systemsDir, [parent], async () => { entered.resolve(); await release.promise; });
+    let first: Promise<unknown> | undefined, second: Promise<unknown> | undefined;
+    try {
+      await bounded(entered.promise);
+      // When
+      first = patchCatalogSystem(db, systemsDir, parent, { expectedRevision: 0, name: "Winner", tags: ["winner"] }, { onAccessQueued: firstQueued.resolve });
+      second = rejectsWithCode(patchCatalogSystem(db, systemsDir, parent, { expectedRevision: 0, description: "stale" }, { onAccessQueued: secondQueued.resolve }), "expected_revision_conflict");
+      await bounded(Promise.all([firstQueued.promise, secondQueued.promise]));
+    } finally { release.resolve(); }
+    await bounded(Promise.all([owner, first, second]));
+    // Then
+    expect(await getCatalogSystem(db, systemsDir, parent)).toMatchObject({ name: "Winner", description: null, tags: ["winner"], metadata_revision: 1 });
+  });
+
+  test.each(["live-file", "live-directory", "trash-directory"] as const)("Given an occupied %s child name When copy acquires the reserved child Then unrelated bytes survive", async kind => {
+    // Given
+    const parent = await seedSystem(`occupied-${kind}`, { receipt: true });
+    const child = id(`occupied-${kind}-child`), entered = signal(), release = signal(), queued = signal();
+    const target = kind === "trash-directory" ? path.join(systemsDir, ".catalog-trash", child) : path.join(systemsDir, child);
+    const owner = withSystemContentLocks(systemsDir, [child], async () => {
+      entered.resolve(); await release.promise;
+      if (kind === "live-file") await writeFile(target, "unregistered");
+      else { await mkdir(target, { recursive: true }); await writeFile(path.join(target, "owner.txt"), "unregistered"); }
+    });
+    let rejected: Promise<unknown> | undefined;
+    try {
+      await bounded(entered.promise);
+      // When
+      rejected = rejectsWithCode(copyCatalogSystem(getSqlite(), systemsDir, parent, childInput(child), { onAccessQueued: queued.resolve }), "id_conflict");
+      await bounded(queued.promise);
+    } finally { release.resolve(); }
+    try {
+      await bounded(Promise.all([owner, rejected]));
+      // Then
+      expect(getCatalogRow(getSqlite(), child)).toBeNull();
+      expect(await readFile(kind === "live-file" ? target : path.join(target, "owner.txt"), "utf8")).toBe("unregistered");
+    } finally { await rm(target, { recursive: true, force: true }); }
+  });
+
+  test("Given two parents copying to one reserved child When both requests queue Then exactly one creates it", async () => {
+    // Given
+    const a = await seedSystem("reservation-a", { receipt: true }), b = await seedSystem("reservation-b", { receipt: true });
+    const child = `a-${id("one-reserved-child")}`, entered = signal(), release = signal(), firstQueued = signal(), secondQueued = signal();
+    const owner = withSystemContentLocks(systemsDir, [child], async () => { entered.resolve(); await release.promise; });
+    let first: Promise<string> | undefined, second: Promise<unknown> | undefined;
+    try {
+      await bounded(entered.promise);
+      // When
+      first = copyCatalogSystem(getSqlite(), systemsDir, a, childInput(child), { onAccessQueued: firstQueued.resolve });
+      second = rejectsWithCode(copyCatalogSystem(getSqlite(), systemsDir, b, childInput(child), { onAccessQueued: secondQueued.resolve }), "id_conflict");
+      await bounded(Promise.all([firstQueued.promise, secondQueued.promise]));
+    } finally { release.resolve(); }
+    await bounded(Promise.all([owner, first, second]));
+    trackChild(child);
+    // Then
+    expect(getLineageReceipt(getSqlite(), child)).toMatchObject({ parentSystemId: a, parentReceiptId: `receipt-${a}` });
+    expect(await readFile(path.join(systemsDir, child, "README.md"), "utf8")).toBe(`# ${a}\n`);
+  });
+
+  test.each(["legacy", "v1", "lineage"] as const)("Given a %s baseline When Save copy trash and restore complete Then v2 manifests and immutable extraction lineage survive", async baseline => {
+    // Given
+    const source = await seedSystem(`v2-${baseline}`, { receipt: baseline !== "legacy" });
+    const db = getSqlite();
+    const originalReceipt = db.query("SELECT * FROM design_system_receipts WHERE id=?").get(`receipt-${source}`);
+    const sidecar = await readFile(path.join(systemsDir, source, "extraction-provenance.json"));
+    let parent = source;
+    if (baseline === "lineage") {
+      parent = id("lineage-base");
+      await copyCatalogSystem(db, systemsDir, source, childInput(parent));
+      trackChild(parent);
+      expect(getCurrentSystemContent(db, parent)?.contentRevision).toBe(-1);
+    }
+    // When
+    const before = await readDesignSystemPalette(parent);
+    const saved = await saveDesignSystemPalette(parent, { expected_digest: before.expected_digest, state: createDefaultPalette() });
+    const parentHead = getCurrentSystemContent(db, parent);
+    if (parentHead === null) throw new Error("Missing v2 parent");
+    for (const operation of ["duplicate", "derive"] as const) {
+      const child = id(`v2-${baseline}-${operation}`);
+      await copyCatalogSystem(db, systemsDir, parent, { ...childInput(child), operation, parentReceiptId: parentHead.id, parentDigest: parentHead.digest });
+      trackChild(child);
+      const lineage = getLineageReceipt(db, child);
+      if (lineage === null) throw new Error("Missing v2 lineage");
+      expect(lineage).toMatchObject({ schemaVersion: 2, contentRevision: -1, parentReceiptId: parentHead.id, parentDigest: parentHead.digest });
+      await validateCatalogReceiptTree(path.join(systemsDir, child), lineage);
+      const inventory = (await inspectContentTree(path.join(systemsDir, child))).inventory;
+      await trashCatalogSystem(db, systemsDir, child);
+      await validateCatalogReceiptTree(path.join(systemsDir, ".catalog-trash", child), lineage);
+      await restoreCatalogSystem(db, systemsDir, child);
+      await validateCatalogReceiptTree(path.join(systemsDir, child), lineage);
+      // Then
+      expect((await inspectContentTree(path.join(systemsDir, child))).inventory).toEqual(inventory);
+      expect(await readFile(path.join(systemsDir, child, "extraction-provenance.json"))).toEqual(sidecar);
+      expect((await readDesignSystemPalette(child)).state).toEqual(saved.state);
+    }
+    expect(db.query("SELECT * FROM design_system_receipts WHERE id=?").get(`receipt-${source}`)).toEqual(originalReceipt);
+    expect(await readFile(path.join(systemsDir, source, "extraction-provenance.json"))).toEqual(sidecar);
+  });
+
+  test("Given a raw read paused under its lease When Save queues Then its complete old bytes precede complete new bytes", async () => {
+    // Given
+    const system = await seedSystem("leased-raw", { receipt: true });
+    const before = await readDesignSystemPalette(system);
+    const initial = await saveDesignSystemPalette(system, { expected_digest: before.expected_digest, state: createDefaultPalette() });
+    const entered = signal(), release = signal();
+    const reading = readCatalogFile(getSqlite(), systemsDir, system, "palette/state.json", { onSnapshot: async () => { entered.resolve(); await release.promise; } });
+    let saved: ReturnType<typeof saveDesignSystemPalette> | undefined;
+    const next = { ...createDefaultPalette(), display: { ...createDefaultPalette().display, appearance: "dark" as const } };
+    try {
+      await bounded(Promise.race([entered.promise, reading.then(() => { throw new Error("Missing snapshot event"); })]));
+      // When
+      saved = saveDesignSystemPalette(system, { expected_digest: initial.expected_digest, state: next });
+      expect(getCurrentSystemContent(getSqlite(), system)).toMatchObject({ id: initial.receipt_id });
+    } finally { release.resolve(); }
+    const [bytes] = await bounded(Promise.all([reading, saved]));
+    // Then
+    expect(bytes === null ? null : Buffer.from(bytes).toString("utf8")).toBe(serializePalette(createDefaultPalette()));
+    const following = await readCatalogFile(getSqlite(), systemsDir, system, "palette/state.json");
+    expect(following === null ? null : Buffer.from(following).toString("utf8")).toBe(serializePalette(next));
+  });
+
+  test("Given an unconsumed raw Response When a whole-root Save replaces its path Then the response body cannot reopen the new path", async () => {
+    // Given
+    const system = await seedSystem("eager-response", { receipt: true });
+    const before = await readDesignSystemPalette(system);
+    const initial = await saveDesignSystemPalette(system, { expected_digest: before.expected_digest, state: createDefaultPalette() });
+    const response = await app.request(`/api/design-systems/${system}/files/palette/state.json`);
+    const next = { ...createDefaultPalette(), display: { ...createDefaultPalette().display, appearance: "dark" as const } };
+    // When
+    await saveDesignSystemPalette(system, { expected_digest: initial.expected_digest, state: next });
+    // Then
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("application/json; charset=utf-8");
+    expect(await response.text()).toBe(serializePalette(createDefaultPalette()));
+    expect(await (await app.request(`/api/design-systems/${system}/files/palette/state.json`)).text()).toBe(serializePalette(next));
+  });
+
+  test("Given a materialized token aggregate under a genuine lease When a token writer queues Then old and following snapshots never mix", async () => {
+    // Given
+    const system = await seedSystem("leased-tokens", { receipt: true, files: { "rules.json": '{"schema_version":1,"rules":[]}' } });
+    const env = authoringContentEnvironment(), entered = signal(), release = signal(), queued = signal();
+    const reading = readDesignSystemTokens(system, env, { onSnapshot: async () => { entered.resolve(); await release.promise; } });
+    let edited: ReturnType<typeof upsertDesignSystemColorToken> | undefined;
+    try {
+      await bounded(Promise.race([entered.promise, reading.then(() => { throw new Error("Missing token snapshot event"); })]));
+      // When
+      edited = upsertDesignSystemColorToken(system, { name: "brand", value: "#abcdef" }, { ...env, onAccessQueued: queued.resolve });
+      await bounded(queued.promise);
+      expect(getCurrentSystemContent(getSqlite(), system)?.schemaVersion).toBe(1);
+    } finally { release.resolve(); }
+    const [old, updated] = await bounded(Promise.all([reading, edited]));
+    // Then
+    expect(old.colors).toEqual([{ name: "brand", value: "#123456" }]);
+    expect(updated?.colors).toEqual([{ name: "brand", value: "#abcdef" }]);
+    const following = await readDesignSystemTokens(system);
+    expect(following).toEqual(updated);
+    expect(following.layout).toEqual(old.layout);
+    expect(following.assets).toEqual(old.assets);
+    expect(following.rules).toEqual(old.rules);
+  });
+
+  test.each(["pending", "held"] as const)("Given %s ownership When catalog and public routes read Then no response advertises current candidate bytes", async ownership => {
+    // Given
+    const system = await seedSystem(`unavailable-${ownership}`, { receipt: true });
+    const db = getSqlite(), root = path.join(systemsDir, system);
+    const rows = db.query("SELECT * FROM design_systems WHERE id=?").get(system);
+    const tree = await inspectContentTree(root);
+    const lock = path.join(systemsDir, ".catalog-locks", system);
+    if (ownership === "pending") db.query(`INSERT INTO design_system_receipts
+      (id,design_system_id,status,content_revision,schema_version,digest,manifest_json,provenance_json,created_at,updated_at,source_path,destination_path)
+      SELECT ?,design_system_id,'recovering',2,2,'candidate-digest',manifest_json,provenance_json,101,101,?,?
+      FROM design_system_receipts WHERE id=?`).run(`unavailable-${system}`, root, root, `receipt-${system}`);
+    else { await mkdir(lock, { recursive: true }); await writeFile(path.join(lock, "unknown.txt"), "held"); }
+    try {
+      // When
+      const detail = await request("GET", `/api/design-systems/${system}`);
+      const listing = await request("GET", `/api/design-systems?query=${system}`);
+      const raw = await request("GET", `/api/design-systems/${system}/files/README.md`);
+      const previews = await request("GET", `/api/design-systems/${system}/previews`);
+      const tokens = await request("GET", `/api/design-systems/${system}/tokens`);
+      const color = await request("PATCH", `/api/design-systems/${system}/colors`, { name: "brand", value: "#abcdef" });
+      const addRule = await request("POST", `/api/design-systems/${system}/rules`, { kind: "do", text: "Rule" });
+      const deleteRule = await request("DELETE", `/api/design-systems/${system}/rules/rule_123`);
+      const form = new FormData();
+      form.set("file", new File([await readFile(path.resolve(import.meta.dir, "../../../assets/fonts/Figtree.woff2"))], "blocked.woff2"));
+      const font = await app.request(`/api/design-systems/${system}/fonts`, { method: "POST", body: form });
+      // Then
+      const unavailable = { id: system, lifecycle: "partial", warning: { code: "partial_operation" }, preview: null,
+        content: { receipt_id: `receipt-${system}`, digest: contentDigest(system) } };
+      expect(detail).toMatchObject({ status: 200, json: { data: unavailable } });
+      expect(listing).toMatchObject({ status: 200, json: { data: [unavailable] } });
+      for (const result of [raw, previews, tokens, color, addRule, deleteRule]) {
+        expect(result).toMatchObject({ status: 409, json: { error: { code: "system_content_unavailable" } } });
+        expect(JSON.stringify(result.json)).not.toContain(systemsDir);
+        expect(JSON.stringify(result.json)).not.toContain("candidate-digest");
+      }
+      expect(font.status).toBe(409);
+      expect(await font.json()).toMatchObject({ error: { code: "system_content_unavailable" } });
+      expect(await request("PATCH", `/api/design-systems/${system}`, { expected_revision: 0, name: "blocked" }))
+        .toMatchObject({ status: 409, json: { error: { code: "operation_conflict" } } });
+      expect(db.query("SELECT * FROM design_systems WHERE id=?").get(system)).toEqual(rows);
+      expect((await inspectContentTree(root)).inventory).toEqual(tree.inventory);
+    } finally {
+      if (ownership === "held") await rm(lock, { recursive: true });
+    }
+  });
+
+  test.each(["restore", "purge"] as const)("Given held or pending trash ownership When %s starts Then its only verified tree survives", async operation => {
+    for (const ownership of ["held", "pending"] as const) {
+      // Given
+      const system = await seedSystem(`${operation}-${ownership}`, { receipt: true });
+      const db = getSqlite();
+      await trashCatalogSystem(db, systemsDir, system);
+      const trash = path.join(systemsDir, ".catalog-trash", system), lock = path.join(systemsDir, ".catalog-locks", system);
+      const tree = await inspectContentTree(trash);
+      if (ownership === "pending") db.query(`INSERT INTO design_system_receipts
+        (id,design_system_id,status,content_revision,schema_version,digest,manifest_json,provenance_json,created_at,updated_at)
+        SELECT ?,design_system_id,'recovering',2,schema_version,digest,manifest_json,provenance_json,101,101
+        FROM design_system_receipts WHERE id=?`).run(`pending-${system}`, `receipt-${system}`);
+      else { await mkdir(lock); await writeFile(path.join(lock, "unknown.txt"), "held"); }
+      const receipts = db.query("SELECT * FROM design_system_receipts WHERE design_system_id=? ORDER BY id").all(system);
+      try {
+        // When
+        const result = operation === "restore" ? await request("POST", `/api/design-systems/${system}/restore`, {})
+          : await request("DELETE", `/api/design-systems/${system}/purge`);
+        // Then
+        expect(result).toMatchObject({ status: 409, json: { error: { code: "operation_conflict" } } });
+        expect(getCatalogRow(db, system)).toMatchObject({ lifecycle: "trashed" });
+        expect(db.query("SELECT * FROM design_system_receipts WHERE design_system_id=? ORDER BY id").all(system)).toEqual(receipts);
+        expect((await inspectContentTree(trash)).inventory).toEqual(tree.inventory);
+      } finally { if (ownership === "held") await rm(lock, { recursive: true }); }
+    }
+  });
+
+  test("Given detail waiting on a metadata owner When that owner commits Then detail rereads metadata under its own lease", async () => {
+    // Given
+    const system = await seedSystem("leased-detail", { receipt: true }), db = getSqlite();
+    const entered = signal(), release = signal(), queued = signal();
+    const owner = withSystemContentAccess(db, systemsDir, [system], async () => {
+      entered.resolve(); await release.promise;
+      updateCatalogMetadata(db, { id: system, expectedRevision: 0, name: "New detail", description: "new", status: "review",
+        tags: ["new"], kind: "design-system", provenance: "observed", license: "unknown", lifecycle: "active", updatedAt: 200 });
+    });
+    let reading: ReturnType<typeof getCatalogSystem> | undefined;
+    try {
+      await bounded(entered.promise);
+      // When
+      reading = getCatalogSystem(db, systemsDir, system, { onAccessQueued: queued.resolve });
+      await bounded(queued.promise);
+    } finally { release.resolve(); }
+    const [, result] = await bounded(Promise.all([owner, reading]));
+    // Then
+    expect(result).toMatchObject({ name: "New detail", description: "new", status: "review", tags: ["new"], metadata_revision: 1 });
+  });
+
+  test.each(["hard-link", "directory-link", "oversized"] as const)("Given a %s live entry When raw bytes are requested Then the bounded reader rejects without exposing bytes", async kind => {
+    // Given
+    const system = await seedSystem(`raw-${kind}`, { receipt: true });
+    const root = path.join(systemsDir, system), unsafe = path.join(root, "unsafe");
+    if (kind === "hard-link") await link(path.join(root, "README.md"), unsafe);
+    else if (kind === "directory-link") await symlink(path.join(root, "fonts"), unsafe, "junction");
+    else {
+      const handle = await open(unsafe, "wx");
+      try { await handle.truncate(128 * 1024 * 1024 + 1); } finally { await handle.close(); }
+    }
+    try {
+      // When
+      const result = await request("GET", `/api/design-systems/${system}/files/README.md`);
+      // Then
+      expect(result).toMatchObject({ status: 409, json: { error: { code: "system_content_conflict" } } });
+      expect(JSON.stringify(result.json)).not.toContain(root);
+      expect(getCurrentSystemContent(getSqlite(), system)?.id).toBe(`receipt-${system}`);
+    } finally { await rm(unsafe, { force: true }); }
+  });
+
+  test("Given packaged preview fonts When read Then bounded verified stylesheet bytes keep content-addressed URLs", async () => {
+    // Given
+    const root = path.join(systemsDir, id("preview-font-source")), fonts = path.join(root, "assets/fonts");
+    directories.push(root);
+    await mkdir(fonts, { recursive: true });
+    const font = Buffer.from("immutable font source"), hash = createHash("sha256").update(font).digest("hex");
+    await writeFile(path.join(fonts, "Fixture.woff2"), font);
+    await writeFile(path.join(fonts, "fonts.css"), "@font-face{src:url('./Fixture.woff2')}");
+    // When
+    const bytes = await readBundledSystemPreview("builtin-theme-light", "preview/fonts.css", root);
+    // Then
+    expect(bytes?.toString("utf8")).toBe(`@font-face{src:url('/runtime/fonts/${hash}/Fixture.woff2')}`);
+    await writeFile(path.join(fonts, "fonts.css"), "@font-face{src:url('./Changed.woff2')}");
+    await expect(readBundledSystemPreview("builtin-theme-light", "preview/fonts.css", root)).rejects.toMatchObject({ code: "system_content_conflict" });
+  });
+
+  test("Given an oversized packaged preview stylesheet When read Then no unbounded font bundle loader is used", async () => {
+    // Given
+    const root = path.join(systemsDir, id("oversized-preview-fonts")), fonts = path.join(root, "assets/fonts");
+    directories.push(root);
+    await mkdir(fonts, { recursive: true });
+    await writeFile(path.join(fonts, "fonts.css"), Buffer.alloc(256 * 1024 + 1, 32));
+    // When / Then
+    await expect(readBundledSystemPreview("builtin-theme-light", "preview/fonts.css", root)).rejects.toMatchObject({ code: "system_content_corrupt" });
+  });
+
+  test.each(["v1", "v2"] as const)("Given a %s lineage-only parent When copied again Then the exact negative parent receipt and validation version survive", async version => {
+    // Given
+    const source = await seedSystem(`lineage-only-${version}`, { receipt: true }), db = getSqlite();
+    const sidecar = await readFile(path.join(systemsDir, source, "extraction-provenance.json"));
+    if (version === "v2") {
+      const before = await readDesignSystemPalette(source);
+      await saveDesignSystemPalette(source, { expected_digest: before.expected_digest, state: createDefaultPalette() });
+    }
+    const parent = id("negative-parent"), child = id("negative-child");
+    await copyCatalogSystem(db, systemsDir, source, childInput(parent));
+    trackChild(parent);
+    const parentHead = getCurrentSystemContent(db, parent);
+    if (parentHead === null) throw new Error("Missing negative parent receipt");
+    // When
+    await copyCatalogSystem(db, systemsDir, parent, { ...childInput(child), operation: "derive",
+      parentReceiptId: parentHead.id, parentDigest: parentHead.digest, reason: "lineage" });
+    trackChild(child);
+    // Then
+    const lineage = getCurrentSystemContent(db, child);
+    expect(parentHead.contentRevision).toBe(-1);
+    expect(lineage).toMatchObject({ schemaVersion: version === "v1" ? 1 : 2, contentRevision: -1,
+      parentSystemId: parent, parentReceiptId: parentHead.id, parentDigest: parentHead.digest });
+    if (lineage === null) throw new Error("Missing second-generation lineage");
+    await validateCatalogReceiptTree(path.join(systemsDir, child), lineage);
+    expect(await readFile(path.join(systemsDir, child, "extraction-provenance.json"))).toEqual(sidecar);
+    expect(getCurrentSystemContent(db, parent)).toEqual(parentHead);
+  });
+
+  test("Given a pending v2 bundled creation When catalog and virtual fallback routes read Then uncommitted storage stays unavailable", async () => {
+    // Given
+    const system = await seedSystem("pending-create", { exactId: "builtin-theme-linen-retreat" });
+    const db = getSqlite(), root = path.join(systemsDir, system), tree = await inspectContentTree(root);
+    db.query(`INSERT INTO design_system_receipts
+      (id,design_system_id,status,content_revision,schema_version,digest,manifest_json,provenance_json,created_at,updated_at,source_path,destination_path)
+      VALUES (?,?,'recovering',1,2,?,?,'{"format":"system-content-v1","writer":"palette","source_extraction":null}',101,101,NULL,?)`)
+      .run(`pending-create-${system}`, system, tree.manifest.tree_digest, JSON.stringify(tree.manifest), root);
+    // When
+    const listing = await request("GET", `/api/design-systems?query=${system}`);
+    const detail = await request("GET", `/api/design-systems/${system}`);
+    const raw = await request("GET", `/api/design-systems/${system}/files/preview/website.html`);
+    const previews = await request("GET", `/api/design-systems/${system}/previews`);
+    // Then
+    expect(listing).toMatchObject({ status: 200, json: { data: [], meta: { total: 0 } } });
+    expect(detail).toMatchObject({ status: 200, json: { data: { lifecycle: "partial", warning: { code: "partial_operation" },
+      content: { receipt_id: null, revision: 0, digest: "" }, preview: null } } });
+    for (const result of [raw, previews]) expect(result).toMatchObject({ status: 409, json: { error: { code: "system_content_unavailable" } } });
+    expect((await inspectContentTree(root)).inventory).toEqual(tree.inventory);
+  });
+
+  test("Given a committed trashed system When raw files and previews are requested Then existing not-found responses remain", async () => {
+    // Given
+    const system = await seedSystem("trashed-read", { receipt: true });
+    await trashCatalogSystem(getSqlite(), systemsDir, system);
+    // When / Then
+    expect(await request("GET", `/api/design-systems/${system}/files/README.md`))
+      .toMatchObject({ status: 404, json: { error: { code: "design_system_file_not_found" } } });
+    expect(await request("GET", `/api/design-systems/${system}/previews`))
+      .toMatchObject({ status: 404, json: { error: { code: "design_system_not_found" } } });
+  });
+
+  test("Given copied bytes diverging immediately after publication When validation and recovery fail Then the pending child and unknown bytes survive", async () => {
+    // Given
+    const parent = await seedSystem("copy-divergence", { receipt: true }), child = id("divergent-child");
+    trackChild(child);
+    const destination = path.join(systemsDir, child), original = fsp.rename, db = getSqlite();
+    const rename = spyOn(fsp, "rename").mockImplementation(async (...args: Parameters<typeof fsp.rename>) => {
+      await original(...args);
+      if (args[1] === destination) await writeFile(path.join(destination, "README.md"), "external bytes after publish\r\n");
+    });
+    try {
+      // When
+      await expect(copyCatalogSystem(db, systemsDir, parent, childInput(child))).rejects.toMatchObject({ code: "catalog_digest_mismatch" });
+    } finally { rename.mockRestore(); }
+    // Then
+    expect(getCatalogRow(db, child)).not.toBeNull();
+    expect(db.query("SELECT status FROM design_system_receipts WHERE design_system_id=?").get(child)).toEqual({ status: "prepared" });
+    const receipts = db.query("SELECT * FROM design_system_receipts WHERE design_system_id=?").all(child);
+    await reconcileCatalogState(db, systemsDir);
+    expect(db.query("SELECT * FROM design_system_receipts WHERE design_system_id=?").all(child)).toEqual(receipts);
+    expect(await readFile(path.join(destination, "README.md"), "utf8")).toBe("external bytes after publish\r\n");
+    expect(await request("GET", `/api/design-systems/${child}/files/README.md`))
+      .toMatchObject({ status: 409, json: { error: { code: "system_content_unavailable" } } });
   });
 });
 

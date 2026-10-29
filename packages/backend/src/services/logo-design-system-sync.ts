@@ -1,9 +1,11 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { LOGO_FILES, parseLogoDesignSystemPatchV1, UpgradeContractError } from "@bg/shared";
-import { getDesignSystemDetail } from "../db/seed";
-import { resolveManagedPath, systemsDir } from "../lib/paths";
 import { PathBoundaryError, resolveWithin } from "../security/path-boundary";
-import { upsertDesignSystemColorToken } from "./design-system-extract";
+import { transformDesignSystemColorTokens } from "./design-system-extract";
+import { readManagedCssForEdit } from "./atomic-text-file";
+import { authoringContentEnvironment, authoringTokenPath, publishAuthoringFiles, withEditableSystemContent, type AuthoringEnvironment } from "./design-system-authoring";
+import { DesignSystemAssetEditError } from "./extraction-asset-errors";
+import { readPreservedFile, safeContentChild } from "./system-content-tree";
 import { LogoDeliverableError, logoSvgSource, validateLogoSvg } from "./logo-deliverables";
 
 /**
@@ -40,7 +42,7 @@ export async function applyLogoDesignSystemPatch(input: {
   readonly designSystemId: string | null;
   /** Selected candidate captured by the completed turn, never re-derived from the live project. */
   readonly expectedSource: string;
-}): Promise<LogoDesignSystemPatchResult> {
+}, env: AuthoringEnvironment = authoringContentEnvironment()): Promise<LogoDesignSystemPatchResult> {
   if (input.designSystemId === null) return { applied: false, reason: "no_design_system" };
 
   const patchFile = safeProjectPath(input.projectDir, LOGO_FILES.design_system_patch, "patch_path_unsafe");
@@ -65,16 +67,6 @@ export async function applyLogoDesignSystemPatch(input: {
     throw error;
   }
 
-  const detail = await getDesignSystemDetail(input.designSystemId);
-  if (detail === null) throw new LogoDesignSystemPatchError("design_system_missing");
-  let systemDir: string;
-  try {
-    systemDir = resolveManagedPath(systemsDir, detail.dir_path);
-  } catch (error) {
-    if (error instanceof PathBoundaryError) throw new LogoDesignSystemPatchError("design_system_path_unsafe");
-    throw error;
-  }
-
   const assetFile = safeProjectPath(input.projectDir, patch.logo_asset, "logo_asset_path_unsafe");
   const asset = await readFile(assetFile).catch((error: unknown) => {
     if (isMissing(error)) return null;
@@ -95,26 +87,28 @@ export async function applyLogoDesignSystemPatch(input: {
   if (source === null) throw new LogoDesignSystemPatchError("svg_source_missing");
   if (source !== input.expectedSource) throw new LogoDesignSystemPatchError("svg_source_mismatch");
 
-  // Resolve every destination and read every input before the first write, so a rejected path or
-  // an unreadable README cannot leave the colour tokens changed by a patch that then fails.
-  const readmeFile = resolveWithin(systemDir, "README.md");
-  const assetsDir = resolveWithin(systemDir, "assets");
-  const existing = await readFile(readmeFile, "utf8").catch((error: unknown) => {
-    if (isMissing(error)) return "";
+  try {
+    return await withEditableSystemContent(env, input.designSystemId, async (base, lease) => {
+      const token = patch.colors.length === 0 ? null : authoringTokenPath(base);
+      const colors = token === null ? [] : [{
+        path: token,
+        bytes: transformDesignSystemColorTokens(await readManagedCssForEdit(await safeContentChild(base.live, ...token.split("/"))), patch.colors),
+      }];
+      const existing = await readPreservedFile(base.live, "README.md").catch((error: unknown) => {
+        if (isMissing(error)) return Buffer.from("");
+        throw error;
+      });
+      const section = mergeLogoSection(existing.toString("utf8"), patch.readme_section);
+      await publishAuthoringFiles(env, base, lease, "logo", [
+        ...colors, { path: "README.md", bytes: section.text }, { path: "assets/logo.svg", bytes: asset },
+      ]);
+      return { applied: true, colors: patch.colors.length, readme: section.readme, asset: true } satisfies LogoDesignSystemPatchResult;
+    });
+  } catch (error) {
+    if (error instanceof DesignSystemAssetEditError && error.code === "design_system_not_found") throw new LogoDesignSystemPatchError("design_system_missing");
+    if (error instanceof PathBoundaryError || error instanceof DesignSystemAssetEditError && error.code === "unsafe_managed_path") throw new LogoDesignSystemPatchError("design_system_path_unsafe");
     throw error;
-  });
-  const section = mergeLogoSection(existing, patch.readme_section);
-  // An empty assets directory is not a visible change; it has to exist for the output path to resolve.
-  await mkdir(assetsDir, { recursive: true });
-  const assetOut = resolveWithin(assetsDir, LOGO_FILES.logo);
-
-  for (const color of patch.colors) {
-    await upsertDesignSystemColorToken(input.designSystemId, { name: color.name, value: color.value });
   }
-  await writeFile(readmeFile, section.text, "utf8");
-  await writeFile(assetOut, asset);
-
-  return { applied: true, colors: patch.colors.length, readme: section.readme, asset: true };
 }
 
 /**
