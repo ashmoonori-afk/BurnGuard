@@ -10,3 +10,6 @@
 # Keep Windows scripts as CRLF for cmd.exe compatibility.
 *.bat text eol=crlf
 *.cmd text eol=crlf
+
+# Preserve frozen corpus bytes for raw SHA-256 verification on every platform.
+packages/backend/tests/fixtures/theme-engine/** -text
