@@ -434,217 +434,260 @@
   "additive": {
     "light": {
       "palette": [
+        "3ddd3332237dece5c4f2c5ed6d47d90f442a1f1f301bf91274f308721b23d9c6",
         "99c94a8d4d84bcb9cd03667eabb4d32dc44ec044a3b0ed93785d8a98eba858e6"
       ]
     },
     "dark": {
       "palette": [
+        "87a20438b72228f078e0b4eb56ba6d5e79b62bb0e5b6391c58ae5c88275cb141",
         "ca3ebcbfeb55dba4ba8c813a03c977833ee81af27350d9c35abef5caa787c48c"
       ]
     },
     "cupcake": {
       "palette": [
+        "56e7c450f4314d67f24955351edc2b3b9bf85b168b019a6f459ec261f90a7cfe",
         "76963aff53846f729cb09b7eebce1ef58c22482fade6ee5282c346b6c5f0ab1f"
       ]
     },
     "retro": {
       "palette": [
+        "c6d0e3b143283a48e9a06dfaf1dadf597cd4f22b5d012b223cd59fe3699a9d7f",
         "f4308416ca9b306e5b5660bbd5657aaf560ad200cf0c396ec3202af240408505"
       ]
     },
     "cyberpunk": {
       "palette": [
-        "6a3f1c96aed3e5715ee1dfbb4b1a81d920f910563e5556e68c8c0d309f5f4353"
+        "6a3f1c96aed3e5715ee1dfbb4b1a81d920f910563e5556e68c8c0d309f5f4353",
+        "8f3b8b46ef5a771ab3424ef4d4726385abbe64e45761487a5f8e837b45ffd0f9"
       ]
     },
     "synthwave": {
       "palette": [
-        "19e0d7c5b801169f3c81fc895fe585f6b2722cc90f9d9ffcb1b9548352c50815"
+        "19e0d7c5b801169f3c81fc895fe585f6b2722cc90f9d9ffcb1b9548352c50815",
+        "2bbfce43792edfa4afca6ba9d5a23b44cea36e5999503f98b077c030685658f4"
       ]
     },
     "luxury": {
       "palette": [
+        "9b8a66b1dd27ce011f280701a1ea0a4bdb9450623e11f0fae7e3fe681c7fcf58",
         "d6ed6e0d8529b7f29f9a52ebc86161260503b6ee526e45bed3a2f79227943b34"
       ]
     },
     "dracula": {
       "palette": [
-        "36c8d1205f3b28d6498e01f2e7b676f0370a629fc64785a741771fe93be7324b"
+        "36c8d1205f3b28d6498e01f2e7b676f0370a629fc64785a741771fe93be7324b",
+        "c0c21a29d15ac3f670a7143ae6200b65cbeebcb66ab7694bba6b34a97278e7a8"
       ]
     },
     "nord": {
       "palette": [
+        "95eb7f0b8fd9ca638d29c6834f1a21830180bf5b01db69c64256c65c5e5bc863",
         "b7ad6672cd60b8f5b923af2a00bb8bf97542dd2384669e83a0c033d7acd5871d"
       ]
     },
     "business": {
       "palette": [
+        "656e5fba8440fc8fa85db088ffc750b88c29d2aa79c1c875e584f58e8d82696c",
         "6f0aa44aeb490f7f73c3a5856daf796f38c7aeb28ffaff02a4e39e4d6a99f695"
       ]
     },
     "cobalt-atelier": {
       "palette": [
-        "be01b6ed32da0d2a9ae1481c5283e46c702e5899cbc718080e831c372a67a05f"
+        "be01b6ed32da0d2a9ae1481c5283e46c702e5899cbc718080e831c372a67a05f",
+        "c8304c61293b324d8740ce1dbf91878266f22ad2e18856b01f555f79c4f5f128"
       ]
     },
     "signal-reel": {
       "palette": [
-        "66434a4442f05658d87facbe6a6a661c008589e2a2814f15877f6a31cec9408c"
+        "66434a4442f05658d87facbe6a6a661c008589e2a2814f15877f6a31cec9408c",
+        "dd3215b02d1ce3bd6ad4629f9e4028f5fde2cf7cea8f77c3d721408175b23d46"
       ]
     },
     "daylight-press": {
       "palette": [
+        "7d5186532012509d66ac37dabb4f26305f024a8917116876db630dd18f7a9609",
         "f1e95a5d72d661f7f7e266404e11ebfd4410efb18eb9369f1b50d061544b01e5"
       ]
     },
     "blueprint-manual": {
       "palette": [
+        "7d764016480089dfe7afd0e89be74c4c399b8f8953bfe478e7a1d167d2b28ad5",
         "972096c9186ab260b073cae953eef4703c7a36a26920b7f3b2a36af1c005904f"
       ]
     },
     "ledger-index": {
       "palette": [
+        "1b4b344519e792c70db591033ebc692b0612211b0d09551502146d292c44d753",
         "d32ce71cf7d7f0ddde6f7b4347b7f3a4f89829f883b0c986497dac2732cbe6e6"
       ]
     },
     "dune-editorial": {
       "palette": [
-        "17e22fa948ff7b5a6cc779a37eb31f08c328ad5de72d08ca93629bb3167badc2"
+        "17e22fa948ff7b5a6cc779a37eb31f08c328ad5de72d08ca93629bb3167badc2",
+        "b724466b32b12428539334c0dc2e8ea17768510d1688017ae3790a37a42b0917"
       ]
     },
     "archive-folio": {
       "palette": [
+        "419d487dc978d50d539adff8925858944a13fd6b19bd97862efe94c7b3305678",
         "98e7859fad28860f2f11cf7596b962cc8326edc616f688b8e2732cdf8a5944f5"
       ]
     },
     "signal-console": {
       "palette": [
+        "674ed478f5d0e06c40508d77f1d63b36416b4ce700eefb30a1d9078c7b08296d",
         "fbb1a26fa067a63ac89945d04fd9a30dc0fa68175ac68d5791ecef6a8f78bdad"
       ]
     },
     "paper-instrument": {
       "palette": [
+        "0e9343cbd1dc4931ca6d4fd39474613acc235aa8dee057a8284b1d75c9046839",
         "d5fd41c2af44857d328022d81cf8a16b2ec08d959cb52f31b88c1f8c4971e865"
       ]
     },
     "quiet-runtime": {
       "palette": [
+        "161e0b1d8b42177b6cc7dceb0986a6de0998b5973ba70be4ea6d165cb7bfa63b",
         "c9e20b4b3a6ca030f3ad0ea8f52417b2e78a3b48869a99295abd6d97686c6fad"
       ]
     },
     "graphite-spec": {
       "palette": [
-        "77918416bdf05540298e98a153765a7203a57ea6cd23709bb2ec70a976f7b5f4"
+        "77918416bdf05540298e98a153765a7203a57ea6cd23709bb2ec70a976f7b5f4",
+        "9d812aa5d8b9ad30a66c4c14a7323da0fdcbd78bb16ec1de85373113282d2b0e"
       ]
     },
     "exploded-field-module": {
       "palette": [
+        "0a786f7046d16b526713933a0316aebb8305b2918cdbb1131031af28800da23b",
         "ebd050e537272bc58fb3d313e883e39c9c32647c1f29e6c78d31c7fe760b6cae"
       ]
     },
     "long-form-press": {
       "palette": [
-        "d3686846ba0416ccfd24f35882322c87c70a0da3618cbf84b0662fedad501055"
+        "d3686846ba0416ccfd24f35882322c87c70a0da3618cbf84b0662fedad501055",
+        "d3813798fc6d9a8631b1b8e3bbe2e5868cb5faed4765b4f42dc2c02f1fb28248"
       ]
     },
     "wide-gutter-review": {
       "palette": [
+        "6ff14efac052bd051ebc60aca23acedc7fc4846acd721c45b1677be265603879",
         "922c3d1168c51599fe02b4f1cda141b13afa2371796952df3aae65be1ede0662"
       ]
     },
     "quarterly-folio": {
       "palette": [
-        "b6f3edc51db559c7bd7dbad2ea1be8f6c8ad77cca07625ffa6c102aa910f9540"
+        "b6f3edc51db559c7bd7dbad2ea1be8f6c8ad77cca07625ffa6c102aa910f9540",
+        "c53eadfbcc42f157e346d4e220b2241489444cccfd080a5f651c33cb5c084156"
       ]
     },
     "night-edition": {
       "palette": [
+        "2fd16800d36ea7f3e8fab7463b1db04252cdfd7b204d8e45f8fdfa555c6a03bc",
         "a3f970341ecdc5eb8da71ac40b5456b7480cd0b4eb71e310da8bd9ec285d15b4"
       ]
     },
     "studio-counter": {
       "palette": [
+        "51950d37dc9372a9c1a45ae5fc689e612e55bf2952e5d4830249c6c6336e332d",
         "695c10b612992c5d7b408af42280a198e8047e3783147ed5db4babce52d05ff6"
       ]
     },
     "atelier-counter": {
       "palette": [
-        "464ba13c8e4b44f90b82c4d1c7afb49e08a0c2bc07387b817c9c4b2e0d0ab0aa"
+        "464ba13c8e4b44f90b82c4d1c7afb49e08a0c2bc07387b817c9c4b2e0d0ab0aa",
+        "9e77e04ba85f3925b9fe0da090a16a62e32f365a73e48bb1cc7289712f88ca15"
       ]
     },
     "market-stack": {
       "palette": [
-        "08fd9069f489e0f795d7d3aa181f311e91b8f7f35956ee2122e71882737e93a7"
+        "08fd9069f489e0f795d7d3aa181f311e91b8f7f35956ee2122e71882737e93a7",
+        "be8a894e92113103092860392fd80347c2ee49db6d1c98cd047c5f1bd12b38bd"
       ]
     },
     "vitrine-mono": {
       "palette": [
-        "834802effa4e69d4e77369061082a907df26ccd5da3f932c017d1ce42d85c1a4"
+        "834802effa4e69d4e77369061082a907df26ccd5da3f932c017d1ce42d85c1a4",
+        "bc599577366e1c8ed78a2be10c273347a3e101b710126ac5cba76d686c6fe517"
       ]
     },
     "modular-configurator": {
       "palette": [
-        "3b291b0c23a686a2e8e5914b935e6ba446bfe2efee5bc10ebb52366df4e0602c"
+        "3b291b0c23a686a2e8e5914b935e6ba446bfe2efee5bc10ebb52366df4e0602c",
+        "9a33e1e42a9069ab4eaf53eaf8db613801c3c2492d22829d1188c97921b8d1ff"
       ]
     },
     "night-marquee": {
       "palette": [
-        "294e5b47b8060e7d100af0211ec0f8b8945692be8e916cf84c21f0982b14ab55"
+        "294e5b47b8060e7d100af0211ec0f8b8945692be8e916cf84c21f0982b14ab55",
+        "7e8706fd650c867519e6ac256c85431317780bf219253a2f0eae9b1580957d09"
       ]
     },
     "stencil-field": {
       "palette": [
-        "853f73a0e291ddfcec10655a83051f4aef7bb5dd47f196a6f35cadc42e05e6e8"
+        "853f73a0e291ddfcec10655a83051f4aef7bb5dd47f196a6f35cadc42e05e6e8",
+        "cce62c951b104eac37d4a879e91a19b052b0bc60938f5674a721ab4f5e5a176c"
       ]
     },
     "press-riso": {
       "palette": [
-        "65d78962f97f888ee3d24e22af1cf4a6eceba87822123fd98006cfd689710a8c"
+        "65d78962f97f888ee3d24e22af1cf4a6eceba87822123fd98006cfd689710a8c",
+        "b86796f66ef8b5a7ccced1f3f1ae6f91d99d5276a4cd1a3f15862028832eade7"
       ]
     },
     "exhibit-wall": {
       "palette": [
-        "01b951af3e4bf5e4f4a52e0394d9624e86e7f5e092231c0e86cc51a22c41dd2d"
+        "01b951af3e4bf5e4f4a52e0394d9624e86e7f5e092231c0e86cc51a22c41dd2d",
+        "3677a5cd13111ad056674e4842901323036513f142275bc56eeb57e71d6e20b8"
       ]
     },
     "index-table": {
       "palette": [
-        "01dfe3bdd5c8b614e389b6231af5ab79e1c899273004c6f5308af906ef9bbdaf"
+        "01dfe3bdd5c8b614e389b6231af5ab79e1c899273004c6f5308af906ef9bbdaf",
+        "146cf228e8287fd4f591efff37186227565afa6f4c516c9cdb894acf66059b95"
       ]
     },
     "facet-archive": {
       "palette": [
-        "1550bb83224a26aeb45844bcac6f653f10a4bed27477d6c39e3cd77940add592"
+        "1550bb83224a26aeb45844bcac6f653f10a4bed27477d6c39e3cd77940add592",
+        "676f5a4559266cd66ccde91706fb8935bf2d8a651bc752b71a5359529baa3949"
       ]
     },
     "console-ledger": {
       "palette": [
-        "3b46557373c9bad7833a658926a063cdda7e303d58bc0f556945e1e535c98cca"
+        "3b46557373c9bad7833a658926a063cdda7e303d58bc0f556945e1e535c98cca",
+        "c28c4419e34cdc25a29e0d99a30facfc12c28d9be152570aaab3435e762f6a81"
       ]
     },
     "field-register": {
       "palette": [
+        "c7c3f50c637fb95ca633438503cd36bea47739810c5fec6b843485ca38575abb",
         "ff886dc329106c14c139a6129c6882dbf4f4ada3c585ec1529af6270cc4ebfe1"
       ]
     },
     "warm-vestibule": {
       "palette": [
-        "8de52ee75889aa7d77d9463a6eb4c240f2fe980b73039f48ffff204de7714540"
+        "8de52ee75889aa7d77d9463a6eb4c240f2fe980b73039f48ffff204de7714540",
+        "f3bfeaadde694fd5af04bded995a53cffb602f066423a6169267c87eaaae986d"
       ]
     },
     "stone-court": {
       "palette": [
+        "431bb3ce4b69a1b5bb3c200aec4a53aa45ec9bbf12f422e1c4a256660b86c596",
         "eef48a85bc079709128ff3695cbc057afdb643e2ec16aebdc333f5731dd35ead"
       ]
     },
     "linen-retreat": {
       "palette": [
-        "7c08c4dd54a78e9937c7f03339b6cef7f3c990e6a961f8d2774cd4a57b4ba950"
+        "7c08c4dd54a78e9937c7f03339b6cef7f3c990e6a961f8d2774cd4a57b4ba950",
+        "bd7b7612db3521679cc317872c355ac4644025388a0b8389d2ddcab858192646"
       ]
     },
     "timber-hall": {
       "palette": [
-        "46b471a69727ad9d7e050f4847eea875f7b9222fdddf91e44a1a818fb78c6002"
+        "46b471a69727ad9d7e050f4847eea875f7b9222fdddf91e44a1a818fb78c6002",
+        "9ffb02d37cd49782554c2711f3d6ad9acf6361e968119851320aca5d47eee1a0"
       ]
     }
   }

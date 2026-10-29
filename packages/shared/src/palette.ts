@@ -8,7 +8,13 @@ export type DesignSystemPaletteResponse = {
   readonly content_revision: number; readonly receipt_id: string | null;
 };
 export type SaveDesignSystemPaletteRequest = { readonly expected_digest: string; readonly state: PaletteState };
-export const PALETTE_EMITTER_VERSION = "burnguard-palette-1";
+export const PALETTE_EMITTER_VERSION = "burnguard-palette-2";
+export const PALETTE_DERIVED_DIGITS = 8;
+
+/** Canonical output precision does not alter editable model or anchor values. */
+export function formatPaletteCssChannel(value: number): string {
+  return String(Number(Math.max(0, Math.min(1, value)).toFixed(PALETTE_DERIVED_DIGITS)));
+}
 
 export function parseSaveDesignSystemPaletteRequest(input: unknown): SaveDesignSystemPaletteRequest {
   const value = shape(input, "expected_digest state");
@@ -21,25 +27,26 @@ export function parseSaveDesignSystemPaletteRequest(input: unknown): SaveDesignS
 /** Length-framed UTF-8 base64url is injective and bounded to 325 characters for validated IDs.
  * Names never become CSS syntax; exact brand RGB inputs remain separate from sampled scales.
  */
+export function paletteCssIdentifier(id: string): string {
+  const bytes = new TextEncoder().encode(id);
+  return `u${bytes.length}_` + btoa(String.fromCharCode(...bytes))
+    .replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
+}
 export function emitPaletteCss(input: PaletteState): string {
   const state = parsePaletteState(input);
   serializePalette(state);
-  const slot = (id: string): string => {
-    const bytes = new TextEncoder().encode(id);
-    return `u${bytes.length}_` + btoa(String.fromCharCode(...bytes))
-      .replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
-  };
   const fallback: string[] = [], wide: string[] = [];
-  const add = (name: string, rgb: RgbColor, color: OklchColor): void => {
+  const add = (name: string, rgb: RgbColor, color: OklchColor, preserveInput = false): void => {
     const srgb = rgb.space === "srgb" ? rgb : oklchToRgb(gamutMapOklch(color, "srgb"), "srgb");
-    const channels = (value: RgbColor): string => [value.r, value.g, value.b].map(channel => String(Math.max(0, Math.min(1, channel)))).join(" ");
-    fallback.push(`  --bg-palette-${name}: color(srgb ${channels(srgb)});`);
-    if (rgb.space === "display-p3") wide.push(`  --bg-palette-${name}: color(display-p3 ${channels(rgb)});`);
+    const channels = (value: RgbColor, exact: boolean): string => [value.r, value.g, value.b]
+      .map(channel => exact ? String(Math.max(0, Math.min(1, channel))) : formatPaletteCssChannel(channel)).join(" ");
+    fallback.push(`  --bg-palette-${name}: color(srgb ${channels(srgb, preserveInput && rgb.space === "srgb")});`);
+    if (rgb.space === "display-p3") wide.push(`  --bg-palette-${name}: color(display-p3 ${channels(rgb, preserveInput)});`);
   };
   for (const stop of state.stops) {
-    for (const sample of samplePalette(state, stop.position)) add(`scale-${slot(sample.id)}-stop-${slot(stop.id)}`, sample.rgb, sample.color);
+    for (const sample of samplePalette(state, stop.position)) add(`scale-${paletteCssIdentifier(sample.id)}-stop-${paletteCssIdentifier(stop.id)}`, sample.rgb, sample.color);
   }
-  for (const anchor of state.anchors) add(`anchor-${slot(anchor.id)}`, anchor.color, rgbToOklch(anchor.color));
+  for (const anchor of state.anchors) add(`anchor-${paletteCssIdentifier(anchor.id)}`, anchor.color, rgbToOklch(anchor.color), true);
   const selector = '[data-bg-palette]';
   const css = `/* ${PALETTE_EMITTER_VERSION} */\n${selector} {\n${fallback.join("\n")}\n}\n` +
     (wide.length === 0 ? "" : `@supports (color: color(display-p3 1 0 0)) {\n${selector} {\n${wide.join("\n")}\n}\n}\n`);

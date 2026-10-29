@@ -27,6 +27,7 @@ import { createApp, classifyApiRoute } from "../src/server";
 import { BURNGUARD_CAPABILITY_HEADER } from "../src/security/request-authority";
 import { expectedDigest, fixture, rulesAdapter, validateRules } from "./fixtures/system-content-fixture";
 import brandAnchors from "./fixtures/theme-engine/baseline/brand-anchors.json";
+import legacyEmitter from "./fixtures/palette-emitter-v1.json";
 
 const roots: string[] = [];
 const databases: Database[] = [];
@@ -123,6 +124,48 @@ describe("design system palette persistence", () => {
     if (suffix !== "") {
       await expect(readDesignSystemPalette("test-system", f.env)).rejects.toMatchObject({ code: "system_content_conflict" });
     }
+  });
+  test.each(legacyEmitter.cases)("Given authenticated v1 $name output When read and explicitly saved Then old bytes survive until a versioned upgrade", async fixturePair => {
+    const f = await setup();
+    const member = (bytes: string) => ({ bytes, length: Buffer.byteLength(bytes), sha256: contentHash(bytes) });
+    const pair = { present: true as const, json: member(fixturePair.json), css: member(fixturePair.css) };
+    await publishSystemContent(f.env, {
+      systemId: "test-system", mode: "replace", expectedDigest: await expectedDigest(f.env),
+      adapter: {
+        provenance: { format: "system-content-v1", writer: "palette", source_extraction: null },
+        writeSet: () => ["palette/scales.css", "palette/state.json"],
+        transform: async stage => {
+          await mkdir(path.join(stage, "palette"));
+          await writeFile(path.join(stage, "palette/state.json"), fixturePair.json);
+          await writeFile(path.join(stage, "palette/scales.css"), fixturePair.css);
+        },
+        paletteHistory: async () => ({ emitter_version: "burnguard-palette-1", before: { present: false as const }, after: pair }),
+        validate: validatePaletteContent,
+      },
+    });
+    const legacy = await readDesignSystemPalette("test-system", f.env);
+    if (legacy.state === null) throw new Error("Missing legacy palette");
+    expect(legacy.state).toEqual(JSON.parse(fixturePair.json));
+    expect(legacy.css).toBe(fixturePair.css);
+    expect(await readFile(path.join(f.live, "palette/scales.css"), "utf8")).toBe(fixturePair.css);
+    const receipt = requiredReceipt(f);
+    const journal = parseContentJournal(JSON.parse(receipt.metadataJson));
+    const malformed = fixturePair.css + "body { display: none; }\n";
+    await writeFile(path.join(f.live, "palette/scales.css"), malformed);
+    await expect(validatePaletteContent(f.live, {
+      ...journal,
+      palette_history: { emitter_version: "burnguard-palette-1", before: { present: false },
+        after: { ...pair, css: member(malformed) } },
+    })).rejects.toMatchObject({ code: "system_content_corrupt" });
+    await writeFile(path.join(f.live, "palette/scales.css"), fixturePair.css);
+    const next = { ...legacy.state, display: { ...legacy.state.display, scale_gap: legacy.state.display.scale_gap + 1 } };
+    const upgraded = await save(f, next);
+    expect(upgraded.state).toEqual(next);
+    expect(upgraded.content_revision).toBe(2);
+    const history = parseContentJournal(JSON.parse(requiredReceipt(f).metadataJson)).palette_history;
+    expect(history?.emitter_version).toBe(PALETTE_EMITTER_VERSION);
+    expect(history?.before).toEqual(pair);
+    expect(upgraded.css?.startsWith(`/* ${PALETTE_EMITTER_VERSION} */\n`)).toBe(true);
   });
   test("Given installed unrelated bytes When saved Then canonical excluded CRLF and empty directories survive", async () => {
     const f = await setup();

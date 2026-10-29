@@ -10,7 +10,7 @@ import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { parseHexColor, relativeLuminance, rgbToOklch } from "../packages/shared/src/color";
 import {
-  createDefaultPalette, emitPaletteCss, parsePaletteState, serializePalette, type PaletteState,
+  createDefaultPalette, emitPaletteCss, PALETTE_DERIVED_DIGITS, parsePaletteState, serializePalette, type PaletteState,
 } from "../packages/shared/src/palette";
 import { bundledDesignSystems } from "../packages/backend/src/data/bundled-design-systems";
 import {
@@ -67,11 +67,11 @@ export function generateThemePalette(slug: string, css: string): PaletteState {
     ...defaults,
     scales: colors.map(({ role, oklch }) => oklch.c === 0
       ? { id: `scale-${role}`, name: `--${role}`, kind: "neutral" }
-      : { id: `scale-${role}`, name: `--${role}`, kind: "hue", hue: oklch.h }),
+      : { id: `scale-${role}`, name: `--${role}`, kind: "hue", hue: Number(oklch.h.toFixed(PALETTE_DERIVED_DIGITS)) % 360 }),
     anchors,
     // Shared chroma preserves the existing engine invariant. Exact tinted neutrals
     // and all semantic fills remain separately available as unmodified RGB anchors.
-    curve: { ...defaults.curve, amount: Math.max(...colors.map(({ oklch }) => oklch.c)) },
+    curve: { ...defaults.curve, amount: Number(Math.max(...colors.map(({ oklch }) => oklch.c)).toFixed(PALETTE_DERIVED_DIGITS)) },
     display: {
       ...defaults.display,
       appearance: relativeLuminance(color("bg")) < relativeLuminance(color("fg-1")) ? "dark" : "light",

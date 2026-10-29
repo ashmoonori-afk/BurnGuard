@@ -2,8 +2,8 @@ import type { Database } from "bun:sqlite";
 import { randomUUID } from "node:crypto";
 import { mkdir, readdir, writeFile } from "node:fs/promises";
 import {
-  emitPaletteCss, PALETTE_EMITTER_VERSION, parsePaletteState, parseSaveDesignSystemPaletteRequest,
-  serializePalette, type DesignSystemPaletteResponse, type SaveDesignSystemPaletteRequest,
+  emitPaletteCss, formatPaletteCssChannel, paletteCssIdentifier, PALETTE_EMITTER_VERSION, parsePaletteState, parseSaveDesignSystemPaletteRequest,
+  serializePalette, type DesignSystemPaletteResponse, type PaletteState, type SaveDesignSystemPaletteRequest,
 } from "@bg/shared/palette";
 import { UpgradeContractError } from "@bg/shared/contract-parser";
 import { getCurrentSystemContent, type CatalogReceiptRow } from "../db/catalog-repository";
@@ -23,6 +23,7 @@ import {
 import { readPreservedFile, safeContentChild, type ContentTree } from "./system-content-tree";
 
 const PAIR_PATHS = ["palette/scales.css", "palette/state.json"] as const;
+const LEGACY_EMITTER_VERSION = "burnguard-palette-1";
 export class DesignSystemPaletteError extends Error {
   readonly name = "DesignSystemPaletteError";
   constructor(readonly code: "design_system_not_found" | "invalid_lifecycle" | "palette_ownership_conflict") { super(code); }
@@ -44,12 +45,36 @@ async function readPair(root: string, tree: ContentTree): Promise<PairSnapshot> 
   if (json.bytes.length > 65_536) return corrupt();
   return { present: true, json, css };
 }
+function pairEmitterVersion(pair: PairSnapshot): string {
+  if (!pair.present) return corrupt();
+  for (const version of [PALETTE_EMITTER_VERSION, LEGACY_EMITTER_VERSION]) {
+    if (pair.css.bytes.startsWith(`/* ${version} */\n`)) return version;
+  }
+  return corrupt();
+}
+function canonicalLegacyCss(bytes: string, state: PaletteState): string {
+  if (!bytes.startsWith(`/* ${LEGACY_EMITTER_VERSION} */\n`)) return corrupt();
+  const exactAnchors = new Set(state.anchors.filter(anchor => anchor.color.space === "srgb")
+    .map(anchor => `--bg-palette-anchor-${paletteCssIdentifier(anchor.id)}`));
+  return bytes.replace(`/* ${LEGACY_EMITTER_VERSION} */`, `/* ${PALETTE_EMITTER_VERSION} */`)
+    .replace(/^  (--bg-palette-[a-zA-Z0-9_-]+): color\((srgb|display-p3) ([0-9.e+-]+) ([0-9.e+-]+) ([0-9.e+-]+)\);$/gm,
+      (match, name: string, space: string, r: string, g: string, b: string) => {
+        if (name.startsWith("--bg-palette-anchor-") && (space === "display-p3" || exactAnchors.has(name))) return match;
+        const channels = [r, g, b].map(raw => {
+          const value = Number(raw);
+          if (!Number.isFinite(value) || value < 0 || value > 1 || String(value) !== raw) return corrupt();
+          return formatPaletteCssChannel(value);
+        });
+        return `  ${name}: color(${space} ${channels.join(" ")});`;
+      });
+}
 function validatePair(pair: PairSnapshot, version: string): void {
-  if (version !== PALETTE_EMITTER_VERSION || !pair.present) return corrupt();
+  if ((version !== PALETTE_EMITTER_VERSION && version !== LEGACY_EMITTER_VERSION) || !pair.present) return corrupt();
   try {
     const state = parsePaletteState(pair.json.bytes);
     const json = serializePalette(state);
-    if ((pair.json.bytes !== json && pair.json.bytes !== `${json}\n`) || emitPaletteCss(state) !== pair.css.bytes) return corrupt();
+    const css = version === LEGACY_EMITTER_VERSION ? canonicalLegacyCss(pair.css.bytes, state) : pair.css.bytes;
+    if ((pair.json.bytes !== json && pair.json.bytes !== `${json}\n`) || emitPaletteCss(state) !== css) return corrupt();
   } catch (error) {
     if (error instanceof UpgradeContractError || error instanceof SyntaxError) return corrupt();
     throw error;
@@ -60,7 +85,8 @@ export const validatePaletteContent: ContentValidator = async (root, journal) =>
   const history = journal.palette_history;
   if (history === null) return corrupt();
   validatePair(history.after, history.emitter_version);
-  if (history.before.present) validatePair(history.before, history.emitter_version);
+  // The result version can advance while the authenticated prior bytes remain unchanged.
+  if (history.before.present) validatePair(history.before, pairEmitterVersion(history.before));
   const names = (await readdir(await safeContentChild(root, "palette"))).sort();
   if (names.length !== 2 || names[0] !== "scales.css" || names[1] !== "state.json") return corrupt();
   // The publisher validates full inventory and pair hashes too. Read again through its bounded IO seam.
@@ -135,7 +161,7 @@ function assertOwned(env: ContentEnvironment, base: ContentObservation, pair: Pa
     ["palette/scales.css", themeFileHash(Buffer.from(pair.css.bytes))],
   ]);
   if (slug === null || !(bundledThemeHistory.additive?.[slug]?.palette ?? []).includes(themeAdditiveDigest(files, "palette"))) return ownership();
-  validatePair(pair, PALETTE_EMITTER_VERSION);
+  validatePair(pair, pairEmitterVersion(pair));
 }
 async function response(env: ContentEnvironment, base: ContentObservation): Promise<DesignSystemPaletteResponse> {
   const pair = await actualPair(base);

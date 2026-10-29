@@ -3,7 +3,8 @@ import { allHueChroma, isInGamut, parseHexColor, parseRgb, selectedHueChroma } f
 import { UpgradeContractError } from "../src/contract-parser";
 import { PALETTE_DISTRIBUTIONS, PALETTE_LIMITS, createDefaultPalette, distributePalette, paletteShareFragment,
   parsePaletteShareFragment, parsePaletteState, redoPalette, samplePalette, sampleScale, serializePalette,
-  transitionPalette, undoPalette, type PaletteHistory, type PaletteState } from "../src/palette";
+  transitionPalette, undoPalette, emitPaletteCss, formatPaletteCssChannel, PALETTE_EMITTER_VERSION,
+  type PaletteHistory, type PaletteState } from "../src/palette";
 
 test("Given default state When initialized Then named absolute stops and five hues plus neutral are provided", () => {
   const state = createDefaultPalette();
@@ -12,6 +13,28 @@ test("Given default state When initialized Then named absolute stops and five hu
   expect(parsed.stops.map(s => s.position)).toEqual([50, 100, 150, 200, 250, 300, 400, 500, 600, 650, 700, 750].map(n => n / 800));
   expect(parsed.scales.filter(s => s.kind === "hue")).toHaveLength(5);
   expect(parsed.scales.filter(s => s.kind === "neutral")).toHaveLength(1);
+});
+
+test("Given derived channel noise When CSS is encoded Then stable output keeps editable values exact", () => {
+  for (const value of [0, 0.123456789, 0.5, 0.99999999, 1]) {
+    expect(formatPaletteCssChannel(value + 1e-15)).toBe(formatPaletteCssChannel(value - 1e-15));
+  }
+  for (let index = 0; index <= 1024; index++) {
+    const value = index / 1024;
+    expect(Math.abs(Number(formatPaletteCssChannel(value)) - value)).toBeLessThanOrEqual(5e-9 + Number.EPSILON);
+  }
+  const original = createDefaultPalette();
+  const state: PaletteState = {
+    ...original,
+    stops: original.stops.map((stop, index) => index === 0 ? { ...stop, position: 0.070123456789 } : stop),
+    anchors: [{ id: "precise-anchor", name: "Precise", color: parseRgb({ space: "srgb", r: 0.123456789123, g: 0.5, b: 0.9 }) }],
+  };
+  expect(parsePaletteState(serializePalette(state))).toEqual(state);
+  const css = emitPaletteCss(state);
+  expect(css.startsWith(`/* ${PALETTE_EMITTER_VERSION} */\n`)).toBe(true);
+  expect(css).toContain("color(srgb 0.123456789123 0.5 0.9)");
+  expect(state.anchors[0]?.color.r).toBe(0.123456789123);
+  expect(state.stops[0]?.position).toBe(0.070123456789);
 });
 
 for (const gamut of ["srgb", "display-p3"] as const) {

@@ -5,7 +5,7 @@ import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { parseHexColor, rgbToOklch } from "@bg/shared/color";
-import { emitPaletteCss, parsePaletteState, serializePalette } from "@bg/shared/palette";
+import { emitPaletteCss, PALETTE_DERIVED_DIGITS, parsePaletteState, serializePalette } from "@bg/shared/palette";
 import {
   BundledPaletteGenerationError, bundledPalettePaths, emitBundledPalettePatch,
   extendBundledPaletteHistory, generateBundledPalettePlan, generateThemePalettePair,
@@ -167,9 +167,9 @@ describe("bundled palette materialization", () => {
         const color = rgbToOklch(parseHexColor(tokens.get(scale.name.slice(2))));
         chromas.push(color.c);
         expect(scale.kind, `${row.slug}: ${scale.id}`).toBe(color.c === 0 ? "neutral" : "hue");
-        if (scale.kind === "hue") expect(scale.hue).toBe(color.h);
+        if (scale.kind === "hue") expect(scale.hue).toBe(Number(color.h.toFixed(PALETTE_DERIVED_DIGITS)) % 360);
       }
-      expect(pair.state.curve.amount).toBe(Math.max(...chromas));
+      expect(pair.state.curve.amount).toBe(Number(Math.max(...chromas).toFixed(PALETTE_DERIVED_DIGITS)));
     }
   }, 30_000);
 
