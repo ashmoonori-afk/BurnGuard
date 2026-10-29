@@ -7,6 +7,7 @@ import {
   CanonicalTreeManifestError, inspectCanonicalTree, parseCanonicalTreeManifest, validateCanonicalTree,
 } from "./canonical-tree-manifest";
 import { ExtractionSidecarError, readValidatedExtractionSidecar } from "./extraction-sidecar";
+import { parseContentProvenance, SystemContentError } from "./system-content-format";
 
 export type CatalogFileIdentity = {
   readonly files: readonly string[];
@@ -58,6 +59,7 @@ export async function inspectCatalogTree(root: string): Promise<CatalogFileIdent
 }
 
 export async function validateCatalogReceiptTree(target: string, receipt: {
+  readonly schemaVersion: number;
   readonly digest: string;
   readonly manifestJson: string;
   readonly provenanceJson: string;
@@ -72,13 +74,19 @@ export async function validateCatalogReceiptTree(target: string, receipt: {
     if (receipt.operation !== "content" && receipt.parentDigest !== receipt.digest) throw new CatalogFileError("catalog_digest_mismatch", "Catalog parent digest is stale");
     await validateCanonicalTree(target, manifest);
     const tree = await inspectCatalogTree(target);
+    if (receipt.schemaVersion === 2) {
+      parseContentProvenance(JSON.parse(receipt.provenanceJson));
+      if (receipt.digest !== manifest.tree_digest) throw new CatalogFileError("catalog_digest_mismatch", "Catalog content digest is stale");
+      return { ...tree, digest: manifest.tree_digest };
+    }
+    if (receipt.schemaVersion !== 1) throw new CatalogFileError("catalog_manifest_unverifiable", "Unknown catalog receipt format");
     const sidecar = await readValidatedExtractionSidecar(target);
     if (sidecar.content_digest !== receipt.digest) throw new CatalogFileError("catalog_digest_mismatch", "Catalog receipt provenance digest is stale");
     return { ...tree, digest: sidecar.content_digest };
   } catch (error) {
     if (error instanceof CatalogFileError) throw error;
     if (error instanceof CanonicalTreeManifestError && error.code === "manifest_unverifiable") throw new CatalogFileError("catalog_manifest_unverifiable", error.message);
-    if (error instanceof CanonicalTreeManifestError || error instanceof ExtractionSidecarError || error instanceof SyntaxError) throw new CatalogFileError("catalog_digest_mismatch", "Catalog receipt or canonical bytes are corrupt");
+    if (error instanceof CanonicalTreeManifestError || error instanceof ExtractionSidecarError || error instanceof SystemContentError || error instanceof SyntaxError) throw new CatalogFileError("catalog_digest_mismatch", "Catalog receipt or canonical bytes are corrupt");
     throw error;
   }
 }

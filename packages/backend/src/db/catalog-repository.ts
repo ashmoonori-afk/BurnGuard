@@ -48,7 +48,10 @@ export function listCatalogRows(db: Database): readonly CatalogRow[] {
     is_template isTemplate,dir_path dirPath,skill_md_path skillMdPath,tokens_css_path tokensCssPath,readme_md_path readmeMdPath,
     thumbnail_path thumbnailPath,created_at createdAt,updated_at updatedAt,archived_at archivedAt,
     metadata_revision metadataRevision,catalog_kind kind,catalog_owner owner,lifecycle,provenance_state provenance,
-    license_state license,trashed_at trashedAt FROM design_systems ORDER BY id`).all();
+    license_state license,trashed_at trashedAt FROM design_systems
+    WHERE NOT EXISTS (SELECT 1 FROM design_system_receipts r WHERE r.design_system_id=design_systems.id
+      AND r.schema_version=2 AND r.operation='content' AND r.source_path IS NULL AND r.status IN ('prepared','recovering'))
+    ORDER BY id`).all();
 }
 
 export function getCatalogRow(db: Database, id: string): CatalogRow | null {
@@ -169,10 +172,13 @@ export function deleteCatalogSystem(db: Database, id: string): void {
 function insertOperation(db: Database, receiptId: string, input: OperationInput): void {
   if (getPendingSystemOperation(db, input.systemId) !== null) throw new CatalogRepositoryError("operation_conflict", input.systemId);
   const ordinal = db.query<{ readonly count: number }, [string]>("SELECT COUNT(*) count FROM design_system_receipts WHERE design_system_id=? AND operation!='content'").get(input.systemId)?.count ?? 0;
-  db.prepare(`INSERT INTO design_system_receipts(id,design_system_id,status,content_revision,schema_version,digest,manifest_json,
+  const source = input.parentReceiptId === null ? null : db.query<CatalogReceiptRow, [string]>(`${RECEIPT_SELECT} WHERE id=? AND status='committed'`).get(input.parentReceiptId);
+  const schemaVersion = source?.schemaVersion ?? 1;
+  if (schemaVersion !== 1 && schemaVersion !== 2 || source !== null && source.digest !== input.digest) throw new CatalogRepositoryError("operation_conflict", input.systemId);
+  db.query(`INSERT INTO design_system_receipts(id,design_system_id,status,content_revision,schema_version,digest,manifest_json,
     provenance_json,created_at,updated_at,operation,parent_system_id,parent_receipt_id,parent_digest,reason,metadata_json,source_path,destination_path)
-    VALUES (?,?,'prepared',?,1,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
-      receiptId, input.systemId, -(ordinal + 1), input.digest, input.manifestJson, input.provenanceJson,
+    VALUES (?,?,'prepared',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+      receiptId, input.systemId, -(ordinal + 1), schemaVersion, input.digest, input.manifestJson, input.provenanceJson,
       input.now, input.now, input.operation, input.parentSystemId, input.parentReceiptId, input.parentDigest,
       input.reason, JSON.stringify(input.metadata), input.sourcePath, input.destinationPath,
     );

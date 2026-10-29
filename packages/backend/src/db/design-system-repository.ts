@@ -3,6 +3,10 @@ import type { drizzle } from "drizzle-orm/bun-sqlite";
 import { getCurrentSystemContent, getPendingSystemOperation } from "./catalog-repository";
 import { PipelineRepositoryError, parseJsonRecord } from "./pipeline-repository";
 import { designSystemReceiptsTable, designSystemTagsTable } from "./pipeline-schema";
+import type { Database } from "bun:sqlite";
+import { getCatalogRow, type CatalogReceiptRow } from "./catalog-repository";
+import { parseContentJournal, parseContentProvenance, SystemContentError, type ContentBase, type ContentHead } from "../services/system-content-format";
+import { parseCanonicalTreeManifest } from "../services/canonical-tree-manifest";
 
 type MetadataUpdate = {
   readonly id: string;
@@ -121,3 +125,111 @@ function parseReceipt(row: Pick<typeof designSystemReceiptsTable.$inferSelect, "
     provenance: parseJsonRecord(row.provenanceJson, row.id),
   };
 }
+
+export function systemContentHead(db: Database, id: string): ContentHead | null {
+  const row = getCurrentSystemContent(db, id);
+  if (row === null) return null;
+  if (row.schemaVersion !== 1 && row.schemaVersion !== 2) throw new SystemContentError("system_content_corrupt");
+  return { receipt_id: row.id, revision: row.contentRevision, schema_version: row.schemaVersion, digest: row.digest };
+}
+
+export function assertSystemContentAuthority(db: Database, id: string, base: ContentBase | null, createPrepared = false): void {
+  const row = getCatalogRow(db, id);
+  if (base === null) {
+    if (createPrepared ? row === null || row.metadataRevision !== 0 || row.lifecycle !== "active" : row !== null) throw new SystemContentError("system_content_conflict");
+  } else if (row === null || row.metadataRevision !== base.metadata_revision || row.lifecycle !== base.lifecycle) {
+    throw new SystemContentError("system_content_conflict");
+  }
+  if (JSON.stringify(systemContentHead(db, id)) !== JSON.stringify(base?.head ?? null)) throw new SystemContentError("system_content_conflict");
+}
+
+export function getSystemContentReceipt(db: Database, id: string): CatalogReceiptRow | null {
+  return db.query<CatalogReceiptRow, [string]>(`${SYSTEM_CONTENT_SELECT} WHERE id=? AND operation='content' AND schema_version=2`).get(id);
+}
+export function listSystemContentReceipts(db: Database): readonly CatalogReceiptRow[] {
+  return db.query<CatalogReceiptRow, []>(`${SYSTEM_CONTENT_SELECT} WHERE operation='content' AND schema_version=2 ORDER BY design_system_id,content_revision`).all();
+}
+export type NewContentSystem = {
+  readonly name: string; readonly description: string | null;
+  readonly skillMdPath: string | null; readonly tokensCssPath: string | null; readonly readmeMdPath: string | null;
+};
+
+/** Stage is complete before this transaction; no placeholder candidate can become durable. */
+export function prepareSystemContent(db: Database, input: {
+  readonly id: string; readonly journal: unknown; readonly manifest: unknown; readonly provenance: unknown;
+  readonly live: string; readonly now: number; readonly create: NewContentSystem | null;
+}): CatalogReceiptRow {
+  const journal = parseContentJournal(input.journal);
+  const manifest = parseCanonicalTreeManifest(input.manifest);
+  const provenance = parseContentProvenance(input.provenance);
+  if (input.id !== `system-content-${journal.operation_id}` || journal.cleanup !== "pending" || journal.intent !== "publish" || journal.failure_code !== null || (journal.mode === "create") !== (input.create !== null) || (provenance.writer === "palette") !== (journal.palette_history !== null)) throw new SystemContentError("system_content_corrupt");
+  db.transaction(() => {
+    assertSystemContentAuthority(db, journal.system_id, journal.base);
+    if (getPendingSystemOperation(db, journal.system_id) !== null) throw new SystemContentError("system_content_conflict");
+    if (input.create !== null) {
+      db.query(`INSERT INTO design_systems(id,name,description,status,source_type,is_template,dir_path,skill_md_path,tokens_css_path,readme_md_path,created_at,updated_at)
+        VALUES (?,?,?,'draft','manual',0,?,?,?,?,?,?)`).run(journal.system_id, input.create.name, input.create.description, input.live, input.create.skillMdPath, input.create.tokensCssPath, input.create.readmeMdPath, input.now, input.now);
+    }
+    const revision = db.query<{ readonly revision: number }, [string]>("SELECT COALESCE(MAX(content_revision),0)+1 revision FROM design_system_receipts WHERE design_system_id=? AND content_revision>0").get(journal.system_id)?.revision;
+    if (revision === undefined || !Number.isSafeInteger(revision) || revision < 1) throw new SystemContentError("system_content_corrupt");
+    db.query(`INSERT INTO design_system_receipts(id,design_system_id,status,content_revision,schema_version,digest,manifest_json,provenance_json,created_at,updated_at,operation,parent_system_id,parent_receipt_id,parent_digest,metadata_json,source_path,destination_path)
+      VALUES (?,?,'prepared',?,2,?,?,?,?,?,'content',?,?,?,?,?,?)`).run(
+      input.id, journal.system_id, revision, manifest.tree_digest, JSON.stringify(manifest), JSON.stringify(provenance), input.now, input.now,
+      journal.base?.head === null || journal.base === null ? null : journal.system_id,
+      journal.base?.head?.receipt_id ?? null, journal.base?.head?.digest ?? null, JSON.stringify(journal),
+      journal.mode === "replace" ? input.live : null, input.live,
+    );
+  })();
+  const result = getSystemContentReceipt(db, input.id);
+  if (result === null) throw new SystemContentError("system_content_corrupt");
+  return result;
+}
+
+export function commitSystemContent(db: Database, receipt: CatalogReceiptRow, now: number): void {
+  const journal = parseContentJournal(JSON.parse(receipt.metadataJson));
+  if (journal.intent !== "publish") throw new SystemContentError("system_content_conflict");
+  db.transaction(() => {
+    assertSystemContentAuthority(db, journal.system_id, journal.base, journal.mode === "create");
+    if (getPendingSystemOperation(db, journal.system_id)?.id !== receipt.id) throw new SystemContentError("system_content_conflict");
+    const changed = db.query(`UPDATE design_system_receipts SET status='committed',updated_at=? WHERE id=? AND schema_version=2 AND operation='content'
+      AND status IN ('prepared','recovering') AND digest=? AND metadata_json=? AND manifest_json=? AND provenance_json=?`).run(now, receipt.id, receipt.digest, receipt.metadataJson, receipt.manifestJson, receipt.provenanceJson).changes;
+    if (changed !== 1) throw new SystemContentError("system_content_conflict");
+    if (db.query("UPDATE design_systems SET updated_at=? WHERE id=?").run(now, journal.system_id).changes !== 1) throw new SystemContentError("system_content_conflict");
+  })();
+}
+/** Every journal transition uses the exact previous bytes as its compare-and-swap token. */
+export function transitionSystemContent(db: Database, receipt: CatalogReceiptRow, journal: unknown, status: CatalogReceiptRow["status"], now: number): CatalogReceiptRow {
+  const parsed = parseContentJournal(journal);
+  const before = parseContentJournal(JSON.parse(receipt.metadataJson));
+  const immutable = (value: typeof parsed) => JSON.stringify({ ...value, intent: "publish", cleanup: "pending", failure_code: null });
+  if (immutable(parsed) !== immutable(before) || before.intent === "rollback" && parsed.intent !== "rollback" ||
+    before.cleanup === "complete" && parsed.cleanup !== "complete" || status === "committed" && receipt.status !== "committed" ||
+    status === "failed" && parsed.intent !== "rollback" || parsed.cleanup === "complete" && status !== "committed" && status !== "failed" &&
+      !(parsed.mode === "create" && parsed.intent === "rollback" && (status === "prepared" || status === "recovering"))) throw new SystemContentError("system_content_corrupt");
+  if (receipt.status === "committed" && status !== "committed" || receipt.status === "failed" && status !== "failed") throw new SystemContentError("system_content_conflict");
+  const changed = db.query(`UPDATE design_system_receipts SET metadata_json=?,status=?,updated_at=? WHERE id=? AND status=? AND metadata_json=?
+    AND schema_version=2 AND operation='content' AND digest=?`).run(JSON.stringify(parsed), status, now, receipt.id, receipt.status, receipt.metadataJson, receipt.digest).changes;
+  if (changed !== 1) throw new SystemContentError("system_content_conflict");
+  const result = getSystemContentReceipt(db, receipt.id);
+  if (result === null) throw new SystemContentError("system_content_corrupt");
+  return result;
+}
+/** Create rollback deletes its own reservation only after all owned storage was removed. */
+export function removeRolledBackContentCreate(db: Database, receipt: CatalogReceiptRow): void {
+  const journal = parseContentJournal(JSON.parse(receipt.metadataJson));
+  if (journal.mode !== "create" || journal.intent !== "rollback" || receipt.status === "committed" || journal.cleanup !== "complete") throw new SystemContentError("system_content_conflict");
+  db.transaction(() => {
+    assertSystemContentAuthority(db, journal.system_id, null, true);
+    const current = getSystemContentReceipt(db, receipt.id);
+    const pending = getPendingSystemOperation(db, journal.system_id);
+    if (current?.metadataJson !== receipt.metadataJson || current.status !== receipt.status || pending !== null && pending.id !== receipt.id) throw new SystemContentError("system_content_conflict");
+    db.query(`DELETE FROM design_systems WHERE id=? AND metadata_revision=0
+      AND NOT EXISTS (SELECT 1 FROM design_system_receipts WHERE design_system_id=? AND id!=?)`)
+      .run(journal.system_id, journal.system_id, receipt.id);
+    // Bun's statement count includes cascaded receipts; SQL changes() counts the one owned system row.
+    if (db.query<{ readonly changes: number }, []>("SELECT changes() changes").get()?.changes !== 1) throw new SystemContentError("system_content_conflict");
+  })();
+}
+const SYSTEM_CONTENT_SELECT = `SELECT id,design_system_id designSystemId,status,content_revision contentRevision,schema_version schemaVersion,
+  digest,manifest_json manifestJson,provenance_json provenanceJson,operation,parent_system_id parentSystemId,parent_receipt_id parentReceiptId,
+  parent_digest parentDigest,reason,metadata_json metadataJson,source_path sourcePath,destination_path destinationPath FROM design_system_receipts`;

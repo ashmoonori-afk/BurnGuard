@@ -61,6 +61,7 @@ jobs:
         run: >-
           bun test --timeout 30000
           packages/backend/tests/project-folder.test.ts
+          packages/backend/tests/system-content-publication.test.ts
           packages/backend/tests/logo-tracer.test.ts
           packages/frontend/tests/canvas-device-width.test.ts
           packages/frontend/tests/toolbar-overflow.test.ts

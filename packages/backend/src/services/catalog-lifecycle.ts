@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import { mkdir, readdir, rm } from "node:fs/promises";
+import { readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import {
   CatalogRepositoryError, commitCatalogOperation, createCatalogChild, deleteCatalogSystem, failCatalogOperation,
@@ -11,6 +11,8 @@ import {
   CatalogFileError, catalogPaths, copyCatalogTree, exists, moveCatalogTree,
   publishCatalogCopy, removeCatalogTree, validateCatalogReceiptTree,
 } from "./catalog-files";
+import { withSystemContentLocks } from "./system-content-access";
+import { pathStat, safeContentChild } from "./system-content-tree";
 
 export class CatalogLifecycleError extends Error {
   readonly name = "CatalogLifecycleError";
@@ -216,22 +218,16 @@ function requiredRow(db: Database, id: string): CatalogRow {
 }
 
 async function catalogLock<T>(root: string, id: string, operation: () => Promise<T>): Promise<T> {
-  const lockRoot = resolveWithin(root, ".catalog-locks");
-  await mkdir(lockRoot, { recursive: true });
-  const lock = resolveWithin(lockRoot, assertSafeName(id));
-  try { await mkdir(lock); }
-  catch (error) {
-    if (error instanceof Error && "code" in error && error.code === "EEXIST") throw new CatalogLifecycleError("catalog_operation_conflict", "Catalog operation is already active");
-    throw error;
-  }
-  try { return await operation(); }
-  finally { await rm(lock, { recursive: true, force: true }); }
+  return withSystemContentLocks(root, [id], operation);
 }
 
 async function cleanupCatalogControls(root: string): Promise<void> {
   const entries = await readdir(root, { withFileTypes: true });
   if (entries.some((entry) => entry.isDirectory() && /^\..+\.catalog-staging-/.test(entry.name))) return;
-  await rm(resolveWithin(root, ".catalog-locks"), { recursive: true, force: true });
+  const lockRoot = await safeContentChild(root, ".catalog-locks");
+  if (await pathStat(lockRoot) === null) return;
+  // Occupied locks, including incomplete/unknown owners, need startup classification rather than blanket deletion.
+  if ((await readdir(lockRoot)).length === 0) await rm(lockRoot, { recursive: true });
 }
 
 function translate(error: unknown): CatalogLifecycleError {
