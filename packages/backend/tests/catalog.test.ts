@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import * as fsp from "node:fs/promises";
 import { createHash } from "node:crypto";
-import { link, mkdir, open, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
+import { link, mkdir, open, readFile, readdir, rm, rmdir, symlink, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { createDefaultPalette, serializePalette } from "@bg/shared/palette";
 import { getCatalogRow, getCurrentSystemContent, getLineageReceipt, updateCatalogMetadata } from "../src/db/catalog-repository";
@@ -715,13 +715,15 @@ describe("shared catalog content access", () => {
     // Given
     const parent = await seedSystem("queued-metadata");
     const entered = signal(), release = signal(), firstQueued = signal(), secondQueued = signal(), db = getSqlite();
+    const queueOrder: string[] = [];
     const owner = withSystemContentLocks(systemsDir, [parent], async () => { entered.resolve(); await release.promise; });
     let first: Promise<unknown> | undefined, second: Promise<unknown> | undefined;
     try {
       await bounded(entered.promise);
       // When
-      first = patchCatalogSystem(db, systemsDir, parent, { expectedRevision: 0, name: "Winner", tags: ["winner"] }, { onAccessQueued: firstQueued.resolve });
-      second = rejectsWithCode(patchCatalogSystem(db, systemsDir, parent, { expectedRevision: 0, description: "stale" }, { onAccessQueued: secondQueued.resolve }), "expected_revision_conflict");
+      first = patchCatalogSystem(db, systemsDir, parent, { expectedRevision: 0, name: "Winner", tags: ["winner"] }, { onAccessQueued: () => { queueOrder.push("first"); firstQueued.resolve(); } });
+      second = rejectsWithCode(patchCatalogSystem(db, systemsDir, parent, { expectedRevision: 0, description: "stale" }, { onAccessQueued: () => { queueOrder.push("second"); secondQueued.resolve(); } }), "expected_revision_conflict");
+      expect(queueOrder).toEqual(["first", "second"]);
       await bounded(Promise.all([firstQueued.promise, secondQueued.promise]));
     } finally { release.resolve(); }
     await bounded(Promise.all([owner, first, second]));
@@ -987,7 +989,10 @@ describe("shared catalog content access", () => {
       expect(result).toMatchObject({ status: 409, json: { error: { code: "system_content_conflict" } } });
       expect(JSON.stringify(result.json)).not.toContain(root);
       expect(getCurrentSystemContent(getSqlite(), system)?.id).toBe(`receipt-${system}`);
-    } finally { await rm(unsafe, { force: true }); }
+    } finally {
+      if (kind === "directory-link") await (process.platform === "win32" ? rmdir(unsafe) : unlink(unsafe));
+      else await rm(unsafe, { force: true });
+    }
   });
 
   test("Given packaged preview fonts When read Then bounded verified stylesheet bytes keep content-addressed URLs", async () => {

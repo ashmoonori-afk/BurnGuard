@@ -25,6 +25,7 @@ export async function withSystemContentLocks<T>(root: string, ids: readonly stri
     await previous;
     let owned = false;
     try {
+      await mkdir(root, { recursive: true });
       const lockRoot = await safeContentChild(root, ".catalog-locks");
       await mkdir(lockRoot, { recursive: true });
       const lock = await safeContentChild(lockRoot, id);

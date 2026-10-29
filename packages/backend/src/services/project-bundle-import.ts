@@ -33,6 +33,7 @@ import { acquireArtifactProjectLock } from "./artifact-project-lock";
 type ImportOwnership = { readonly operationId: string; readonly projectId: string; readonly systemId: string | null };
 type ProjectBundleImportEvents = {
   readonly atBoundary?: (name: "system-reserved" | "system-restored" | "project-created" | "before-commit" | "outer-committed" | "owner-removed", owner: ImportOwnership) => Promise<void>;
+  readonly getLocalFonts?: typeof getLocalFonts;
 };
 
 export async function importProjectBundleFile(file: File, name?: string, events: ProjectBundleImportEvents = {}): Promise<ProjectBundleImportResponse> {
@@ -157,7 +158,7 @@ async function importStagedBundle(
     // Archive pin text is untrusted prompt input; the pin is rebuilt by the app renderer from the restored system.
     if (selectedSystemId !== null) await ensureProjectDesignSystemPin(project.id, plannedSystem === null ? undefined : lease);
     await indexProjectFiles(project.id);
-    const warnings = await importWarnings(manifest.fonts.families, system.missing_builtin);
+    const warnings = await importWarnings(manifest.fonts.families, system.missing_builtin, events.getLocalFonts ?? getLocalFonts);
     await events.atBoundary?.("before-commit", owner);
     await writeProjectBundleImportReceipt({ schema_version: 1, operation_id: operationId, project_id: projectId, system_id: plannedSystem?.id ?? null, phase: "committed" });
     outerCommitted = true;
@@ -340,12 +341,12 @@ async function writeEntries(input: WriteEntriesInput): Promise<void> {
   }
 }
 
-async function importWarnings(families: readonly string[], missingBuiltin: string | null): Promise<readonly ProjectBundleImportWarning[]> {
+async function importWarnings(families: readonly string[], missingBuiltin: string | null, fonts: typeof getLocalFonts): Promise<readonly ProjectBundleImportWarning[]> {
   const warnings: ProjectBundleImportWarning[] = [];
   if (missingBuiltin) warnings.push({ code: "missing_builtin_design_system", reference: missingBuiltin });
   if (families.length === 0) return warnings;
   let installed: readonly string[] = [];
-  try { installed = (await getLocalFonts()).families; }
+  try { installed = (await fonts()).families; }
   catch (error) {
     if (!(error instanceof Error)) throw error;
     installed = [];

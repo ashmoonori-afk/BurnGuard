@@ -30,6 +30,8 @@ if (phase === "prepare") {
   await runMigrations();
   const release = new Response(Bun.stdin).text();
   await importProjectBundleFile(new File([new Uint8Array(await readFile(archive))], "fixture.burnguard-project"), "Crash fixture", {
+    // OS font discovery is unrelated to crash ownership; keep this process fixture deterministic.
+    getLocalFonts: async () => ({ schema_version: 1, families: [] }),
     atBoundary: async (name, owner) => {
       if (name !== boundary || owner.systemId === null) return;
       const live = path.join(systemsDir, owner.systemId);
