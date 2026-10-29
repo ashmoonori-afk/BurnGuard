@@ -17,3 +17,4 @@ packages/backend/tests/fixtures/theme-engine/** -text
 # Generated palette hashes must survive Windows checkout unchanged.
 "design system themes/*/palette/state.json" text eol=lf
 "design system themes/*/palette/scales.css" text eol=lf
+packages/backend/src/data/bundled-theme-history.json text eol=lf
