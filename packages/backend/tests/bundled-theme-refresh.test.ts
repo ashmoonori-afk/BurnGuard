@@ -68,6 +68,8 @@ async function upgradedProfile(files: Readonly<Record<string, string>>) {
   const shipped = path.join(repoRoot, "design system themes", SLUG);
   await cp(source, shipped, { recursive: true });
   for (const directory of ["palette", "canonical"]) {
+    // Each synthetic release owns its additive inputs, independently of today's bundle.
+    await rm(path.join(shipped, directory), { recursive: true, force: true });
     await mkdir(path.join(shipped, directory), { recursive: true });
     await writeFile(path.join(shipped, directory, "SKILL.md"), "# Additive instructions\n");
   }
@@ -203,10 +205,13 @@ describe("bundled theme refresh on upgrade", () => {
     expect(getCurrentSystemContent(getSqlite(), bundledDesignSystemId(SLUG))).toBeNull();
   });
   test("Given historical legacy bytes When the bundle has no additions Then startup preserves the installed tree", async () => {
-    const { systems, installed } = await upgradedProfile(legacyTheme);
+    const { systems, installed, repoRoot, shipped } = await upgradedProfile(legacyTheme);
+    for (const directory of ["palette", "canonical"]) {
+      await rm(path.join(shipped, directory), { recursive: true, force: true });
+    }
     const before = await readThemeFiles(installed);
 
-    await seedBundledDesignSystems(resolveRepoRoot(), systems, legacyHistory);
+    await seedBundledDesignSystems(repoRoot, systems, legacyHistory);
 
     expect(await readThemeFiles(installed)).toEqual(before);
   });
