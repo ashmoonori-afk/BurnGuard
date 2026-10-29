@@ -1,4 +1,9 @@
 import { Hono } from "hono";
+import { parseSaveDesignSystemPaletteRequest } from "@bg/shared/palette";
+import { UpgradeContractError } from "@bg/shared/contract-parser";
+import { PathBoundaryError, assertSafeName } from "../security/path-boundary";
+import { DesignSystemPaletteError, readDesignSystemPalette, saveDesignSystemPalette } from "../services/design-system-palette";
+import { SystemContentError } from "../services/system-content-format";
 import { MAX_PAGE_LIMIT } from "@bg/shared";
 import type {
   ApiErrorBody,
@@ -69,6 +74,31 @@ function parseExtractionLineage(input: unknown): DesignSystemExtractionLineageRe
 }
 
 export const systemRoutes = new Hono();
+
+function paletteFailure(error: unknown) {
+  if (error instanceof UpgradeContractError || error instanceof PathBoundaryError || error instanceof SyntaxError) {
+    return { body: fail("invalid_body", "Invalid palette request"), status: 400 as const };
+  }
+  if (error instanceof DesignSystemPaletteError) {
+    return { body: fail(error.code, "Palette is unavailable"), status: error.code === "design_system_not_found" ? 404 as const : 409 as const };
+  }
+  if (error instanceof SystemContentError) {
+    return { body: fail(error.code, "Palette could not be read or saved"), status: error.code === "expected_digest_conflict" ? 412 as const :
+      error.code === "system_content_failed" ? 500 as const : 409 as const };
+  }
+  return { body: fail("system_content_failed", "Palette could not be read or saved"), status: 500 as const };
+}
+
+systemRoutes.get("/api/design-systems/:id/palette", async c => {
+  try { return c.json(ok(await readDesignSystemPalette(assertSafeName(c.req.param("id"))))); }
+  catch (error) { const failure = paletteFailure(error); return c.json(failure.body, failure.status); }
+});
+systemRoutes.put("/api/design-systems/:id/palette", async c => {
+  try {
+    const request = parseSaveDesignSystemPaletteRequest(await c.req.json<unknown>());
+    return c.json(ok(await saveDesignSystemPalette(assertSafeName(c.req.param("id")), request)));
+  } catch (error) { const failure = paletteFailure(error); return c.json(failure.body, failure.status); }
+});
 
 systemRoutes.post("/api/design-systems/pinterest", async (c) => {
   try {

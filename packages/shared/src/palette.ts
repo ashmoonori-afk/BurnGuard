@@ -1,6 +1,52 @@
 import { allHueChroma, ColorContractError, isInGamut, oklchToRgb, parseColorGamut, parseRgb,
   selectedHueChroma, type ColorGamut, type OklchColor, type RgbColor } from "./color";
 import { decodeContract, isRecord, UpgradeContractError } from "./contract-parser";
+import { gamutMapOklch, rgbToOklch } from "./color";
+
+export type DesignSystemPaletteResponse = {
+  readonly state: PaletteState | null; readonly css: string | null; readonly expected_digest: string;
+  readonly content_revision: number; readonly receipt_id: string | null;
+};
+export type SaveDesignSystemPaletteRequest = { readonly expected_digest: string; readonly state: PaletteState };
+export const PALETTE_EMITTER_VERSION = "burnguard-palette-1";
+
+export function parseSaveDesignSystemPaletteRequest(input: unknown): SaveDesignSystemPaletteRequest {
+  const value = shape(input, "expected_digest state");
+  if (typeof value.expected_digest !== "string" || !/^[0-9a-f]{64}$/.test(value.expected_digest)) return invalid("expected_digest");
+  const state = parsePaletteState(value.state);
+  serializePalette(state);
+  return { expected_digest: value.expected_digest, state };
+}
+
+/** Length-framed UTF-8 base64url is injective and bounded to 325 characters for validated IDs.
+ * Names never become CSS syntax; exact brand RGB inputs remain separate from sampled scales.
+ */
+export function emitPaletteCss(input: PaletteState): string {
+  const state = parsePaletteState(input);
+  serializePalette(state);
+  const slot = (id: string): string => {
+    const bytes = new TextEncoder().encode(id);
+    return `u${bytes.length}_` + btoa(String.fromCharCode(...bytes))
+      .replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
+  };
+  const fallback: string[] = [], wide: string[] = [];
+  const add = (name: string, rgb: RgbColor, color: OklchColor): void => {
+    const srgb = rgb.space === "srgb" ? rgb : oklchToRgb(gamutMapOklch(color, "srgb"), "srgb");
+    const channels = (value: RgbColor): string => [value.r, value.g, value.b].map(channel => String(Math.max(0, Math.min(1, channel)))).join(" ");
+    fallback.push(`  --bg-palette-${name}: color(srgb ${channels(srgb)});`);
+    if (rgb.space === "display-p3") wide.push(`  --bg-palette-${name}: color(display-p3 ${channels(rgb)});`);
+  };
+  for (const stop of state.stops) {
+    for (const sample of samplePalette(state, stop.position)) add(`scale-${slot(sample.id)}-stop-${slot(stop.id)}`, sample.rgb, sample.color);
+  }
+  for (const anchor of state.anchors) add(`anchor-${slot(anchor.id)}`, anchor.color, rgbToOklch(anchor.color));
+  const selector = '[data-bg-palette]';
+  const css = `/* ${PALETTE_EMITTER_VERSION} */\n${selector} {\n${fallback.join("\n")}\n}\n` +
+    (wide.length === 0 ? "" : `@supports (color: color(display-p3 1 0 0)) {\n${selector} {\n${wide.join("\n")}\n}\n}\n`);
+  // Generated syntax is ASCII, so code-unit length is also its raw UTF-8 byte length.
+  if (css.length > 1024 * 1024) return invalid("css_size");
+  return css;
+}
 
 export const PALETTE_LIMITS = { stops: 64, scales: 64, anchors: 64, history: 64, json: 65536, share: 196620 } as const;
 export const PALETTE_DISTRIBUTIONS = ["default", "even", "more-light", "more-dark", "ends", "custom"] as const;
