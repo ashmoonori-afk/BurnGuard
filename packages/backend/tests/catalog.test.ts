@@ -12,20 +12,20 @@ import { canCreateSymlink } from "./helpers/platform";
 
 const app = createApp();
 const ids: string[] = [];
+const directories: string[] = [];
 let sequence = 0;
 
 function id(label: string): string {
   sequence += 1;
   const value = `catalog-${process.pid}-${sequence}-${label}`;
-  ids.push(value);
   return value;
 }
 
 async function seedSystem(label: string, options: { readonly receipt?: boolean; readonly name?: string; readonly exactId?: string } = {}): Promise<string> {
   const systemId = options.exactId ?? id(label);
-  if (options.exactId !== undefined) ids.push(systemId);
   const dir = path.join(systemsDir, systemId);
-  await mkdir(dir, { recursive: true });
+  await mkdir(dir);
+  directories.push(dir);
   const provenanceContent = { entries: [{ identity: systemId }] };
   const digest = createHash("sha256").update(JSON.stringify(provenanceContent)).digest("hex");
   await mkdir(path.join(dir, "fonts"), { recursive: true });
@@ -43,6 +43,7 @@ async function seedSystem(label: string, options: { readonly receipt?: boolean; 
       systemId, options.name ?? systemId, dir, path.join(dir, "SKILL.md"),
       path.join(dir, "colors_and_type.css"), path.join(dir, "README.md"), now, now,
     );
+  ids.push(systemId);
   if (options.receipt === true) {
     const files = await Promise.all([
       "README.md", "SKILL.md", "colors_and_type.css", "extraction-provenance.json", "fonts/fonts.css",
@@ -86,9 +87,9 @@ afterAll(async () => {
   for (const systemId of ids.reverse()) {
     db.prepare("UPDATE projects SET design_system_id=NULL WHERE design_system_id=?").run(systemId);
     db.prepare("DELETE FROM design_systems WHERE id=?").run(systemId);
-    await rm(path.join(systemsDir, systemId), { recursive: true, force: true });
     await rm(path.join(systemsDir, ".catalog-trash", systemId), { recursive: true, force: true });
   }
+  for (const directory of directories) await rm(directory, { recursive: true, force: true });
 });
 
 describe("production API route registration", () => {
@@ -138,6 +139,23 @@ describe("production API route registration", () => {
 });
 
 describe("catalog query and metadata", () => {
+  test("Given an existing fixture tree When another seed claims its ID Then the row and authored bytes survive", async () => {
+    // Given
+    const systemId = await seedSystem("owned-tree");
+    const root = path.join(systemsDir, systemId);
+    await writeFile(path.join(root, "README.md"), "# Owner-authored content\n");
+    const tree = await inspectCatalogTree(root);
+    const row = getSqlite().query("SELECT * FROM design_systems WHERE id=?").get(systemId);
+
+    // When
+    const attempt = seedSystem("duplicate-owner", { exactId: systemId });
+
+    // Then
+    await expect(attempt).rejects.toMatchObject({ code: "EEXIST" });
+    expect(await inspectCatalogTree(root)).toEqual(tree);
+    expect(getSqlite().query("SELECT * FROM design_systems WHERE id=?").get(systemId)).toEqual(row);
+  });
+
   test.each(["prepared", "recovering", "failed"] as const)("Given a newer %s content attempt When catalog detail is read Then committed extraction identity remains current", async (status) => {
     // Given
     const systemId = await seedSystem(`head-${status}`, { receipt: true });
@@ -367,6 +385,10 @@ describe("catalog lineage and lifecycle", () => {
       : { id: child, name: child };
 
     const result = await request("POST", `/api/design-systems/${parent}/${operation}`, body);
+    if (result.status === 201) {
+      ids.push(child);
+      directories.push(path.join(systemsDir, child));
+    }
 
     expect(result).toMatchObject({ status: 201, json: { data: { id: child, content: { digest }, lineage: { operation, parent_id: parent, parent_receipt_id: `receipt-${parent}`, parent_digest: digest } } } });
     expect(await readFile(path.join(systemsDir, child, "README.md"), "utf8")).toBe(`# ${parent}\n`);
