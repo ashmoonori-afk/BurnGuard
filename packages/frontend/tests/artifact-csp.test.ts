@@ -1,4 +1,4 @@
-import { describe, expect, spyOn, test } from "bun:test";
+import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import { buildSandboxedArtifactSrcDoc } from "../src/components/canvas/frame-bridge";
 import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
@@ -7,6 +7,8 @@ import { Script } from "node:vm";
 import { launchChromiumViaNode } from "../../backend/src/services/chromium-node-launch";
 
 const BASE_HREF = "http://127.0.0.1:14070/api/projects/p/fs/index.html";
+const pendingCanvasPolicies = new Set<() => void>();
+afterEach(() => { for (const report of pendingCanvasPolicies) report(); });
 
 const systemChromeAvailable = process.platform === "darwin"
   ? existsSync("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
@@ -61,7 +63,7 @@ async function assertCanvasPolicy(
     phases.push({ phase, elapsed_ms });
     if (elapsed_ms >= 15_000) reportPending();
   };
-  const diagnostic = setTimeout(reportPending, 15_000);
+  pendingCanvasPolicies.add(reportPending);
   try {
     markPhase("launch");
     browser = await launch(server);
@@ -108,11 +110,13 @@ async function assertCanvasPolicy(
     markPhase("complete");
   } finally {
     trace.cleanup = "browser";
+    markPhase("cleanup_browser");
     try { await browser?.close(); }
     finally {
       trace.cleanup = "server";
+      markPhase("cleanup_server");
       try { await server.stop(true); }
-      finally { clearTimeout(diagnostic); }
+      finally { pendingCanvasPolicies.delete(reportPending); }
     }
   }
 }
