@@ -1,4 +1,6 @@
 import type { Database } from "bun:sqlite";
+import type { PaletteTransferProof } from "@bg/shared/palette";
+import { insertPaletteTransfer, validatePaletteTransferReceipt } from "./palette-transfer-repository";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import type { CatalogKind, CatalogLicense, CatalogProvenance, DesignSystemSourceType, ProjectType } from "@bg/shared";
@@ -34,6 +36,7 @@ type OperationInput = {
   readonly parentSystemId: string | null; readonly parentReceiptId: string | null; readonly parentDigest: string | null;
   readonly reason: string | null; readonly metadata: Readonly<Record<string, string>>;
   readonly sourcePath: string; readonly destinationPath: string; readonly now: number;
+  readonly paletteTransfer?: PaletteTransferProof;
 };
 
 export class CatalogRepositoryError extends Error {
@@ -133,6 +136,7 @@ export function createCatalogChild(db: Database, parent: CatalogRow, childId: st
           childPath(input.destinationPath, parent.readmeMdPath), parent.thumbnailPath, input.now, input.now, parent.kind, parent.provenance, parent.license,
         );
       insertOperation(db, receiptId, input);
+      if (input.paletteTransfer !== undefined) insertPaletteTransfer(db, receiptId, input.paletteTransfer);
     })();
   } catch (error) {
     if (error instanceof Error && "code" in error && error.code === "SQLITE_CONSTRAINT") throw new CatalogRepositoryError("id_conflict", childId);
@@ -153,8 +157,9 @@ export function prepareCatalogOperation(db: Database, input: OperationInput): st
 
 export function commitCatalogOperation(db: Database, receiptId: string, lifecycle: "active" | "trashed", now: number): void {
   db.transaction(() => {
-    const receipt = db.query<{ readonly designSystemId: string; readonly operation: string }, [string]>("SELECT design_system_id designSystemId,operation FROM design_system_receipts WHERE id=? AND operation!='content' AND status IN ('prepared','recovering')").get(receiptId);
+    const receipt = db.query<CatalogReceiptRow, [string]>(`${RECEIPT_SELECT} WHERE id=? AND operation!='content' AND status IN ('prepared','recovering')`).get(receiptId);
     if (receipt === null) throw new CatalogRepositoryError("operation_conflict", receiptId);
+    validatePaletteTransferReceipt(db, receipt);
     const changed = db.prepare("UPDATE design_system_receipts SET status='committed',updated_at=? WHERE id=? AND operation!='content' AND status IN ('prepared','recovering')").run(now, receiptId).changes;
     if (changed !== 1) throw new CatalogRepositoryError("operation_conflict", receiptId);
     db.prepare("UPDATE design_systems SET lifecycle=?,trashed_at=?,updated_at=? WHERE id=?").run(lifecycle, lifecycle === "trashed" ? now : null, now, receipt.designSystemId);

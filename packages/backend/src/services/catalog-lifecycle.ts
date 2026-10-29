@@ -1,4 +1,5 @@
 import type { Database } from "bun:sqlite";
+import { validatePaletteTransferReceipt } from "../db/palette-transfer-repository";
 import { readdir, rm } from "node:fs/promises";
 import {
   CatalogRepositoryError, commitCatalogOperation, createCatalogChild, deleteCatalogSystem, failCatalogOperation,
@@ -13,6 +14,7 @@ import {
 import { withSystemContentAccess, withSystemContentLocks } from "./system-content-access";
 import type { CatalogAccessEvents } from "./catalog-snapshot";
 import { SystemContentError } from "./system-content-format";
+import { authenticatePaletteTransfer, paletteContentEnvironment, validatePaletteTransferAtRoot } from "./design-system-palette";
 import { pathStat, safeContentChild } from "./system-content-tree";
 
 export class CatalogLifecycleError extends Error {
@@ -29,7 +31,7 @@ type ChildInput = {
 };
 
 export async function copyCatalogSystem(db: Database, root: string, parentId: string, input: ChildInput, events: CatalogAccessEvents = {}): Promise<string> {
-  const pending = withSystemContentAccess(db, root, [parentId, input.id], async () => {
+  const pending = withSystemContentAccess(db, root, [parentId, input.id], async lease => {
     const parent = requiredRow(db, parentId);
     const parentReceipt = getCurrentSystemContent(db, parentId);
     if (parentReceipt === null || parentReceipt.status !== "committed") throw new CatalogLifecycleError("lineage_parent_mismatch", "Parent content receipt is unavailable");
@@ -37,24 +39,31 @@ export async function copyCatalogSystem(db: Database, root: string, parentId: st
     if (input.parentDigest !== undefined && input.parentDigest !== parentReceipt.digest) throw new CatalogLifecycleError("lineage_parent_mismatch", "Parent digest is stale");
     const paths = await catalogPaths(root, parent.id, parent.dirPath);
     await validateReceiptTree(paths.live, parentReceipt, parent.id);
+    let paletteTransfer: Awaited<ReturnType<typeof authenticatePaletteTransfer>>;
+    try { paletteTransfer = await authenticatePaletteTransfer(paletteContentEnvironment(db, root), parentId, lease); }
+    catch { throw new CatalogFileError("catalog_digest_mismatch", "Palette transfer authority is unavailable"); }
     if (getCatalogRow(db, input.id) !== null) throw new CatalogLifecycleError("id_conflict", "Child ID already exists");
     const destination = resolveWithin(root, assertSafeName(input.id));
     const childPaths = await catalogPaths(root, input.id, destination);
     if (await exists(childPaths.live) || await exists(childPaths.trash)) throw new CatalogLifecycleError("id_conflict", "Child storage is occupied");
     const now = Date.now();
     const operation = operationInput(input.id, input.operation, parentReceipt, parent, paths.live, destination, input.reason, input.metadata, now);
-    const receiptId = createCatalogChild(db, parent, input.id, input.name, operation);
+    const receiptId = createCatalogChild(db, parent, input.id, input.name, { ...operation, ...(paletteTransfer === null ? {} : { paletteTransfer }) });
     if (fault(`prepared:${input.operation}:${input.id}`)) throw new CatalogLifecycleError("catalog_operation_failed", "Injected prepared receipt fault");
     let staging: string | null = null;
     let published = false;
     try {
+      const childReceipt = getPendingSystemOperation(db, input.id);
+      if (childReceipt === null || childReceipt.id !== receiptId) throw new CatalogRepositoryError("operation_conflict", input.id);
       const copy = await copyCatalogTree(root, input.id, paths.live);
       staging = copy.staging;
       await validateReceiptTree(copy.staging, parentReceipt, parent.id);
+      await validatePaletteReceipt(db, copy.staging, childReceipt);
       await publishCatalogCopy(copy.staging, copy.destination);
       published = true;
       staging = null;
       await validateReceiptTree(copy.destination, parentReceipt, parent.id);
+      await validatePaletteReceipt(db, copy.destination, childReceipt);
       if (fault(`db-after-fs:${input.operation}:${input.id}`)) throw new InjectedCatalogFault();
       commitCatalogOperation(db, receiptId, "active", Date.now());
       return input.id;
@@ -148,6 +157,7 @@ export async function reconcileCatalogState(db: Database, root: string): Promise
       if (receipt.operation === "duplicate" || receipt.operation === "derive") {
         if (row === null || receipt.destinationPath === null || !(await exists(receipt.destinationPath))) throw new MissingCatalogState();
         await validateReceiptTree(receipt.destinationPath, receipt, receipt.designSystemId);
+        await validatePaletteReceipt(db, receipt.destinationPath, receipt);
         commitCatalogOperation(db, receipt.id, "active", Date.now());
       } else if (receipt.operation === "trash" || receipt.operation === "restore") {
         if (row === null) throw new MissingCatalogState();
@@ -244,6 +254,13 @@ async function cleanupCatalogControls(root: string): Promise<void> {
   if (await pathStat(lockRoot) === null) return;
   // Occupied locks, including incomplete/unknown owners, need startup classification rather than blanket deletion.
   if ((await readdir(lockRoot)).length === 0) await rm(lockRoot, { recursive: true });
+}
+
+async function validatePaletteReceipt(db: Database, root: string, receipt: CatalogReceiptRow): Promise<void> {
+  try {
+    const proof = validatePaletteTransferReceipt(db, receipt);
+    if (proof !== null) await validatePaletteTransferAtRoot(root, proof);
+  } catch { throw new CatalogFileError("catalog_digest_mismatch", "Palette transfer does not match its receipt"); }
 }
 
 function translate(error: unknown): CatalogLifecycleError {

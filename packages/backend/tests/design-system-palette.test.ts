@@ -5,18 +5,20 @@ import { link, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
-  createDefaultPalette, emitPaletteCss, PALETTE_EMITTER_VERSION, parseSaveDesignSystemPaletteRequest,
-  serializePalette, type PaletteState,
+  createDefaultPalette, emitPaletteCss, PALETTE_EMITTER_VERSION, parsePaletteState, parsePaletteTransferProof, parseSaveDesignSystemPaletteRequest,
+  serializePalette, type PaletteState, type PaletteTransferProof,
 } from "@bg/shared/palette";
 import { parseHexColor, parseRgb } from "@bg/shared/color";
-import { getCurrentSystemContent, getCatalogRow } from "../src/db/catalog-repository";
+import { getCurrentSystemContent, getCatalogRow, type CatalogReceiptRow } from "../src/db/catalog-repository";
+import { insertPaletteTransfer, readPaletteTransfer, validatePaletteTransferReceipt } from "../src/db/palette-transfer-repository";
 import { listSystemContentReceipts } from "../src/db/design-system-repository";
 import { getSqlite } from "../src/db/sqlite-client";
 import { systemsDir } from "../src/lib/paths";
-import { copyCatalogSystem } from "../src/services/catalog-lifecycle";
+import { copyCatalogSystem, purgeCatalogSystem, trashCatalogSystem } from "../src/services/catalog-lifecycle";
 import { validateCatalogReceiptTree } from "../src/services/catalog-files";
 import {
-  paletteContentEnvironment, readDesignSystemPalette, saveDesignSystemPalette, validatePaletteContent,
+  authenticatePaletteTransfer, paletteContentEnvironment, readDesignSystemPalette, saveDesignSystemPalette,
+  validatePaletteContent, validatePaletteTransferAtRoot,
 } from "../src/services/design-system-palette";
 import { buildExtractionProvenance } from "../src/services/extraction-provenance";
 import { contentHash, parseContentJournal } from "../src/services/system-content-format";
@@ -358,11 +360,211 @@ describe("design system palette persistence", () => {
     const childReceipt = getCurrentSystemContent(f.db, "child");
     expect(childReceipt?.metadataJson).toBe("{}");
     expect(childReceipt?.parentReceiptId).toBe(copiedHead.id);
-    const saved = await saveDesignSystemPalette("child", { expected_digest: child.expected_digest,
+    expect(getCatalogRow(f.db, "test-system")?.metadataRevision).toBe(0);
+    const lifecycleStatements = spyOn(Database.prototype, "prepare");
+    try {
+      await trashCatalogSystem(f.db, f.systemsRoot, "test-system");
+      await purgeCatalogSystem(f.db, f.systemsRoot, "test-system");
+    } finally {
+      for (const result of lifecycleStatements.mock.results) if (result.type === "return") result.value.finalize();
+      lifecycleStatements.mockRestore();
+    }
+    expect(getCatalogRow(f.db, "test-system")).toBeNull();
+    const independent = await readDesignSystemPalette("child", f.env);
+    expect(independent.css).toBe(child.css);
+    const saved = await saveDesignSystemPalette("child", { expected_digest: independent.expected_digest,
       state: { ...state, display: { ...state.display, appearance: "dark" } } }, f.env);
     expect(saved.content_revision).toBe(1);
     expect(getCurrentSystemContent(f.db, "child")?.parentReceiptId).toBe(childReceipt?.id);
-    expect(getCatalogRow(f.db, "test-system")?.metadataRevision).toBe(0);
+    expect(getCatalogRow(f.db, "test-system")).toBeNull();
+  });
+});
+
+describe("palette transfer authority", () => {
+  async function transferred(legacy = false, operation: "content" | "duplicate" | "derive" = "content") {
+    const f = await setup();
+    const frozen = legacyEmitter.cases[0];
+    if (frozen === undefined) throw new Error("Missing frozen legacy pair");
+    const json = legacy ? frozen.json : serializePalette(state) + "\n";
+    const css = legacy ? frozen.css : emitPaletteCss(state);
+    await mkdir(path.join(f.live, "palette"));
+    await writeFile(path.join(f.live, "palette/state.json"), json);
+    await writeFile(path.join(f.live, "palette/scales.css"), css);
+    await mkdir(path.join(f.live, "fonts"));
+    for (const name of ["SKILL.md", "colors_and_type.css", "fonts/fonts.css"]) await writeFile(path.join(f.live, name), "original\r\n");
+    const provenance = buildExtractionProvenance([], 1);
+    const raw = JSON.stringify(provenance);
+    await writeFile(path.join(f.live, "extraction-provenance.json"), raw);
+    const manifest = (await inspectContentTree(f.live)).manifest;
+    const receipt: CatalogReceiptRow = {
+      id: "transfer", designSystemId: "test-system", status: "prepared", contentRevision: operation === "content" ? 1 : -1, schemaVersion: 1,
+      digest: provenance.content_digest, manifestJson: JSON.stringify(manifest), provenanceJson: raw, operation,
+      parentSystemId: operation === "content" ? null : "purged-parent",
+      parentReceiptId: operation === "content" ? null : "purged-parent-receipt",
+      parentDigest: operation === "content" ? null : provenance.content_digest, reason: null, metadataJson: "{}",
+      sourcePath: operation === "content" ? null : path.join(f.systemsRoot, "purged-parent"),
+      destinationPath: operation === "content" ? null : f.live,
+    };
+    const proof: PaletteTransferProof = { schema_version: 1,
+      emitter_version: legacy ? "burnguard-palette-1" : PALETTE_EMITTER_VERSION,
+      state: { size_bytes: Buffer.byteLength(json), sha256: contentHash(json) },
+      css: { size_bytes: Buffer.byteLength(css), sha256: contentHash(css) } };
+    f.db.query(`INSERT INTO design_system_receipts
+      (id,design_system_id,status,content_revision,schema_version,digest,manifest_json,provenance_json,created_at,updated_at,
+        operation,parent_system_id,parent_receipt_id,parent_digest,source_path,destination_path)
+      VALUES ('transfer','test-system','prepared',?,1,?,?,?,1,1,?,?,?,?,?,?)`).run(
+        receipt.contentRevision, receipt.digest, receipt.manifestJson, raw, operation, receipt.parentSystemId,
+        receipt.parentReceiptId, receipt.parentDigest, receipt.sourcePath, receipt.destinationPath);
+    insertPaletteTransfer(f.db, receipt.id, proof);
+    return { ...f, receipt, proof, json, css };
+  }
+  const declaration: PaletteTransferProof = { schema_version: 1, emitter_version: PALETTE_EMITTER_VERSION,
+    state: { size_bytes: 1, sha256: "a".repeat(64) }, css: { size_bytes: 1, sha256: "b".repeat(64) } };
+  test.each(["paths", "target", "receipt_id", "provenance"] as const)(
+    "Given transfer %s authority injection When parsed Then the closed declaration rejects it", field => {
+      expect(() => parsePaletteTransferProof({ ...declaration, [field]: "injected" })).toThrow();
+    });
+  test.each([0, -1, 1.5, 262145, NaN, Infinity])(
+    "Given invalid transfer state length %s When parsed Then the bounded integer contract rejects it", size_bytes => {
+      expect(() => parsePaletteTransferProof({ ...declaration, state: { ...declaration.state, size_bytes } })).toThrow();
+    });
+  test.each([
+    { ...declaration, schema_version: 2 },
+    { ...declaration, emitter_version: "burnguard-palette-3" },
+    { ...declaration, css: { ...declaration.css, size_bytes: 1048577 } },
+    { ...declaration, state: { ...declaration.state, sha256: "A".repeat(64) } },
+    { ...declaration, css: { ...declaration.css, sha256: "b".repeat(63) } },
+    { ...declaration, css: { ...declaration.css, sha256: "b".repeat(64) + "\n" } },
+    { ...declaration, state: { ...declaration.state, path: "palette/state.json" } },
+  ])("Given an invalid transfer declaration When parsed Then no unsupported claim survives", input => {
+    expect(() => parsePaletteTransferProof(input)).toThrow();
+  });
+  test.each(["prepared", "recovering", "failed"] as const)(
+    "Given a %s owner with a valid stored proof When read Then storage binding does not activate it", async status => {
+      const f = await transferred();
+      f.db.query("UPDATE design_system_receipts SET status=? WHERE id='transfer'").run(status);
+      expect(validatePaletteTransferReceipt(f.db, { ...f.receipt, status })).toEqual(f.proof);
+      await expect(readDesignSystemPalette("test-system", f.env)).rejects.toMatchObject({
+        code: status === "failed" ? "palette_ownership_conflict" : "system_content_unavailable",
+      });
+    });
+  test.each([false, true])(
+    "Given committed v1 transfer legacy=%s When authenticated and explicitly saved Then exact prior bytes survive the upgrade", async legacy => {
+      const f = await transferred(legacy);
+      f.db.query("UPDATE design_system_receipts SET status='committed' WHERE id='transfer'").run();
+      const current = await readDesignSystemPalette("test-system", f.env);
+      expect(current.state).toEqual(parsePaletteState(f.json));
+      expect(current.css).toBe(f.css);
+      await withSystemContentAccess(f.db, f.systemsRoot, ["test-system"], async lease => {
+        expect(await authenticatePaletteTransfer(f.env, "test-system", lease)).toEqual(f.proof);
+      });
+      expect(await readFile(path.join(f.live, "palette/state.json"), "utf8")).toBe(f.json);
+      const next: PaletteState = { ...parsePaletteState(f.json), display: { ...parsePaletteState(f.json).display, scale_gap: 31 } };
+      const saved = await save(f, next);
+      expect(saved.content_revision).toBe(2);
+      const history = parseContentJournal(JSON.parse(requiredReceipt(f).metadataJson)).palette_history;
+      expect(history?.before).toEqual({ present: true,
+        json: { bytes: f.json, length: f.proof.state.size_bytes, sha256: f.proof.state.sha256 },
+        css: { bytes: f.css, length: f.proof.css.size_bytes, sha256: f.proof.css.sha256 } });
+    });
+  test("Given a prepared proof When inserted twice Then no upsert changes its immutable bytes", async () => {
+    const f = await transferred();
+    expect(() => insertPaletteTransfer(f.db, f.receipt.id, f.proof)).toThrow();
+    expect(readPaletteTransfer(f.db, f.receipt.id)).toEqual(f.proof);
+  });
+  test.each(["duplicate", "derive"] as const)(
+    "Given a committed local %s proof and absent foreign receipts When opened Then foreign lineage is not consulted", async operation => {
+      const f = await transferred(false, operation);
+      f.db.query("UPDATE design_system_receipts SET status='committed' WHERE id='transfer'").run();
+      const current = await readDesignSystemPalette("test-system", f.env);
+      expect(current.content_revision).toBe(-1);
+      expect(current.css).toBe(f.css);
+    });
+  test.each([
+    ["proof_version", 2], ["state_size_bytes", 0], ["state_size_bytes", 1.5],
+    ["css_size_bytes", 1048577], ["state_sha256", "A".repeat(64)], ["emitter_version", "bad/emitter"],
+    ["state_sha256", "a".repeat(64) + "\0tail"], ["emitter_version", "burnguard-palette-2\0tail"],
+  ] as const)("Given invalid SQL %s=%s When storage is updated Then its scalar constraint rejects it", async (column, value) => {
+    const f = await transferred();
+    expect(() => f.db.query(`UPDATE design_system_palette_transfers SET ${column}=? WHERE receipt_id='transfer'`).run(value)).toThrow();
+  });
+  test.each(["state_size_bytes", "state_sha256", "css_size_bytes", "css_sha256"] as const)(
+    "Given mismatched stored %s When binding the receipt Then the manifest rejects the proof", async field => {
+      const f = await transferred();
+      const value = field.endsWith("sha256") ? "f".repeat(64) : 1;
+      // The column name comes only from this closed test table, never external input.
+      f.db.query(`UPDATE design_system_palette_transfers SET ${field}=? WHERE receipt_id='transfer'`).run(value);
+      expect(() => validatePaletteTransferReceipt(f.db, f.receipt)).toThrow();
+    });
+  test("Given a foreign supplied destination When binding a stored proof Then receipt identity cannot be substituted", async () => {
+    const f = await transferred();
+    expect(() => validatePaletteTransferReceipt(f.db, { ...f.receipt, designSystemId: "foreign" })).toThrow();
+  });
+  test("Given an unknown stored emitter When binding a receipt Then bounded emitter text does not authorize a future protocol", async () => {
+    const f = await transferred();
+    f.db.query("UPDATE design_system_palette_transfers SET emitter_version='burnguard-palette-3' WHERE receipt_id='transfer'").run();
+    expect(() => validatePaletteTransferReceipt(f.db, f.receipt)).toThrow();
+  });
+  test.each([false, true])(
+    "Given transferred ownership and foreign-link=%s When ordinary content is published Then only same-system ancestry authorizes the pair", async foreign => {
+      const f = await transferred();
+      f.db.query("UPDATE design_system_receipts SET status='committed' WHERE id='transfer'").run();
+      const env = { ...f.env, validators: { ...f.env.validators, rules: validateRules } };
+      await publishSystemContent(env, { systemId: "test-system", mode: "replace",
+        expectedDigest: await expectedDigest(env), adapter: { ...rulesAdapter(), provenance: {
+          format: "system-content-v1", writer: "rules", source_extraction: { receipt_id: f.receipt.id, digest: f.receipt.digest },
+        } } });
+      if (foreign) {
+        f.db.query("UPDATE design_system_receipts SET parent_system_id='foreign' WHERE schema_version=2").run();
+        await expect(readDesignSystemPalette("test-system", f.env)).rejects.toMatchObject({ code: "system_content_corrupt" });
+      } else {
+        expect((await readDesignSystemPalette("test-system", f.env)).css).toBe(f.css);
+      }
+    });
+  test("Given a committed generic head above a failed transfer When opened Then an inert ancestor cannot authorize the pair", async () => {
+    const f = await transferred();
+    f.db.query("UPDATE design_system_receipts SET status='committed' WHERE id='transfer'").run();
+    const env = { ...f.env, validators: { ...f.env.validators, rules: validateRules } };
+    await publishSystemContent(env, { systemId: "test-system", mode: "replace",
+      expectedDigest: await expectedDigest(env), adapter: { ...rulesAdapter(), provenance: {
+        format: "system-content-v1", writer: "rules", source_extraction: { receipt_id: f.receipt.id, digest: f.receipt.digest },
+      } } });
+    f.db.query("UPDATE design_system_receipts SET status='failed' WHERE id='transfer'").run();
+    await expect(readDesignSystemPalette("test-system", f.env)).rejects.toMatchObject({ code: "system_content_corrupt" });
+  });
+  test("Given a destination receipt When deleted Then its transfer authority cascades with the owner", async () => {
+    const f = await transferred();
+    f.db.query("DELETE FROM design_system_receipts WHERE id='transfer'").run();
+    expect(readPaletteTransfer(f.db, "transfer")).toBeNull();
+  });
+  test("Given changed raw LF bytes When validating the original declaration Then semantic equality cannot replace its hash", async () => {
+    const f = await transferred();
+    await writeFile(path.join(f.live, "palette/state.json"), serializePalette(state));
+    await expect(validatePaletteTransferAtRoot(f.live, f.proof)).rejects.toMatchObject({ code: "system_content_corrupt" });
+  });
+  test("Given current CSS with a legacy emitter claim When validating Then matching hashes cannot bypass emitter semantics", async () => {
+    const f = await transferred();
+    await expect(validatePaletteTransferAtRoot(f.live, { ...f.proof, emitter_version: "burnguard-palette-1" }))
+      .rejects.toMatchObject({ code: "system_content_corrupt" });
+  });
+  test("Given an unowned exact pair When declaration validation succeeds Then live authentication still rejects it", async () => {
+    const f = await transferred();
+    f.db.query("DELETE FROM design_system_receipts WHERE id='transfer'").run();
+    await expect(validatePaletteTransferAtRoot(f.live, f.proof)).resolves.toBeUndefined();
+    await withSystemContentAccess(f.db, f.systemsRoot, ["test-system"], async lease => {
+      await expect(authenticatePaletteTransfer(f.env, "test-system", lease)).rejects.toMatchObject({ code: "palette_ownership_conflict" });
+    });
+  });
+  test("Given a fabricated lease When authenticating an absent pair Then lease ownership is required before observation", async () => {
+    const f = await setup();
+    await expect(authenticatePaletteTransfer(f.env, "test-system", { systemIds: ["test-system"] }))
+      .rejects.toMatchObject({ code: "system_content_unavailable" });
+  });
+  test("Given an absent reserved subtree When authenticated under a real lease Then no proof is invented", async () => {
+    const f = await setup();
+    await withSystemContentAccess(f.db, f.systemsRoot, ["test-system"], async lease => {
+      expect(await authenticatePaletteTransfer(f.env, "test-system", lease)).toBeNull();
+    });
   });
 });
 

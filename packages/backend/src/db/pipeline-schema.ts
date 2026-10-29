@@ -47,6 +47,27 @@ export const designSystemReceiptsTable = sqliteTable(
   ],
 );
 
+export const designSystemPaletteTransfersTable = sqliteTable(
+  "design_system_palette_transfers",
+  {
+    receiptId: text("receipt_id").primaryKey().notNull().references(() => designSystemReceiptsTable.id, { onDelete: "cascade" }),
+    proofVersion: integer("proof_version").notNull(),
+    emitterVersion: text("emitter_version").notNull(),
+    stateSizeBytes: integer("state_size_bytes").notNull(),
+    stateSha256: text("state_sha256").notNull(),
+    cssSizeBytes: integer("css_size_bytes").notNull(),
+    cssSha256: text("css_sha256").notNull(),
+  },
+  (table) => [
+    check("ck_palette_transfer_version", sql`typeof(${table.proofVersion}) = 'integer' AND ${table.proofVersion} = 1`),
+    check("ck_palette_transfer_emitter", sql`typeof(${table.emitterVersion}) = 'text' AND length(CAST(${table.emitterVersion} AS BLOB)) BETWEEN 1 AND 64 AND instr(${table.emitterVersion}, char(0)) = 0 AND ${table.emitterVersion} NOT GLOB '*[^a-zA-Z0-9._-]*'`),
+    check("ck_palette_transfer_state_size", sql`typeof(${table.stateSizeBytes}) = 'integer' AND ${table.stateSizeBytes} BETWEEN 1 AND 262144`),
+    check("ck_palette_transfer_state_hash", sql`typeof(${table.stateSha256}) = 'text' AND length(${table.stateSha256}) = 64 AND length(CAST(${table.stateSha256} AS BLOB)) = 64 AND ${table.stateSha256} NOT GLOB '*[^0-9a-f]*'`),
+    check("ck_palette_transfer_css_size", sql`typeof(${table.cssSizeBytes}) = 'integer' AND ${table.cssSizeBytes} BETWEEN 1 AND 1048576`),
+    check("ck_palette_transfer_css_hash", sql`typeof(${table.cssSha256}) = 'text' AND length(${table.cssSha256}) = 64 AND length(CAST(${table.cssSha256} AS BLOB)) = 64 AND ${table.cssSha256} NOT GLOB '*[^0-9a-f]*'`),
+  ],
+);
+
 export const learningItemsTable = sqliteTable(
   "learning_items",
   {

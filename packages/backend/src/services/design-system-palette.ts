@@ -2,17 +2,18 @@ import type { Database } from "bun:sqlite";
 import { randomUUID } from "node:crypto";
 import { mkdir, readdir, writeFile } from "node:fs/promises";
 import {
-  emitPaletteCss, formatPaletteCssChannel, paletteCssIdentifier, PALETTE_EMITTER_VERSION, parsePaletteState, parseSaveDesignSystemPaletteRequest,
-  serializePalette, type DesignSystemPaletteResponse, type PaletteState, type SaveDesignSystemPaletteRequest,
+  emitPaletteCss, formatPaletteCssChannel, paletteCssIdentifier, PALETTE_EMITTER_VERSION, parsePaletteState, parsePaletteTransferProof, parseSaveDesignSystemPaletteRequest,
+  serializePalette, type DesignSystemPaletteResponse, type PaletteState, type PaletteTransferProof, type SaveDesignSystemPaletteRequest,
 } from "@bg/shared/palette";
 import { UpgradeContractError } from "@bg/shared/contract-parser";
 import { getCurrentSystemContent, type CatalogReceiptRow } from "../db/catalog-repository";
+import { PaletteTransferRepositoryError, validatePaletteTransferReceipt } from "../db/palette-transfer-repository";
 import { getSqlite } from "../db/sqlite-client";
 import { systemsDir } from "../lib/paths";
 import { PathBoundaryError } from "../security/path-boundary";
-import { withSystemContentAccess, type SystemContentLease } from "./system-content-access";
+import { assertSystemContentLease, withSystemContentAccess, type SystemContentLease } from "./system-content-access";
 import { bundledThemeHistory, themeAdditiveDigest, themeFileHash } from "./bundled-theme-refresh";
-import { CanonicalTreeManifestError } from "./canonical-tree-manifest";
+import { CanonicalTreeManifestError, parseCanonicalTreeManifest } from "./canonical-tree-manifest";
 import {
   contentHash, parseContentJournal, parseContentProvenance, SystemContentError,
   type PairFile, type PairSnapshot,
@@ -20,7 +21,7 @@ import {
 import {
   observeSystemContent, publishSystemContent, type ContentEnvironment, type ContentObservation, type ContentValidator,
 } from "./system-content-publication";
-import { readPreservedFile, safeContentChild, type ContentTree } from "./system-content-tree";
+import { inspectContentTree, readPreservedFile, safeContentChild, type ContentTree } from "./system-content-tree";
 
 const PAIR_PATHS = ["palette/scales.css", "palette/state.json"] as const;
 const LEGACY_EMITTER_VERSION = "burnguard-palette-1";
@@ -45,9 +46,9 @@ async function readPair(root: string, tree: ContentTree): Promise<PairSnapshot> 
   if (json.bytes.length > 65_536) return corrupt();
   return { present: true, json, css };
 }
-function pairEmitterVersion(pair: PairSnapshot): string {
+function pairEmitterVersion(pair: PairSnapshot): PaletteTransferProof["emitter_version"] {
   if (!pair.present) return corrupt();
-  for (const version of [PALETTE_EMITTER_VERSION, LEGACY_EMITTER_VERSION]) {
+  for (const version of [PALETTE_EMITTER_VERSION, LEGACY_EMITTER_VERSION] as const) {
     if (pair.css.bytes.startsWith(`/* ${version} */\n`)) return version;
   }
   return corrupt();
@@ -79,6 +80,16 @@ function validatePair(pair: PairSnapshot, version: string): void {
     if (error instanceof UpgradeContractError || error instanceof SyntaxError) return corrupt();
     throw error;
   }
+}
+function validateTransferPair(pair: PairSnapshot, proof: PaletteTransferProof): void {
+  if (!pair.present || pair.json.length !== proof.state.size_bytes || pair.json.sha256 !== proof.state.sha256 ||
+    pair.css.length !== proof.css.size_bytes || pair.css.sha256 !== proof.css.sha256) return corrupt();
+  validatePair(pair, proof.emitter_version);
+}
+/** Byte validation of a supplied declaration grants no live ownership. */
+export async function validatePaletteTransferAtRoot(root: string, input: PaletteTransferProof): Promise<void> {
+  const proof = parsePaletteTransferProof(input);
+  validateTransferPair(await readPair(root, await inspectContentTree(root)), proof);
 }
 /** This exact function is also registered for publication/recovery; no closure-specific validator. */
 export const validatePaletteContent: ContentValidator = async (root, journal) => {
@@ -118,42 +129,63 @@ async function expectedIdentity(base: ContentObservation): Promise<string> {
     file("palette/state.json", pair.present ? pair.json : null), file("palette/scales.css", pair.present ? pair.css : null)]));
 }
 /** Follow only committed, digest-linked app evidence. A copied transaction journal is never authority. */
-function ownedVersion(env: ContentEnvironment, initial: CatalogReceiptRow | null, pair: PairSnapshot): string | null {
-  let receipt: CatalogReceiptRow | null = initial;
+function ownedVersion(env: ContentEnvironment, base: ContentObservation, pair: PairSnapshot): PaletteTransferProof["emitter_version"] | null {
+  let receipt: CatalogReceiptRow | null = getCurrentSystemContent(env.db, base.systemId);
   const seen = new Set<string>();
   while (receipt !== null) {
-    if (seen.has(receipt.id) || seen.size >= 10_000 || receipt.status !== "committed") return corrupt();
+    if (seen.has(receipt.id) || seen.size >= 10_000 || receipt.status !== "committed" ||
+      receipt.designSystemId !== base.systemId || (receipt.schemaVersion !== 1 && receipt.schemaVersion !== 2)) return corrupt();
     seen.add(receipt.id);
+    const proof = validatePaletteTransferReceipt(env.db, receipt);
+    if (proof !== null) {
+      if (receipt.destinationPath !== null && receipt.destinationPath !== base.live) return corrupt();
+      validateTransferPair(pair, proof);
+      return proof.emitter_version;
+    }
+    // Foreign lineage is historical metadata, never a live palette dependency.
+    if (receipt.operation === "duplicate" || receipt.operation === "derive") return null;
     if (receipt.schemaVersion === 1) return null;
-    if (receipt.schemaVersion !== 2) return corrupt();
+    if (receipt.operation !== "content" || !Number.isSafeInteger(receipt.contentRevision) || receipt.contentRevision < 1) return corrupt();
     const provenance = parseContentProvenance(JSON.parse(receipt.provenanceJson));
-    if (receipt.operation === "content") {
-      const journal = parseContentJournal(JSON.parse(receipt.metadataJson));
-      if (journal.system_id !== receipt.designSystemId || receipt.id !== `system-content-${journal.operation_id}`) return corrupt();
-      if (provenance.writer === "palette") {
-        const history = journal.palette_history;
-        if (history === null || JSON.stringify(history.after) !== JSON.stringify(pair)) return corrupt();
-        return history.emitter_version;
-      }
-    } else if (receipt.operation !== "duplicate" && receipt.operation !== "derive") return corrupt();
+    const journal = parseContentJournal(JSON.parse(receipt.metadataJson));
+    const manifest = parseCanonicalTreeManifest(JSON.parse(receipt.manifestJson));
+    const head = journal.base?.head ?? null;
+    if (journal.system_id !== base.systemId || receipt.id !== `system-content-${journal.operation_id}` ||
+      receipt.digest !== manifest.tree_digest || journal.intent !== "publish" || journal.failure_code !== null ||
+      receipt.destinationPath !== base.live || receipt.sourcePath !== (journal.mode === "replace" ? base.live : null) ||
+      receipt.parentReceiptId !== (head?.receipt_id ?? null) || receipt.parentDigest !== (head?.digest ?? null) ||
+      receipt.parentSystemId !== (head === null ? null : base.systemId) ||
+      (provenance.writer === "palette") !== (journal.palette_history !== null)) return corrupt();
+    if (provenance.writer === "palette") {
+      const history = journal.palette_history;
+      if (history === null || JSON.stringify(history.after) !== JSON.stringify(pair)) return corrupt();
+      const version = pairEmitterVersion(pair);
+      if (history.emitter_version !== version) return corrupt();
+      validatePair(pair, version);
+      return version;
+    }
     if (receipt.parentReceiptId === null) return null;
     const parent: CatalogReceiptRow | null = env.db.query<CatalogReceiptRow, [string]>(`SELECT id,design_system_id designSystemId,status,
       content_revision contentRevision,schema_version schemaVersion,digest,manifest_json manifestJson,
       provenance_json provenanceJson,operation,parent_system_id parentSystemId,parent_receipt_id parentReceiptId,
       parent_digest parentDigest,reason,metadata_json metadataJson,source_path sourcePath,destination_path destinationPath
       FROM design_system_receipts WHERE id=?`).get(receipt.parentReceiptId);
-    if (parent === null || parent.digest !== receipt.parentDigest || parent.designSystemId !== receipt.parentSystemId ||
-      receipt.operation !== "content" && (receipt.digest !== parent.digest || receipt.manifestJson !== parent.manifestJson)) return corrupt();
+    if (parent === null || head === null || parent.digest !== head.digest || parent.designSystemId !== base.systemId ||
+      parent.contentRevision !== head.revision || parent.schemaVersion !== head.schema_version ||
+      JSON.stringify(parseCanonicalTreeManifest(JSON.parse(parent.manifestJson))) !== JSON.stringify(journal.base?.manifest)) return corrupt();
     receipt = parent;
   }
   return null;
 }
-function assertOwned(env: ContentEnvironment, base: ContentObservation, pair: PairSnapshot): void {
-  if (!pair.present) return;
-  let version: string | null;
-  try { version = ownedVersion(env, getCurrentSystemContent(env.db, base.systemId), pair); }
-  catch (error) { if (error instanceof SyntaxError) return corrupt(); throw error; }
-  if (version !== null) { validatePair(pair, version); return; }
+function assertOwned(env: ContentEnvironment, base: ContentObservation, pair: PairSnapshot): PaletteTransferProof["emitter_version"] | null {
+  if (!pair.present) return null;
+  let version: PaletteTransferProof["emitter_version"] | null;
+  try { version = ownedVersion(env, base, pair); }
+  catch (error) {
+    if (error instanceof SyntaxError || error instanceof PaletteTransferRepositoryError || error instanceof CanonicalTreeManifestError) return corrupt();
+    throw error;
+  }
+  if (version !== null) return version;
   // Keep the shipped additive-history format ready for its later 43-system producer.
   const slug = base.systemId.startsWith("builtin-theme-") ? base.systemId.slice("builtin-theme-".length) : null;
   const files = new Map([
@@ -161,7 +193,9 @@ function assertOwned(env: ContentEnvironment, base: ContentObservation, pair: Pa
     ["palette/scales.css", themeFileHash(Buffer.from(pair.css.bytes))],
   ]);
   if (slug === null || !(bundledThemeHistory.additive?.[slug]?.palette ?? []).includes(themeAdditiveDigest(files, "palette"))) return ownership();
-  validatePair(pair, pairEmitterVersion(pair));
+  version = pairEmitterVersion(pair);
+  validatePair(pair, version);
+  return version;
 }
 async function response(env: ContentEnvironment, base: ContentObservation): Promise<DesignSystemPaletteResponse> {
   const pair = await actualPair(base);
@@ -176,6 +210,18 @@ async function observePalette(env: ContentEnvironment, id: string, lease: System
     if (error instanceof Error && "code" in error && (error.code === "ENOENT" || error.code === "ENOTDIR")) return corrupt();
     throw error;
   }
+}
+/** The caller already owns this genuine lease; do not acquire a nested lock. */
+export async function authenticatePaletteTransfer(env: ContentEnvironment, id: string, lease: SystemContentLease): Promise<PaletteTransferProof | null> {
+  assertSystemContentLease(lease, env.systemsRoot, id);
+  const base = await observePalette(env, id, lease);
+  const pair = await actualPair(base);
+  const version = assertOwned(env, base, pair);
+  if (!pair.present) return null;
+  if (version === null) return corrupt();
+  return parsePaletteTransferProof({ schema_version: 1, emitter_version: version,
+    state: { size_bytes: pair.json.length, sha256: pair.json.sha256 },
+    css: { size_bytes: pair.css.length, sha256: pair.css.sha256 } });
 }
 export async function readDesignSystemPalette(id: string, env: ContentEnvironment = paletteContentEnvironment()): Promise<DesignSystemPaletteResponse> {
   return withSystemContentAccess(env.db, env.systemsRoot, [id], async lease => response(env, await observePalette(env, id, lease)));

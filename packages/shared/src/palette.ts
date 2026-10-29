@@ -11,6 +11,27 @@ export type SaveDesignSystemPaletteRequest = { readonly expected_digest: string;
 export const PALETTE_EMITTER_VERSION = "burnguard-palette-2";
 export const PALETTE_DERIVED_DIGITS = 8;
 
+/** An unsigned declaration of exact pair bytes; no source or destination authority. */
+export type PaletteTransferProof = {
+  readonly schema_version: 1;
+  readonly emitter_version: "burnguard-palette-1" | "burnguard-palette-2";
+  readonly state: { readonly size_bytes: number; readonly sha256: string };
+  readonly css: { readonly size_bytes: number; readonly sha256: string };
+};
+export function parsePaletteTransferProof(input: unknown): PaletteTransferProof {
+  const v = shape(input, "schema_version emitter_version state css");
+  if (v.schema_version !== 1) return invalid("schema_version");
+  const member = (input: unknown, maximum: number) => {
+    const file = shape(input, "size_bytes sha256");
+    if (typeof file.size_bytes !== "number" || !Number.isSafeInteger(file.size_bytes) ||
+      file.size_bytes < 1 || file.size_bytes > maximum) return invalid("size_bytes");
+    if (typeof file.sha256 !== "string" || file.sha256.length !== 64 || !/^[0-9a-f]{64}$/.test(file.sha256)) return invalid("sha256");
+    return { size_bytes: file.size_bytes, sha256: file.sha256 };
+  };
+  return { schema_version: 1, emitter_version: choice(v.emitter_version, ["burnguard-palette-1", "burnguard-palette-2"]),
+    state: member(v.state, 262_144), css: member(v.css, 1024 * 1024) };
+}
+
 /** Canonical output precision does not alter editable model or anchor values. */
 export function formatPaletteCssChannel(value: number): string {
   return String(Number(Math.max(0, Math.min(1, value)).toFixed(PALETTE_DERIVED_DIGITS)));
