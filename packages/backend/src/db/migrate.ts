@@ -78,11 +78,14 @@ export async function runMigrationsFrom(
         if (db.query("PRAGMA foreign_key_check").all().length > 0) {
           throw new MigrationError(MIGRATION_FOREIGN_KEY_VIOLATION);
         }
-        db
-          .prepare(
-            "INSERT INTO schema_migrations (id, applied_at) VALUES (?, ?)",
-          )
-          .run(file, Date.now());
+        const statement = db.prepare(
+          "INSERT INTO schema_migrations (id, applied_at) VALUES (?, ?)",
+        );
+        try {
+          statement.run(file, Date.now());
+        } finally {
+          statement.finalize();
+        }
       });
       txn();
     }

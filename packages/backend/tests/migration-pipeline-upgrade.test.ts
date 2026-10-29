@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { cp, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -99,6 +99,31 @@ function namedIndexes(db: Database, tableName: string) {
 }
 
  describe("pipeline migration", () => {
+  test("Given retained native statements When real migrations run Then the file database closes strictly", async () => {
+    // Given
+    const root = await mkdtemp(path.join(tmpdir(), "burnguard-migration-close-"));
+    directories.push(root);
+    const db = new Database(path.join(root, "app.sqlite"));
+    // Call through to SQLite and retain its statements in mock.results so GC cannot hide a leak.
+    const prepared = spyOn(db, "prepare");
+    try {
+      // When
+      await runMigrationsFrom(db, sourceDir, { directory: path.join(root, "backups"), appVersion: "1.2.3" });
+
+      // Then
+      expect(prepared).toHaveBeenCalled();
+      expect(() => db.close(true)).not.toThrow();
+    } finally {
+      try {
+        const returned = prepared.mock.results.filter((result) => result.type === "return");
+        for (const result of returned) result.value.finalize();
+      } finally {
+        prepared.mockRestore();
+        db.close();
+      }
+    }
+  });
+
   test("Given legacy missing paths When 0005 runs Then rows survive with deterministic backfills and no receipt inference", async () => {
     // Given
     const db = database();
