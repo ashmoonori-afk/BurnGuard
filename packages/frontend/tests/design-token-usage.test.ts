@@ -34,7 +34,7 @@ function definedColours(): Set<string> {
 const TAILWIND_DEFAULT_ALLOWLIST: ReadonlySet<string> = new Set(["white", "black", "transparent", "current", "inherit"]);
 
 const COLOUR_PREFIX = "(?:ring-offset|bg|text|border|ring|fill|stroke|divide|outline|from|to|via|placeholder)";
-const UTILITY = new RegExp(`(?<![\\w\\-/\\[.$])(${COLOUR_PREFIX})-([a-z][a-z0-9-]*)(?:/[\\w.\\[\\]%]+)?(?![\\w\\-\\[:$])`, "g");
+const UTILITY = new RegExp(`(?<![\\w\\-/\\[.$#])(${COLOUR_PREFIX})-([a-z][a-z0-9-]*)(?:/[\\w.\\[\\]%]+)?(?![\\w\\-\\[:$])`, "g");
 
 // Utilities that share a colour prefix but set something else (size, alignment, style, side, gradient direction ...).
 const NON_COLOUR: Record<string, RegExp> = {
@@ -79,6 +79,11 @@ function colourUses(): Use[] {
 }
 
 describe("colour utilities resolve to defined tokens", () => {
+  test("Given a URL fragment and actual color classes When scanned Then only the classes require tokens", () => {
+    const uses = [..."bg-palette #bg-palette=payload bg-card".matchAll(UTILITY)];
+    expect(uses.map(match => match[2])).toEqual(["palette", "card"]);
+  });
+
   test("Given every source file When its colour utility classes are scanned Then each names a config token or an allowlisted Tailwind default", () => {
     const defined = definedColours();
     const unresolved = colourUses().filter((use) => !defined.has(use.colour) && !TAILWIND_DEFAULT_ALLOWLIST.has(use.colour));

@@ -58,6 +58,13 @@ for icons, borders, and large or bold labels.
 - Keep the canvas free of decorative cards; use one clear work surface and
   one contextual inspector.
 
+Layout: Palette editor - compare generated scales while retaining adjacent
+controls -> supporting-pane
+(https://raw.githubusercontent.com/changeroa/StyleGallery/main/patterns/split-sidebar/supporting-pane.md);
+scroll owner: the containing system-detail page, with a named horizontal
+comparison reel, step-position rail and a stacked alternative; avoid viewport-sized fixed columns,
+competing vertical scrollports, and hidden metadata on narrow containers.
+
 ## Component anatomy
 
 - **NewProjectPanel**: one prominent idea field, an editable suggested name,
@@ -87,6 +94,14 @@ for icons, borders, and large or bold labels.
   forcing the user to reselect the element in another mode.
 - **TweaksPanel**: focused, editable token controls. Save is an explicit
   checkpoint; reset and undo remain visible and reversible.
+- **PaletteEditor**: generated scales are the primary work surface and Save is
+  its only primary action. Stops, curve, gamut, scales, exact anchors and display
+  settings remain separate controls. Every drag has an exact-value keyboard
+  alternative and one undo checkpoint. Import, sharing and reset change a local
+  draft; only explicit Save publishes the validated pair. Swatch values,
+  P3-only markers and both text contrast values remain readable in all-info
+  mode. Errors preserve the draft. The existing individual token editor and
+  saved project appearance remain independent.
 - **CommentPanel**: contextual feedback tied to an artifact path and optional
   slide index. Resolved comments leave the active queue.
 - **QuickComment**: Alt/Option+C over a loaded canvas opens the existing memo

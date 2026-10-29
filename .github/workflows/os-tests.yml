@@ -247,6 +247,7 @@ jobs:
           packages/frontend/tests/design-system-pin.browser.test.ts
           packages/frontend/tests/northvale-previews.browser.test.ts
           packages/frontend/tests/workspace-controls.browser.test.ts
+          packages/backend/tests/palette-editor.browser.test.ts
           packages/frontend/tests/app-font.browser.test.ts
       - name: Chromium popup and deck runtime
         env:
