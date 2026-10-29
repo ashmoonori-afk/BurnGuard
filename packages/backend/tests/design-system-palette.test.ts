@@ -93,6 +93,37 @@ describe("design system palette persistence", () => {
     expect(await readDesignSystemPalette("test-system", paletteContentEnvironment(reopened, f.systemsRoot))).toEqual(result);
     expect(listSystemContentReceipts(f.db)).toHaveLength(1);
   });
+  test.each([
+    { name: "compact", suffix: "", accepted: true },
+    { name: "LF", suffix: "\n", accepted: true },
+    { name: "CRLF", suffix: "\r\n", accepted: false },
+    { name: "double-LF", suffix: "\n\n", accepted: false },
+    { name: "space", suffix: " ", accepted: false },
+  ])("Given $name JSON When validating a candidate Then only an optional terminal LF is accepted", async ({ suffix, accepted }) => {
+    const f = await setup();
+    await save(f);
+    const journal = parseContentJournal(JSON.parse(requiredReceipt(f).metadataJson));
+    const history = journal.palette_history;
+    if (history === null || !history.after.present) throw new Error("Missing fixture palette history");
+    const bytes = serializePalette(state) + suffix;
+    await writeFile(path.join(f.live, "palette/state.json"), bytes);
+    const candidate = {
+      ...journal,
+      palette_history: {
+        ...history,
+        after: {
+          ...history.after,
+          json: { bytes, length: Buffer.byteLength(bytes), sha256: contentHash(bytes) },
+        },
+      },
+    };
+    if (accepted) await expect(validatePaletteContent(f.live, candidate)).resolves.toBeUndefined();
+    else await expect(validatePaletteContent(f.live, candidate)).rejects.toMatchObject({ code: "system_content_corrupt" });
+    // Text acceptance cannot authorize a changed file against an existing receipt.
+    if (suffix !== "") {
+      await expect(readDesignSystemPalette("test-system", f.env)).rejects.toMatchObject({ code: "system_content_conflict" });
+    }
+  });
   test("Given installed unrelated bytes When saved Then canonical excluded CRLF and empty directories survive", async () => {
     const f = await setup();
     const before = await inspectContentTree(f.live);

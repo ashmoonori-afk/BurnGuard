@@ -13,3 +13,7 @@
 
 # Preserve frozen corpus bytes for raw SHA-256 verification on every platform.
 packages/backend/tests/fixtures/theme-engine/** -text
+
+# Generated palette hashes must survive Windows checkout unchanged.
+"design system themes/*/palette/state.json" text eol=lf
+"design system themes/*/palette/scales.css" text eol=lf

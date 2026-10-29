@@ -48,7 +48,8 @@ function validatePair(pair: PairSnapshot, version: string): void {
   if (version !== PALETTE_EMITTER_VERSION || !pair.present) return corrupt();
   try {
     const state = parsePaletteState(pair.json.bytes);
-    if (serializePalette(state) !== pair.json.bytes || emitPaletteCss(state) !== pair.css.bytes) return corrupt();
+    const json = serializePalette(state);
+    if ((pair.json.bytes !== json && pair.json.bytes !== `${json}\n`) || emitPaletteCss(state) !== pair.css.bytes) return corrupt();
   } catch (error) {
     if (error instanceof UpgradeContractError || error instanceof SyntaxError) return corrupt();
     throw error;
