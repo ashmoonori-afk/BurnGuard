@@ -68,6 +68,31 @@ export const designSystemPaletteTransfersTable = sqliteTable(
   ],
 );
 
+export const designSystemCanonicalTransfersTable = sqliteTable(
+  "design_system_canonical_transfers",
+  {
+    receiptId: text("receipt_id").primaryKey().notNull().references(() => designSystemReceiptsTable.id, { onDelete: "cascade" }),
+    proofVersion: integer("proof_version").notNull(),
+    emitterVersion: text("emitter_version").notNull(),
+    jsonSizeBytes: integer("json_size_bytes").notNull(),
+    jsonSha256: text("json_sha256").notNull(),
+    cssSizeBytes: integer("css_size_bytes").notNull(),
+    cssSha256: text("css_sha256").notNull(),
+    skillSizeBytes: integer("skill_size_bytes").notNull(),
+    skillSha256: text("skill_sha256").notNull(),
+  },
+  (table) => [
+    check("ck_canonical_transfer_version", sql`typeof(${table.proofVersion}) = 'integer' AND ${table.proofVersion} = 1`),
+    check("ck_canonical_transfer_emitter", sql`typeof(${table.emitterVersion}) = 'text' AND length(CAST(${table.emitterVersion} AS BLOB)) BETWEEN 1 AND 64 AND instr(${table.emitterVersion}, char(0)) = 0 AND ${table.emitterVersion} NOT GLOB '*[^a-zA-Z0-9._-]*'`),
+    check("ck_canonical_transfer_json_size", sql`typeof(${table.jsonSizeBytes}) = 'integer' AND ${table.jsonSizeBytes} BETWEEN 1 AND 262144`),
+    check("ck_canonical_transfer_json_hash", sql`typeof(${table.jsonSha256}) = 'text' AND length(${table.jsonSha256}) = 64 AND length(CAST(${table.jsonSha256} AS BLOB)) = 64 AND ${table.jsonSha256} NOT GLOB '*[^0-9a-f]*'`),
+    check("ck_canonical_transfer_css_size", sql`typeof(${table.cssSizeBytes}) = 'integer' AND ${table.cssSizeBytes} BETWEEN 1 AND 262144`),
+    check("ck_canonical_transfer_css_hash", sql`typeof(${table.cssSha256}) = 'text' AND length(${table.cssSha256}) = 64 AND length(CAST(${table.cssSha256} AS BLOB)) = 64 AND ${table.cssSha256} NOT GLOB '*[^0-9a-f]*'`),
+    check("ck_canonical_transfer_skill_size", sql`typeof(${table.skillSizeBytes}) = 'integer' AND ${table.skillSizeBytes} BETWEEN 1 AND 65536`),
+    check("ck_canonical_transfer_skill_hash", sql`typeof(${table.skillSha256}) = 'text' AND length(${table.skillSha256}) = 64 AND length(CAST(${table.skillSha256} AS BLOB)) = 64 AND ${table.skillSha256} NOT GLOB '*[^0-9a-f]*'`),
+  ],
+);
+
 export const learningItemsTable = sqliteTable(
   "learning_items",
   {

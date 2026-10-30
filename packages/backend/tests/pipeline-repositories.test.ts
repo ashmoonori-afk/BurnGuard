@@ -9,9 +9,10 @@ import { requiredArray, requiredBoolean, stringArray } from "@bg/shared/contract
 import { parseLearningContract } from "@bg/shared/learning-contract";
 import { drizzle } from "drizzle-orm/bun-sqlite";
 import type { PaletteTransferProof } from "@bg/shared/palette";
+import { CANONICAL_THEME_EMITTER, type CanonicalTransferProof } from "@bg/shared/theme";
 import { createArtifactOperation, transitionArtifactOperation } from "../src/db/artifact-operation-repository";
 import { CatalogRepositoryError, commitCatalogOperation, getContentReceipt, getCurrentSystemContent, getPendingSystemOperation, prepareCatalogOperation } from "../src/db/catalog-repository";
-import { commitDesignSystemReceipt, getDesignSystemPipeline, prepareDesignSystemReceipt, updateDesignSystemMetadata } from "../src/db/design-system-repository";
+import { commitDesignSystemReceipt, commitSystemContent, getDesignSystemPipeline, prepareDesignSystemReceipt, prepareSystemContent, updateDesignSystemMetadata } from "../src/db/design-system-repository";
 import { insertSequencedEvent, listSequencedSessionEvents, parsePersistedNormalizedEvent, parsePersistedUserEvent } from "../src/db/event-sequence-repository";
 import { persistNormalizedEvent } from "../src/db/events";
 import { createExportAttempt, createExportRetry, getExportAttempt } from "../src/db/export-attempt-repository";
@@ -19,6 +20,7 @@ import { createLearningCheckpoint, getLearningCheckpoint, updateLearningProgress
 import { runMigrationsFrom } from "../src/db/migrate";
 import { PipelineRepositoryError, reconcilePipelineRows } from "../src/db/pipeline-repository";
 import { PaletteTransferRepositoryError, readPaletteTransfer } from "../src/db/palette-transfer-repository";
+import { CanonicalTransferRepositoryError, readCanonicalTransfer, validateCanonicalTransferReceipt } from "../src/db/canonical-transfer-repository";
 import { digestEntries } from "../src/services/canonical-tree-manifest";
 import { LogoDeliverableError } from "../src/services/logo-deliverables";
 import { sanitizeTurnEvent } from "../src/services/turn-error-sanitizer";
@@ -66,6 +68,122 @@ function importedPaletteReceipt() {
     paletteTransfer: proof,
   };
 }
+
+function importedCanonicalReceipt() {
+  const member = (text: string) => ({ size_bytes: Buffer.byteLength(text), sha256: createHash("sha256").update(text).digest("hex") });
+  const proof: CanonicalTransferProof = {
+    schema_version: 1, emitter_version: CANONICAL_THEME_EMITTER,
+    json: member("{}\n"), css: member(":root{}\n"), skill: member("Guide\n"),
+  };
+  const files = [
+    { path: "canonical/SKILL.md", size: proof.skill.size_bytes, sha256: proof.skill.sha256 },
+    { path: "canonical/theme.css", size: proof.css.size_bytes, sha256: proof.css.sha256 },
+    { path: "canonical/theme.json", size: proof.json.size_bytes, sha256: proof.json.sha256 },
+  ];
+  return { id: "canonical-imported", designSystemId: "ds", contentRevision: 1, schemaVersion: 1,
+    digest: "extraction-digest", provenance: { state: "observed" }, createdAt: 2,
+    manifest: { schema_version: 1, digest_algorithm: "sha256", tree_digest: digestEntries(files), files, publication_state: "validated" },
+    canonicalTransfer: proof };
+}
+
+describe("canonical transfer repository", () => {
+  test("Given a canonical v2 candidate When prepared and committed Then its proof belongs to the same initial receipt", () => {
+    const input = importedCanonicalReceipt();
+    const operation = "11111111-1111-4111-8111-111111111111";
+    const prepared = prepareSystemContent(sqlite, {
+      id: `system-content-${operation}`, now: 2, live: "/missing/fresh-canonical",
+      create: { name: "Canonical", description: null, skillMdPath: null, tokensCssPath: null, readmeMdPath: null },
+      journal: { transaction_version: 1, operation_id: operation, system_id: "fresh-canonical",
+        mode: "create", intent: "publish", cleanup: "pending", base: null,
+        result_preservation_digest: "3".repeat(64), write_set: input.manifest.files.map(file => file.path),
+        palette_history: null, failure_code: null },
+      manifest: input.manifest,
+      provenance: { format: "system-content-v1", writer: "canonical", source_extraction: null },
+      canonicalTransfer: input.canonicalTransfer,
+    });
+    expect(getCurrentSystemContent(sqlite, "fresh-canonical")).toBeNull();
+    expect(validateCanonicalTransferReceipt(sqlite, prepared)).toEqual(input.canonicalTransfer);
+    commitSystemContent(sqlite, prepared, 3);
+    expect(getCurrentSystemContent(sqlite, "fresh-canonical")).toMatchObject({
+      id: prepared.id, contentRevision: 1, schemaVersion: 2, status: "committed",
+    });
+    expect(readCanonicalTransfer(sqlite, prepared.id)).toEqual(input.canonicalTransfer);
+  });
+
+  test("Given a trusted declaration When its v1 receipt commits Then the same local owner retains the bound triple", () => {
+    const input = importedCanonicalReceipt();
+    prepareDesignSystemReceipt(db, input);
+    expect(getCurrentSystemContent(sqlite, "ds")).toBeNull();
+    expect(readCanonicalTransfer(sqlite, input.id)).toEqual(input.canonicalTransfer);
+    commitDesignSystemReceipt(db, { id: input.id, digest: input.digest, updatedAt: 3 });
+    const head = getCurrentSystemContent(sqlite, "ds");
+    expect(head).toMatchObject({ id: input.id, schemaVersion: 1, contentRevision: 1, status: "committed" });
+    if (head === null) throw new Error("Missing committed canonical owner");
+    expect(validateCanonicalTransferReceipt(sqlite, { ...head })).toEqual(input.canonicalTransfer);
+    expect(() => validateCanonicalTransferReceipt(sqlite, { ...head, reason: "forged snapshot" })).toThrow(CanonicalTransferRepositoryError);
+  });
+
+  test("Given a declaration that differs from the manifest When prepared Then receipt and proof roll back together", () => {
+    const input = importedCanonicalReceipt();
+    expect(() => prepareDesignSystemReceipt(db, { ...input, canonicalTransfer: {
+      ...input.canonicalTransfer, json: { ...input.canonicalTransfer.json, sha256: "0".repeat(64) },
+    } })).toThrow(CanonicalTransferRepositoryError);
+    expect(getPendingSystemOperation(sqlite, "ds")).toBeNull();
+    expect(readCanonicalTransfer(sqlite, input.id)).toBeNull();
+  });
+
+  test("Given an outer transaction failure When the prepared declaration is rolled back Then no authority is left behind", () => {
+    const input = importedCanonicalReceipt();
+    expect(() => sqlite.transaction(() => {
+      prepareDesignSystemReceipt(db, input);
+      throw new Error("injected outer rollback");
+    })()).toThrow("injected outer rollback");
+    expect(getPendingSystemOperation(sqlite, "ds")).toBeNull();
+    expect(readCanonicalTransfer(sqlite, input.id)).toBeNull();
+  });
+
+  test("Given a matching retry When prepared again Then the existing proof is neither replaced nor duplicated", () => {
+    const input = importedCanonicalReceipt();
+    prepareDesignSystemReceipt(db, input);
+    expect(prepareDesignSystemReceipt(db, input).id).toBe(input.id);
+    expect(sqlite.query<{ count: number }, []>("SELECT count(*) count FROM design_system_canonical_transfers").get()?.count).toBe(1);
+    expect(() => prepareDesignSystemReceipt(db, { ...input, canonicalTransfer: {
+      ...input.canonicalTransfer, skill: { ...input.canonicalTransfer.skill, sha256: "2".repeat(64) },
+    } })).toThrow(PipelineRepositoryError);
+    expect(readCanonicalTransfer(sqlite, input.id)).toEqual(input.canonicalTransfer);
+  });
+
+  test.each([true, false])("Given initial proof presence %s When a retry changes presence Then it cannot adopt or discard authority", initiallyPresent => {
+    const input = importedCanonicalReceipt();
+    const { canonicalTransfer: _proof, ...withoutProof } = input;
+    prepareDesignSystemReceipt(db, initiallyPresent ? input : withoutProof);
+    expect(() => prepareDesignSystemReceipt(db, initiallyPresent ? withoutProof : input)).toThrow(PipelineRepositoryError);
+    expect(readCanonicalTransfer(sqlite, input.id)).toEqual(initiallyPresent ? input.canonicalTransfer : null);
+  });
+
+  test.each(["proof", "manifest"] as const)("Given a prepared triple When its %s changes Then commit refuses without activating it", target => {
+    const input = importedCanonicalReceipt();
+    prepareDesignSystemReceipt(db, input);
+    if (target === "proof") sqlite.query("UPDATE design_system_canonical_transfers SET css_sha256=? WHERE receipt_id=?").run("0".repeat(64), input.id);
+    else sqlite.query("UPDATE design_system_receipts SET manifest_json=? WHERE id=?").run(JSON.stringify({
+      ...input.manifest, files: input.manifest.files.slice(1),
+    }), input.id);
+    expect(() => commitDesignSystemReceipt(db, { id: input.id, digest: input.digest, updatedAt: 3 })).toThrow(CanonicalTransferRepositoryError);
+    expect(getCurrentSystemContent(sqlite, "ds")).toBeNull();
+    expect(getPendingSystemOperation(sqlite, "ds")?.status).toBe("prepared");
+  });
+
+  test("Given a failed owner When its declaration is read and then its receipt is deleted Then it stays inert and cascades away", () => {
+    const input = importedCanonicalReceipt();
+    prepareDesignSystemReceipt(db, input);
+    sqlite.query("UPDATE design_system_receipts SET status='failed' WHERE id=?").run(input.id);
+    expect(readCanonicalTransfer(sqlite, input.id)).toEqual(input.canonicalTransfer);
+    expect(getCurrentSystemContent(sqlite, "ds")).toBeNull();
+    sqlite.query("DELETE FROM design_system_receipts WHERE id=?").run(input.id);
+    expect(readCanonicalTransfer(sqlite, input.id)).toBeNull();
+    expect(sqlite.query("PRAGMA foreign_key_check").all()).toEqual([]);
+  });
+});
 
 describe("design system repository", () => {
   test("Given a trusted imported proof When receipt preparation and commit succeed Then the same v1 owner retains its extraction identity and proof", () => {
