@@ -27,13 +27,23 @@ export function rulesAdapter(): ContentAdapter {
 export function environment(db: Database, systemsRoot: string): ContentEnvironment {
   return { db, systemsRoot, operationId: () => OPERATION_ID, now: () => 10, io: defaultManagedTreeIo, validators: { rules: validateRules } };
 }
+let migratedSchema: Promise<Uint8Array> | undefined;
 export async function fixture(root: string, mode: "replace" | "create") {
   const systemsRoot = path.join(root, "systems");
   await mkdir(systemsRoot);
   const dbPath = path.join(root, "fixture.sqlite");
+  // Migrate one empty schema, then give every case its own persistent database.
+  // Publication/recovery still exercise real files, locks and isolated mutable rows.
+  migratedSchema ??= (async () => {
+    const template = new Database(":memory:");
+    try {
+      await runMigrationsFrom(template, path.join(import.meta.dir, "../../src/db/migrations"));
+      return template.serialize();
+    } finally { template.close(true); }
+  })();
+  await writeFile(dbPath, await migratedSchema);
   const db = new Database(dbPath);
   db.run("PRAGMA foreign_keys=ON");
-  await runMigrationsFrom(db, path.join(import.meta.dir, "../../src/db/migrations"));
   const live = path.join(systemsRoot, "test-system");
   if (mode === "replace") {
     await mkdir(path.join(live, ".git", "empty"), { recursive: true });
