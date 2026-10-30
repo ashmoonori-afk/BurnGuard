@@ -4,6 +4,9 @@ import { cp, mkdir, mkdtemp, open, readFile, readdir, rename, rm, writeFile } fr
 import { tmpdir } from "node:os";
 import { existsSync } from "node:fs";
 import path from "node:path";
+import { parseHexColor } from "@bg/shared/color";
+import { createDefaultPalette, emitPaletteCss, serializePalette } from "@bg/shared/palette";
+import { createDefaultThemeSettings, synthesizeTheme } from "@bg/shared/theme";
 import { seedBundledDesignSystems as seedBundled } from "../src/bootstrap";
 import { bundledDesignSystemId, bundledDesignSystems } from "../src/data/bundled-design-systems";
 import { resolveRepoRoot, systemsDir } from "../src/lib/paths";
@@ -15,6 +18,7 @@ import { getCurrentSystemContent } from "../src/db/catalog-repository";
 import { validateCatalogReceiptTree } from "../src/services/catalog-files";
 import { parseContentJournal } from "../src/services/system-content-format";
 import { DEFAULT_CANONICAL_TREE_LIMITS } from "../src/services/canonical-tree-manifest";
+import { writeCanonicalCandidate } from "../src/services/canonical-theme-files";
 import {
   bundledAdditionValidator, bundledThemeHistory, readThemeFiles, recoverBundledTheme, refreshBundledTheme, themeAdditiveDigest, themeFileHash, themeTreeDigest, type BundledThemeHistory, type BundledThemeRefresh,
 } from "../src/services/bundled-theme-refresh";
@@ -58,6 +62,21 @@ const legacyTheme = {
 };
 const retiredRuntime = "export const glass = true;\n";
 
+async function writeSyntheticAdditions(root: string, amount = 0.2): Promise<void> {
+  const defaults = createDefaultPalette();
+  const palette = { ...defaults, curve: { ...defaults.curve, amount } };
+  await mkdir(path.join(root, "palette"), { recursive: true });
+  await writeFile(path.join(root, "palette/state.json"), serializePalette(palette));
+  await writeFile(path.join(root, "palette/scales.css"), emitPaletteCss(palette));
+  await writeCanonicalCandidate(root, synthesizeTheme({
+    system_id: bundledDesignSystemId(SLUG), default_mode: "light", palette,
+    sources: { brand: { kind: "color", color: parseHexColor("#123456") }, surface: { kind: "scale", id: "neutral" },
+      status: { success: parseHexColor("#15803d"), warning: parseHexColor("#a16207"),
+        destructive: parseHexColor("#b91c1c"), info: parseHexColor("#0369a1") } },
+    settings: { light: createDefaultThemeSettings(), dark: createDefaultThemeSettings() },
+  }));
+}
+
 /** Profile from an older release: every other theme is already current or edited, so only `light` can change. */
 async function upgradedProfile(files: Readonly<Record<string, string>>) {
   await mkdir(systemsDir, { recursive: true });
@@ -70,9 +89,8 @@ async function upgradedProfile(files: Readonly<Record<string, string>>) {
   for (const directory of ["palette", "canonical"]) {
     // Each synthetic release owns its additive inputs, independently of today's bundle.
     await rm(path.join(shipped, directory), { recursive: true, force: true });
-    await mkdir(path.join(shipped, directory), { recursive: true });
-    await writeFile(path.join(shipped, directory, "SKILL.md"), "# Additive instructions\n");
   }
+  await writeSyntheticAdditions(shipped);
   await Promise.all(bundledDesignSystems.filter(({ slug }) => slug !== SLUG).map(({ slug }) => mkdir(path.join(systems, bundledDesignSystemId(slug)), { recursive: true })));
   const installed = path.join(systems, bundledDesignSystemId(SLUG));
   for (const [relative, text] of Object.entries(files)) {
@@ -173,7 +191,7 @@ describe("bundled theme refresh on upgrade", () => {
     if (first === null) throw new Error("Missing first content authority");
     const firstFiles = await readThemeFiles(installed);
     if (firstFiles === null) throw new Error("Unsafe fixture");
-    await writeFile(path.join(shipped, "palette/SKILL.md"), "# Next additive instructions\n");
+    await writeSyntheticAdditions(shipped, 0.15);
     const history: BundledThemeHistory = { ...legacyHistory, additive: { [SLUG]: {
       palette: [themeAdditiveDigest(firstFiles, "palette")],
       canonical: [themeAdditiveDigest(firstFiles, "canonical")],
@@ -187,7 +205,8 @@ describe("bundled theme refresh on upgrade", () => {
     expect(next.id).not.toBe(first.id);
     expect(JSON.parse(next.provenanceJson)).toMatchObject({ writer: "bundled-addition", source_extraction: null });
     expect(parseContentJournal(JSON.parse(next.metadataJson))).toMatchObject({
-      write_set: ["palette/SKILL.md"], palette_history: null, cleanup: "complete",
+      write_set: ["canonical/theme.json", "palette/scales.css", "palette/state.json"],
+      palette_history: null, cleanup: "complete",
     });
     await expect(bundledAdditionValidator(await fixtureHistory(repoRoot, history))(installed, {
       ...parseContentJournal(JSON.parse(next.metadataJson)), write_set: ["README.md"],
@@ -244,9 +263,9 @@ describe("bundled theme refresh on upgrade", () => {
     } } };
     await mkdir(path.join(installed, "palette/user-empty"));
     await seedBundledDesignSystems(repoRoot, systems, history);
-    expect((await readdir(path.join(installed, "palette"))).sort()).toEqual(["SKILL.md", "user-empty"]);
+    expect((await readdir(path.join(installed, "palette"))).sort()).toEqual(["scales.css", "state.json", "user-empty"]);
     expect(await readdir(path.join(installed, "palette/user-empty"))).toEqual([]);
-    expect(await readdir(path.join(installed, "canonical"))).toEqual(["SKILL.md"]);
+    expect((await readdir(path.join(installed, "canonical"))).sort()).toEqual(["SKILL.md", "theme.css", "theme.json"]);
     expect(themeTreeDigest((await readThemeFiles(installed)) ?? new Map())).toBe(themeTreeDigest(old));
   });
 
@@ -297,7 +316,8 @@ describe("bundled theme refresh on upgrade", () => {
     expect(await readFile(path.join(installed, "liquid-glass/liquid-glass.mjs"), "utf8")).toBe(retiredRuntime);
     expect(await readFile(path.join(installed, "fonts", "Brand.woff2"), "utf8")).toBe("brand font bytes");
     expect(await readFile(path.join(installed, "fonts", "fonts.css"), "utf8")).toBe("/* stale stylesheet */\n");
-    expect(existsSync(path.join(installed, "palette/SKILL.md"))).toBe(true);
+    expect(existsSync(path.join(installed, "palette/state.json"))).toBe(true);
+    expect(existsSync(path.join(installed, "palette/scales.css"))).toBe(true);
     expect(await hidden(systems)).toEqual([]);
   });
 
@@ -429,6 +449,7 @@ describe("bundled theme refresh on upgrade", () => {
     await seedBundledDesignSystems(repoRoot, systems, legacyHistory);
 
     expect(await readFile(path.join(installed, "colors_and_type.css"), "utf8")).toBe(crlf["colors_and_type.css"] ?? "");
-    expect(existsSync(path.join(installed, "palette/SKILL.md"))).toBe(true);
+    expect(existsSync(path.join(installed, "palette/state.json"))).toBe(true);
+    expect(existsSync(path.join(installed, "palette/scales.css"))).toBe(true);
   });
 });

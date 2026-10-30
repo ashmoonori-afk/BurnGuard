@@ -34,7 +34,7 @@ function bindManifest(receipt: CatalogReceiptRow, proof: CanonicalTransferProof)
     if (content && receipt.schemaVersion === 2) {
       const journal = parseContentJournal(JSON.parse(receipt.metadataJson));
       const provenance = parseContentProvenance(JSON.parse(receipt.provenanceJson));
-      if (!["palette", "canonical", "brand-image", "bundle-import"].includes(provenance.writer) ||
+      if (!["palette", "canonical", "brand-image", "bundle-import", "bundled-addition"].includes(provenance.writer) ||
         receipt.id !== `system-content-${journal.operation_id}` || receipt.designSystemId !== journal.system_id ||
         receipt.parentReceiptId !== (journal.base?.head?.receipt_id ?? null) ||
         receipt.parentDigest !== (journal.base?.head?.digest ?? null) ||

@@ -1,4 +1,6 @@
 import type { Database } from "bun:sqlite";
+import { parseCanonicalTransferProof, type CanonicalTransferProof } from "@bg/shared/theme";
+import { CanonicalTransferRepositoryError, validateCanonicalTransferReceipt } from "../db/canonical-transfer-repository";
 import { mkdir, open, readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { getCatalogRow, getCurrentSystemContent, getPendingSystemOperation, type CatalogReceiptRow, type CatalogRow } from "../db/catalog-repository";
@@ -11,6 +13,7 @@ import { assertSafeName } from "../security/path-boundary";
 import { defaultManagedTreeIo, type ManagedTreeIo } from "./artifact-tree-storage";
 import { parseCanonicalTreeManifest } from "./canonical-tree-manifest";
 import { CatalogFileError, validateCatalogReceiptTree } from "./catalog-files";
+import { validateCanonicalTransferAtRoot } from "./canonical-theme-files";
 import { assertSystemContentLease, withSystemContentAccess, type SystemContentLease } from "./system-content-access";
 import {
   contentHash, contentPath, corrupt, digest, exactRecord, operationId, parseContentJournal, parseContentProvenance,
@@ -40,6 +43,7 @@ export type ContentAdapter = {
   readonly transform: (stage: string, base: ContentObservation, boundary: (name: ContentBoundary) => Promise<void>) => Promise<void>;
   readonly validate: ContentValidator;
   readonly paletteHistory?: (base: ContentObservation, stage: string) => Promise<PaletteHistory>;
+  readonly canonicalTransfer?: (base: ContentObservation, stage: string) => Promise<CanonicalTransferProof | null>;
   /** Palette supplies its fixed-order actual-pair digest here; other writers use contentObservationDigest. */
   readonly expectedIdentity?: (base: ContentObservation) => Promise<string>;
 };
@@ -157,6 +161,10 @@ async function candidate(env: ContentEnvironment, target: string, receipt: Catal
   await matchTree(target, receipt.digest, journal.result_preservation_digest);
   if (journal.palette_history !== null) await matchPair(target, journal.palette_history.after);
   await validate(target, journal);
+  let canonical: CanonicalTransferProof | null;
+  try { canonical = validateCanonicalTransferReceipt(env.db, receipt); }
+  catch (error) { if (error instanceof CanonicalTransferRepositoryError) return corrupt(); throw error; }
+  if (canonical !== null) await validateCanonicalTransferAtRoot(target, canonical);
 }
 async function oldTree(target: string, journal: ContentJournal): Promise<void> {
   if (journal.base === null) conflict();
@@ -376,6 +384,12 @@ export async function publishSystemContent(env: ContentEnvironment, input: {
         await matchPair(paths.stage, journal.palette_history.after);
       }
       await input.adapter.validate(paths.stage, journal);
+      const declaration = await input.adapter.canonicalTransfer?.(observation, paths.stage) ?? null;
+      const canonicalTransfer = declaration === null ? null : parseCanonicalTransferProof(declaration);
+      if (writeSet.some(name => name.split("/")[0]?.toLowerCase() === "canonical") && canonicalTransfer === null) {
+        throw new SystemContentError("system_content_unavailable");
+      }
+      if (canonicalTransfer !== null) await validateCanonicalTransferAtRoot(paths.stage, canonicalTransfer);
       await boundary(env, "stage-validated");
       const identical = observation.tree?.preservation_digest === result.preservation_digest;
       if (!identical) verifyContentWriteSet(observation.tree, result, writeSet);
@@ -397,7 +411,8 @@ export async function publishSystemContent(env: ContentEnvironment, input: {
           if (!result.inventory.some((entry) => entry[0] === "file" && entry[1] === relative)) conflict();
         }
       }
-      prepared = prepareSystemContent(env.db, { id: `system-content-${op}`, journal, manifest: result.manifest, provenance, live: paths.live, now: env.now(), create: input.create ?? null });
+      prepared = prepareSystemContent(env.db, { id: `system-content-${op}`, journal, manifest: result.manifest, provenance, live: paths.live, now: env.now(), create: input.create ?? null,
+        ...(canonicalTransfer === null ? {} : { canonicalTransfer }) });
       await boundary(env, "receipt-prepared");
       prepared = await resumePublish(env, prepared);
     } catch (error) {
@@ -418,8 +433,8 @@ export async function publishSystemContent(env: ContentEnvironment, input: {
     try { await cleanup(env, prepared); }
     catch (error) {
       if (!(error instanceof Error)) throw error;
-      prepared = fresh(env, prepared);
     }
+    prepared = fresh(env, prepared);
     await candidate(env, paths.live, prepared);
     const committed = await observeSystemContent(env, input.systemId, lease);
     return { receipt: fresh(env, prepared), observation: committed, noOp: false };

@@ -13,6 +13,7 @@ import {
 } from "./system-content-publication";
 import { inspectContentTree, readPreservedFile, safeContentChild } from "./system-content-tree";
 import { DEFAULT_CANONICAL_TREE_LIMITS } from "./canonical-tree-manifest";
+import { readCanonicalCandidate } from "./canonical-theme-files";
 
 /**
  * Shipped legacy tree digests and retired runtime file hashes retain their existing history format.
@@ -240,6 +241,7 @@ export async function refreshBundledTheme(
           }
         },
         validate,
+        canonicalTransfer: async (_base, stage) => (await readCanonicalCandidate(stage))?.proof ?? null,
       },
     });
   });

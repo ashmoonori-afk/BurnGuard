@@ -68,6 +68,7 @@ jobs:
           packages/backend/tests/artifact-tree-durability.test.ts
           packages/backend/tests/system-content-publication.test.ts
           packages/backend/tests/design-system-palette.test.ts
+          packages/backend/tests/design-system-canonical.test.ts
           packages/backend/tests/design-system-wireframe.test.ts
           packages/backend/tests/design-system-visual-diff.test.ts
           packages/backend/tests/design-system-hero-assets.test.ts
