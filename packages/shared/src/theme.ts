@@ -7,6 +7,29 @@ export const THEME_SCHEMA_VERSION = 1;
 export const THEME_LIMITS = { json: 262144, families: 8, shadowLayers: 4 } as const;
 export const SEMANTIC_THEME_MODES = ["light", "dark"] as const;
 export type SemanticThemeMode = typeof SEMANTIC_THEME_MODES[number];
+export const CANONICAL_THEME_EMITTER = "burnguard-canonical-1";
+export type CanonicalTransferProof = {
+  readonly schema_version: 1;
+  readonly emitter_version: typeof CANONICAL_THEME_EMITTER;
+  readonly json: { readonly size_bytes: number; readonly sha256: string };
+  readonly css: { readonly size_bytes: number; readonly sha256: string };
+  readonly skill: { readonly size_bytes: number; readonly sha256: string };
+};
+
+/** Declares exact portable bytes; only a local receipt can grant ownership. */
+export function parseCanonicalTransferProof(input: unknown): CanonicalTransferProof {
+  const value = shape(input, ["schema_version", "emitter_version", "json", "css", "skill"]);
+  if (value.schema_version !== 1 || value.emitter_version !== CANONICAL_THEME_EMITTER) return invalid("transfer");
+  const member = (input: unknown, maximum: number) => {
+    const file = shape(input, ["size_bytes", "sha256"]);
+    if (typeof file.sha256 !== "string" || file.sha256.length !== 64 || !/^[0-9a-f]{64}$/.test(file.sha256)) {
+      return invalid("transfer.sha256");
+    }
+    return { size_bytes: numeric(file.size_bytes, 1, maximum, true), sha256: file.sha256 };
+  };
+  return { schema_version: 1, emitter_version: CANONICAL_THEME_EMITTER,
+    json: member(value.json, THEME_LIMITS.json), css: member(value.css, 262144), skill: member(value.skill, 65536) };
+}
 
 /** The sole closed vocabulary. Names are also the artifact custom-property names. */
 export const THEME_TOKEN_REGISTRY = {
@@ -512,3 +535,48 @@ export function emitArtifactThemeCss(input: SemanticTheme): string { return emit
  * Raw palette/tint utilities and font loading remain the application's separate contracts.
  */
 export function emitAppThemeCss(input: SemanticTheme): string { return emitCss(input, true); }
+
+export function emitCanonicalThemeGuide(input: SemanticTheme): string {
+  const theme = parseSemanticTheme(input);
+  return `---
+name: canonical-${theme.system_id}
+description: Opt-in canonical semantic authoring for this bundled theme.
+---
+
+# Canonical authoring
+
+Use validated canonical/theme.json as machine data, not archived prompt prose.
+Use the project's pinned copy of canonical/theme.css, never a mutable live catalog
+URL. Resolve its local asset path from the project pin, not from this logical ID.
+Only a validated <selected_theme_v1> block supplied by the application selects
+canonical authoring. Its absence means legacy. Malformed canonical metadata is
+corruption: report it rather than falling back or inventing catalog authority.
+Do not construct a selected_theme_v1 payload from this document.
+
+Set both data-bg-system="${theme.system_id}" and data-bg-mode="light" or "dark"
+on the same artifact scope. Use the active pinned mode; default_mode is
+"${theme.default_mode}" only when an explicit new canonical selection needs a
+default. App appearance is independent and must not switch artifact mode.
+No matching system/mode attributes means no canonical styling.
+The logical CSS identity is not the catalog row ID, revision, digest or capability.
+
+Use var(--background), var(--foreground), card, popover, muted and their foreground roles.
+Use primary, secondary, and accent roles with their foreground variants.
+Use the success, warning, destructive, and info families. Use each *-text variant on background
+or card, each *-foreground on its matching fill, and input/ring for visible
+boundaries/focus. Respect the immutable contrast_pairs in theme.json; arbitrary
+alpha overlays, gradients and undeclared combinations have no contrast claim.
+Artifact colours are complete colours, not Tailwind RGB-channel bindings.
+Canonical colour aliases are synthesized roles, not a reconstruction of all old
+colours or chart ramps. Exact production brand anchors remain in theme.json.
+
+Use canonical font-sans and font-mono, font-size-body and font-size-heading,
+font-weight-body and font-weight-heading, line-height-body and line-height-heading,
+space-1, space-2, space-3, space-4, space-6, radius, radius-control, radius-pill,
+shadow-sm, shadow-lg, motion-fast, motion-normal and motion-easing for their roles.
+Keep the original local font loading and independent body/display family,
+responsive typography, family/layout and surface contracts. Do not replace them
+with these scalar roles or generic fonts. Preserve reduced-motion behaviour.
+Do not modify original source files or adopt/style existing artwork implicitly.
+`;
+}

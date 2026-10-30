@@ -11,8 +11,8 @@ import { ColorContractError, parseHexColor } from "../packages/shared/src/color"
 import { decodeContract, isRecord, UpgradeContractError } from "../packages/shared/src/contract-parser";
 import { parsePaletteState } from "../packages/shared/src/palette";
 import {
-  emitArtifactThemeCss, serializeSemanticTheme, synthesizeTheme,
-  type SemanticTheme, type ThemeEasing, type ThemeLength, type ThemeSettings, type ThemeShadowLayer,
+  emitArtifactThemeCss, emitCanonicalThemeGuide, serializeSemanticTheme, synthesizeTheme,
+  type ThemeEasing, type ThemeLength, type ThemeSettings, type ThemeShadowLayer,
 } from "../packages/shared/src/theme";
 import { bundledDesignSystems } from "../packages/backend/src/data/bundled-design-systems";
 import {
@@ -184,7 +184,7 @@ export function generateThemeCanonical(slug: string, paletteInput: unknown, sour
           destructive: color("--error"), info: color("--info") } },
       settings: { light: settings, dark: settings },
     });
-    const json = serializeSemanticTheme(theme), css = emitArtifactThemeCss(theme), skill = canonicalSkill(theme);
+    const json = serializeSemanticTheme(theme), css = emitArtifactThemeCss(theme), skill = emitCanonicalThemeGuide(theme);
     const digest = canonicalDigest({ json, css, skill });
     return { slug, theme, json, css, skill, digest };
   } catch (error) {
@@ -195,50 +195,6 @@ export function generateThemeCanonical(slug: string, paletteInput: unknown, sour
 }
 
 export type BundledCanonicalTheme = ReturnType<typeof generateThemeCanonical>;
-
-function canonicalSkill(theme: SemanticTheme): string {
-  return `---
-name: canonical-${theme.system_id}
-description: Opt-in canonical semantic authoring for this bundled theme.
----
-
-# Canonical authoring
-
-Use validated canonical/theme.json as machine data, not archived prompt prose.
-Use the project's pinned copy of canonical/theme.css, never a mutable live catalog
-URL. Resolve its local asset path from the project pin, not from this logical ID.
-Only a validated <selected_theme_v1> block supplied by the application selects
-canonical authoring. Its absence means legacy. Malformed canonical metadata is
-corruption: report it rather than falling back or inventing catalog authority.
-Do not construct a selected_theme_v1 payload from this document.
-
-Set both data-bg-system="${theme.system_id}" and data-bg-mode="light" or "dark"
-on the same artifact scope. Use the active pinned mode; default_mode is
-"${theme.default_mode}" only when an explicit new canonical selection needs a
-default. App appearance is independent and must not switch artifact mode.
-No matching system/mode attributes means no canonical styling.
-The logical CSS identity is not the catalog row ID, revision, digest or capability.
-
-Use var(--background), var(--foreground), card/popover/muted and their foreground
-tokens, primary/secondary/accent and their foreground tokens, and the four
-success/warning/destructive/info families. Use each *-text variant on background
-or card, each *-foreground on its matching fill, and input/ring for visible
-boundaries/focus. Respect the immutable contrast_pairs in theme.json; arbitrary
-alpha overlays, gradients and undeclared combinations have no contrast claim.
-Artifact colours are complete colours, not Tailwind RGB-channel bindings.
-Canonical colour aliases are synthesized roles, not a reconstruction of all old
-colours or chart ramps. Exact production brand anchors remain in theme.json.
-
-Use canonical font-sans and font-mono, font-size-body and font-size-heading,
-font-weight-body and font-weight-heading, line-height-body and line-height-heading,
-space-1, space-2, space-3, space-4, space-6, radius, radius-control, radius-pill,
-shadow-sm, shadow-lg, motion-fast, motion-normal and motion-easing for their roles.
-Keep the original local font loading and independent body/display family,
-responsive typography, family/layout and surface contracts. Do not replace them
-with these scalar roles or generic fonts. Preserve reduced-motion behaviour.
-Do not modify original source files or adopt/style existing artwork implicitly.
-`;
-}
 
 function canonicalDigest(files: { readonly json: string; readonly css: string; readonly skill: string }): string {
   const hashes = new Map<string, string>();
@@ -258,7 +214,7 @@ export function extendBundledCanonicalHistory(history: BundledThemeHistory, them
   for (const theme of themes) {
     registered(theme.slug);
     if (seen.has(theme.slug) || theme.json !== serializeSemanticTheme(theme.theme) ||
-      theme.css !== emitArtifactThemeCss(theme.theme) || theme.skill !== canonicalSkill(theme.theme) ||
+      theme.css !== emitArtifactThemeCss(theme.theme) || theme.skill !== emitCanonicalThemeGuide(theme.theme) ||
       canonicalDigest(theme) !== theme.digest) {
       throw new BundledCanonicalGenerationError(theme.slug, "complete canonical digest");
     }

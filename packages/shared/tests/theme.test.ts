@@ -8,9 +8,41 @@ import { createDefaultPalette, type PaletteState } from "../src/palette";
 import {
   THEME_CONTRAST_PAIRS, THEME_LIGHTNESS_STEPS, THEME_LIMITS, THEME_TOKEN_REGISTRY, SEMANTIC_THEME_MODES,
   createDefaultThemeSettings, emitAppThemeCss, emitArtifactThemeCss, getThemeSettings,
-  parseSemanticTheme, serializeSemanticTheme, synthesizeTheme,
-  type SemanticTheme, type SemanticThemeMode, type ThemeSynthesisInput,
+  CANONICAL_THEME_EMITTER, parseCanonicalTransferProof, parseSemanticTheme, serializeSemanticTheme, synthesizeTheme,
+  type CanonicalTransferProof, type SemanticTheme, type SemanticThemeMode, type ThemeEasing, type ThemeSynthesisInput,
 } from "../src/theme";
+
+function transferProof() {
+  const file = { size_bytes: 1, sha256: "1".repeat(64) };
+  return { schema_version: 1, emitter_version: CANONICAL_THEME_EMITTER,
+    json: { ...file }, css: { ...file }, skill: { ...file } } satisfies CanonicalTransferProof;
+}
+
+test("Given a canonical byte declaration When parsed Then exact members are retained without sharing mutable input", () => {
+  const input = transferProof(), parsed = parseCanonicalTransferProof(input);
+  expect(parsed).toEqual(input);
+  input.json.sha256 = "2".repeat(64);
+  expect(parsed.json.sha256).toBe("1".repeat(64));
+});
+
+test.each([
+  ["unknown version", { ...transferProof(), schema_version: 2 }],
+  ["unknown emitter", { ...transferProof(), emitter_version: "foreign" }],
+  ["unknown key", { ...transferProof(), owner: "not-authority" }],
+  ["missing guide", { schema_version: 1, emitter_version: CANONICAL_THEME_EMITTER, json: transferProof().json, css: transferProof().css }],
+  ["null member", { ...transferProof(), css: null }],
+  ["empty member", { ...transferProof(), css: { ...transferProof().css, size_bytes: 0 } }],
+  ["fractional size", { ...transferProof(), css: { ...transferProof().css, size_bytes: 1.5 } }],
+  ["nonfinite size", { ...transferProof(), css: { ...transferProof().css, size_bytes: Infinity } }],
+  ["large JSON", { ...transferProof(), json: { ...transferProof().json, size_bytes: 262145 } }],
+  ["large CSS", { ...transferProof(), css: { ...transferProof().css, size_bytes: 262145 } }],
+  ["large guide", { ...transferProof(), skill: { ...transferProof().skill, size_bytes: 65537 } }],
+  ["uppercase hash", { ...transferProof(), css: { ...transferProof().css, sha256: "A".repeat(64) } }],
+  ["terminal LF hash", { ...transferProof(), css: { ...transferProof().css, sha256: `${"1".repeat(64)}\n` } }],
+  ["unknown member key", { ...transferProof(), json: { ...transferProof().json, path: "elsewhere" } }],
+] as const)("Given %s in canonical transfer input When parsed Then the closed byte declaration rejects it", (_name, input) => {
+  expect(() => parseCanonicalTransferProof(input)).toThrow(UpgradeContractError);
+});
 
 function inputFor(color: RgbColor = parseHexColor("#b64128"), system_id = "test-brand"): ThemeSynthesisInput {
   const palette: PaletteState = { ...createDefaultPalette(),
@@ -234,8 +266,8 @@ test("Given unsupported values When parsed Then expressions units nonfinite data
 
 test("Given authored cubic curves When parsed and emitted Then exact geometry survives both CSS contracts", () => {
   const theme = synthesizeTheme(inputFor());
-  for (const points of [[0.2, 0, 0, 1], [0, -0.25, 1, 1.25], [0.12345678901234567, 0, 1, 1]]) {
-    const curve = { type: "easing", value: { type: "cubic-bezier", points } };
+  for (const points of [[0.2, 0, 0, 1], [0, -0.25, 1, 1.25], [0.12345678901234567, 0, 1, 1]] as const) {
+    const curve = { type: "easing", value: { type: "cubic-bezier", points } } satisfies ThemeEasing;
     const parsed = parseSemanticTheme(lightPatch(theme, { "motion-easing": curve }));
     expect(parsed.modes.light["motion-easing"]).toEqual(curve);
     expect(parsed.modes.light["motion-easing"]).not.toBe(curve);
