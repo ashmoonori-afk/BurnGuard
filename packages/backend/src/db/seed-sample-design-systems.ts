@@ -9,6 +9,7 @@ import { getDb } from "./client";
 import { designSystemsTable } from "./schema";
 import { systemsDir } from "../lib/paths";
 import type { PromptSample } from "./seed-tutorials";
+import { canCreateSeedSystem, preserveSystemFromSeed } from "../services/startup-system-seed-guard";
 
 export function promptSampleDesignSystemId(slug: string): string { return `sample-system-${slug}`; }
 
@@ -17,6 +18,7 @@ export async function seedPromptSampleDesignSystem(sample: PromptSample, html: s
   const dirPath = path.join(systemsDir, id);
   const db = getDb();
   if ((await db.select({ id: designSystemsTable.id }).from(designSystemsTable).where(eq(designSystemsTable.id, id))).length) return;
+  if (!(await canCreateSeedSystem(id))) return;
   await mkdir(dirPath, { recursive: true });
   await copyBundledFonts(dirPath);
   const layout = sampleLayoutFiles(sample.layout);
@@ -29,6 +31,7 @@ export async function seedPromptSampleDesignSystem(sample: PromptSample, html: s
 }
 
 export async function seedSplashDesignSystemFiles(dirPath: string, html: string): Promise<void> {
+  if (await preserveSystemFromSeed("splash", path.dirname(dirPath))) return;
   await mkdir(dirPath, { recursive: true });
   await copyBundledFonts(dirPath);
   const files = { "colors_and_type.css": '@import url("./fonts/fonts.css");\n' + (html.match(/:root \{([\s\S]*?)\}/)?.[0] ?? "") + '\n:root { --font-body: "DM Sans", "Pretendard", sans-serif; --font-display: "Space Grotesk", "Pretendard", sans-serif; --font-mono: "IBM Plex Mono", "Pretendard", monospace; }', "SKILL.md": "# Splash Design System\nUse the canonical blue, ink and pale background tokens in colors_and_type.css. Preserve rounded panels, pill actions, the transfer preview, and six vertical sections: hero, features, workflow, transparency, FAQ, final action. Use local DM Sans/Pretendard body, Space Grotesk/Pretendard headings and IBM Plex Mono numeric text. Copy fonts/ including licenses and link fonts/fonts.css; no CDN. Body 16–18px/1.6, headings 32–64px/1.15 (Korean 1.3), supporting text at least 14px/1.5. Keep contrast readable and text unclipped at 200% zoom; use responsive single-column layouts on mobile.", "README.md": "# Splash Design System\nPublished style system for the Splash landing template. Open preview.html for the complete six-section reference. Use local DM Sans/Pretendard body, Space Grotesk/Pretendard display and IBM Plex Mono numeric fonts. Copy fonts/ and licenses, link fonts/fonts.css, no CDN. Body 16–18px/1.6; headings 32–64px/1.15 (Korean 1.3). Preserve contrast and wrapping at 200% zoom. This is an illustrative product, not a payment service.", "preview.html": html };

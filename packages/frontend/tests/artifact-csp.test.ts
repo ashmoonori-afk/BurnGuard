@@ -1,4 +1,4 @@
-import { describe, expect, spyOn, test } from "bun:test";
+import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import { buildSandboxedArtifactSrcDoc } from "../src/components/canvas/frame-bridge";
 import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
@@ -7,6 +7,8 @@ import { Script } from "node:vm";
 import { launchChromiumViaNode } from "../../backend/src/services/chromium-node-launch";
 
 const BASE_HREF = "http://127.0.0.1:14070/api/projects/p/fs/index.html";
+const pendingCanvasPolicies = new Set<() => void>();
+afterEach(() => { for (const report of pendingCanvasPolicies) report(); });
 
 const systemChromeAvailable = process.platform === "darwin"
   ? existsSync("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
@@ -40,29 +42,59 @@ async function assertCanvasPolicy(
   launch: (server: ReturnType<typeof Bun.serve>) => ReturnType<typeof launchChromiumViaNode> =
     () => launchSystemChrome(),
 ) {
+  const startedAt = performance.now();
+  const phases: { phase: string; elapsed_ms: number }[] = [];
   const source = await readFile(new URL("../src/components/canvas/Canvas.tsx", import.meta.url), "utf8");
   const sandbox = /sandbox="([^"]+)"/.exec(source)?.[1];
   if (sandbox === undefined) throw new Error("Canvas sandbox attribute missing");
   const requests: string[] = [];
   const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch(request) { requests.push(new URL(request.url).pathname); return new Response("<!doctype html><body></body>", { headers: { "content-type": "text/html" } }); } });
   let browser: Awaited<ReturnType<typeof launchChromiumViaNode>> | undefined;
+  const trace = { action, phase: "launch", cleanup: "not_started" };
+  const reportPending = (): void => {
+    process.stderr.write(`CANVAS_POLICY_PENDING ${JSON.stringify({
+      ...trace, elapsed_ms: Math.round(performance.now() - startedAt), phases,
+      frame_events: requests.filter(name => name.startsWith("/_bg-csp-phase/")),
+    })}\n`);
+  };
+  const markPhase = (phase: string): void => {
+    trace.phase = phase;
+    const elapsed_ms = Math.round(performance.now() - startedAt);
+    phases.push({ phase, elapsed_ms });
+    if (elapsed_ms >= 15_000) reportPending();
+  };
+  pendingCanvasPolicies.add(reportPending);
   try {
+    markPhase("launch");
     browser = await launch(server);
+    markPhase("new_page");
     const page = await browser.newPage();
     const base = `${server.url.origin}/api/projects/p/fs/index.html`;
+    markPhase("page_navigation");
     await page.goto(server.url.origin);
+    markPhase("navigation_listener");
     await page.evaluate(() => window.addEventListener("message", event => {
       if (event.source === document.querySelector("iframe")?.contentWindow && event.data?.event === "navigate") console.log(`NAVIGATE:${event.data.payload.href}`);
     }));
     const html = buildSandboxedArtifactSrcDoc(`<html><head></head><body><button id="open" onclick="document.querySelector('output').textContent = window.open('${server.url.origin}/unexpected') === null ? 'blocked' : 'opened'">Open</button><output></output><a href="next.html">Normal link</a><a target="_blank" href="other.html">Blank link</a></body></html>`, base);
-    await page.evaluate(({ html, sandbox }) => new Promise<void>((resolve, reject) => {
+    markPhase("iframe_creation");
+    await page.evaluate(({ html, sandbox, traceBase }) => new Promise<void>((resolve, reject) => {
+      void fetch(`${traceBase}/_bg-csp-phase/start`).catch(() => {});
       const frame = document.createElement("iframe");
       frame.setAttribute("sandbox", sandbox);
-      const timer = setTimeout(() => reject(new Error("frame_load_timeout")), 5000);
-      frame.addEventListener("load", () => { clearTimeout(timer); resolve(); }, { once: true });
+      const timer = setTimeout(() => {
+        void fetch(`${traceBase}/_bg-csp-phase/timeout`).catch(() => {});
+        reject(new Error("frame_load_timeout"));
+      }, 5000);
+      frame.addEventListener("load", () => {
+        void fetch(`${traceBase}/_bg-csp-phase/load`).catch(() => {});
+        clearTimeout(timer);
+        resolve();
+      }, { once: true });
       frame.srcdoc = html;
       document.body.append(frame);
-    }), { html, sandbox });
+    }), { html, sandbox, traceBase: server.url.origin });
+    markPhase("policy_action");
     const frame = page.frameLocator("iframe");
     if (action === "popup") {
       await frame.locator("#open").click();
@@ -75,9 +107,17 @@ async function assertCanvasPolicy(
       expect(page.context().pages()).toEqual([page]);
     }
     expect(requests).not.toContain("/unexpected");
+    markPhase("complete");
   } finally {
+    trace.cleanup = "browser";
+    markPhase("cleanup_browser");
     try { await browser?.close(); }
-    finally { await server.stop(true); }
+    finally {
+      trace.cleanup = "server";
+      markPhase("cleanup_server");
+      try { await server.stop(true); }
+      finally { pendingCanvasPolicies.delete(reportPending); }
+    }
   }
 }
 

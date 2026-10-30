@@ -8,6 +8,7 @@ import Bootstrap from "./components/Bootstrap";
 import { applyLaunchTheme } from "./hooks/useTheme";
 import { applyDocumentLocale, useLocaleStore } from "./i18n/locale";
 import "./index.css";
+import "./components/systems/palette-preview.css";
 
 async function main(): Promise<void> {
   const root = document.getElementById("root");

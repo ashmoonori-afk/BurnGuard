@@ -1,7 +1,15 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { Database } from "bun:sqlite";
+import { createHash } from "node:crypto";
+import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { parseHexColor, rgbToOklch } from "@bg/shared/color";
+import { emitPaletteCss, PALETTE_DERIVED_DIGITS, parsePaletteState, serializePalette } from "@bg/shared/palette";
+import {
+  BundledPaletteGenerationError, bundledPalettePaths, emitBundledPalettePatch,
+  extendBundledPaletteHistory, generateBundledPalettePlan, generateThemePalettePair,
+} from "../../../scripts/build-theme-palettes";
 import { seedBundledDesignSystems } from "../src/bootstrap";
 import {
   bundledDesignSystemId,
@@ -9,6 +17,13 @@ import {
 } from "../src/data/bundled-design-systems";
 import { resolveRepoRoot } from "../src/lib/paths";
 import { extractCssCustomProperties } from "../src/services/design-system-extract";
+import { runMigrationsFrom } from "../src/db/migrate";
+import {
+  bundledThemeHistory, themeAdditiveDigest, themeFileHash, type BundledThemeHistory,
+} from "../src/services/bundled-theme-refresh";
+import { paletteContentEnvironment, readDesignSystemPalette } from "../src/services/design-system-palette";
+import frozenBrands from "./fixtures/theme-engine/baseline/brand-anchors.json";
+import frozenLegacy from "./fixtures/theme-engine/baseline/legacy-inventory.json";
 
 /**
  * The first ten built-in themes. Their palettes are authored for BurnGuard; the slugs predate the
@@ -117,6 +132,165 @@ const canonicalTokensPath = path.join(
   "design system sample",
   "colors_and_type.css",
 );
+
+describe("bundled palette materialization", () => {
+  test("Given production CSS When generation repeats Then every owned pair and history byte is deterministic", async () => {
+    const first = await generateBundledPalettePlan();
+    const second = await generateBundledPalettePlan();
+    expect(first).toEqual(second);
+    expect(first.pairs.map(pair => pair.slug)).toEqual([...THEME_SLUGS]);
+    expect(first.changes).toEqual([]);
+    for (const pair of first.pairs) {
+      const paths = bundledPalettePaths(resolveRepoRoot(), pair.slug);
+      expect((await readdir(path.join(paths.directory, "palette"))).sort()).toEqual(["scales.css", "state.json"]);
+      expect(await readFile(paths.state, "utf8")).toBe(pair.json);
+      expect(await readFile(paths.css, "utf8")).toBe(pair.css);
+      expect(`${serializePalette(parsePaletteState(pair.json))}\n`).toBe(pair.json);
+      expect(emitPaletteCss(pair.state)).toBe(pair.css);
+    }
+  }, 30_000);
+
+  test("Given all frozen brands When production CSS generates palettes Then exact anchors and actual theme hues survive", async () => {
+    expect(frozenBrands.rows.map(row => row.slug)).toEqual([...THEME_SLUGS]);
+    for (const row of frozenBrands.rows) {
+      const source = await readFile(bundledPalettePaths(resolveRepoRoot(), row.slug).source, "utf8");
+      const tokens = await extractCssCustomProperties(source);
+      const pair = generateThemePalettePair(row.slug, source);
+      const brand = pair.state.anchors.find(anchor => anchor.id === "anchor-primary-blue");
+      expect(brand?.color, row.slug).toEqual(parseHexColor(row.hex));
+      expect(brand?.color, row.slug).toEqual({ space: "srgb", r: row.rgb[0], g: row.rgb[1], b: row.rgb[2] });
+      for (const anchor of pair.state.anchors) {
+        expect(anchor.color, `${row.slug}: ${anchor.id}`).toEqual(parseHexColor(tokens.get(anchor.name.slice(2))));
+      }
+      const chromas: number[] = [];
+      for (const scale of pair.state.scales) {
+        const color = rgbToOklch(parseHexColor(tokens.get(scale.name.slice(2))));
+        chromas.push(color.c);
+        expect(scale.kind, `${row.slug}: ${scale.id}`).toBe(color.c === 0 ? "neutral" : "hue");
+        if (scale.kind === "hue") expect(scale.hue).toBe(Number(color.h.toFixed(PALETTE_DERIVED_DIGITS)) % 360);
+      }
+      expect(pair.state.curve.amount).toBe(Number(Math.max(...chromas).toFixed(PALETTE_DERIVED_DIGITS)));
+    }
+  }, 30_000);
+
+  test("Given missing or ambiguous production colours When generated Then no default brand is substituted", async () => {
+    const source = await readFile(bundledPalettePaths(resolveRepoRoot(), "light").source, "utf8");
+    for (const invalid of [
+      source.replace(/--primary-blue\s*:[^;]*;/, ""),
+      source.replace(/--primary-blue\s*:[^;]*;/, "--primary-blue: var(--accent);"),
+      source + "\n:root { --primary-blue: #123456; }\n",
+    ]) {
+      expect(() => generateThemePalettePair("light", invalid)).toThrow(BundledPaletteGenerationError);
+    }
+    expect(() => generateThemePalettePair("../light", source)).toThrow(BundledPaletteGenerationError);
+    const changed = generateThemePalettePair("light", source.replace(/--primary-blue\s*:[^;]*;/, "--primary-blue: #123456;"));
+    expect(changed.state.anchors.find(anchor => anchor.id === "anchor-primary-blue")?.color).toEqual(parseHexColor("#123456"));
+    expect(changed.json).not.toBe(generateThemePalettePair("light", source).json);
+    expect(generateThemePalettePair("light", source.replace(/\n/g, "\r\n"))).toEqual(generateThemePalettePair("light", source));
+  });
+
+  test("Given all shipped pairs When the real palette service reads them Then approved hashes alone grant ownership", async () => {
+    const systemsRoot = await mkdtemp(path.join(tmpdir(), "bg-shipped-palettes-"));
+    const db = new Database(":memory:");
+    try {
+      db.run("PRAGMA foreign_keys=ON");
+      await runMigrationsFrom(db, path.join(import.meta.dir, "../src/db/migrations"));
+      const env = paletteContentEnvironment(db, systemsRoot);
+      for (const { slug } of bundledDesignSystems) {
+        const id = bundledDesignSystemId(slug), live = path.join(systemsRoot, id);
+        const shipped = bundledPalettePaths(resolveRepoRoot(), slug);
+        await mkdir(live);
+        await cp(path.join(shipped.directory, "palette"), path.join(live, "palette"), { recursive: true });
+        db.query("INSERT INTO design_systems(id,name,status,dir_path,created_at,updated_at) VALUES (?,?,'draft',?,1,1)")
+          .run(id, slug, live);
+        const result = await readDesignSystemPalette(id, env);
+        expect(result.state).toEqual(parsePaletteState(await readFile(shipped.state, "utf8")));
+        expect(result.css).toBe(await readFile(shipped.css, "utf8"));
+        expect(result.receipt_id).toBeNull();
+        expect(result.content_revision).toBe(0);
+      }
+      const id = bundledDesignSystemId("light"), live = path.join(systemsRoot, id);
+      const current = await readDesignSystemPalette(id, env);
+      if (current.state === null) throw new Error("Missing shipped palette state");
+      const next = { ...current.state, display: { ...current.state.display, scale_gap: current.state.display.scale_gap + 1 } };
+      await writeFile(path.join(live, "palette", "state.json"), `${serializePalette(next)}\n`);
+      await expect(readDesignSystemPalette(id, env)).rejects.toMatchObject({ code: "palette_ownership_conflict" });
+      await writeFile(path.join(live, "palette", "state.json"), `${serializePalette(current.state)}\n`);
+      await writeFile(path.join(live, "palette", "extra.css"), "");
+      await expect(readDesignSystemPalette(id, env)).rejects.toMatchObject({ code: "palette_ownership_conflict" });
+      expect(db.query("SELECT COUNT(*) AS count FROM design_system_receipts").get()).toEqual({ count: 0 });
+    } finally {
+      db.close(true);
+      await rm(systemsRoot, { recursive: true, force: true });
+    }
+  }, 30_000);
+
+  test("Given exact shipped subtrees When history is extended Then only nonempty palette authority is added", async () => {
+    const pairs = (await generateBundledPalettePlan()).pairs;
+    const empty = themeAdditiveDigest(new Map(), "palette");
+    for (const pair of pairs) {
+      const files = new Map([
+        ["palette/state.json", themeFileHash(Buffer.from(pair.json))],
+        ["palette/scales.css", themeFileHash(Buffer.from(pair.css))],
+      ]);
+      const frame = [...files].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)
+        .map(([name, hash]) => `${name}\t${hash}\n`).join("");
+      expect(pair.digest).toBe(createHash("sha256").update(frame).digest("hex"));
+      expect(pair.digest).not.toBe(empty);
+      expect(bundledThemeHistory.additive?.[pair.slug]?.palette).toContain(pair.digest);
+      expect(bundledThemeHistory.additive?.[pair.slug]?.palette).not.toContain(empty);
+      expect(themeAdditiveDigest(new Map([...files, ["canonical/tokens.json", "a".repeat(64)], ["README.md", "b".repeat(64)]]), "palette"))
+        .toBe(pair.digest);
+      expect(themeAdditiveDigest(new Map([["palette/state.json", files.get("palette/state.json") ?? ""]]), "palette")).not.toBe(pair.digest);
+    }
+    const prior: BundledThemeHistory = {
+      themes: bundledThemeHistory.themes, retired: bundledThemeHistory.retired,
+      additive: { light: { palette: ["a".repeat(64)], canonical: ["b".repeat(64)] }, retired_slug: { palette: ["c".repeat(64)] } },
+    };
+    const before = JSON.stringify(prior);
+    const extended = extendBundledPaletteHistory(prior, pairs);
+    expect(JSON.stringify(prior)).toBe(before);
+    expect(extended.themes).toEqual(prior.themes);
+    expect(extended.retired).toEqual(prior.retired);
+    expect(extended.additive?.light?.canonical).toEqual(prior.additive?.light?.canonical);
+    expect(extended.additive?.light?.palette).toContain("a".repeat(64));
+    expect(extended.additive?.retired_slug).toEqual(prior.additive?.retired_slug);
+    expect(extendBundledPaletteHistory(extended, pairs)).toEqual(extended);
+  }, 30_000);
+
+  test("Given the frozen legacy inventory When palettes are added Then every prior theme and font file stays unchanged", async () => {
+    const files = [...frozenLegacy.systems.flatMap(system => system.files), ...frozenLegacy.shared_inputs.flatMap(input => input.files)];
+    expect(frozenLegacy.systems.map(system => system.slug)).toEqual([...THEME_SLUGS]);
+    expect(files).toHaveLength(frozenLegacy.counts.theme_files + frozenLegacy.counts.shared_font_files);
+    for (const file of files) {
+      const bytes = await readFile(path.join(resolveRepoRoot(), ...file.path.split("/")));
+      // Text checkout endings may differ on Windows; binary font bytes never do.
+      const normalized = /\.(css|md|txt|json)$/i.test(file.path)
+        ? Buffer.from(bytes.toString("utf8").replace(/\r\n/g, "\n")) : bytes;
+      expect(normalized.length, file.path).toBe(file.bytes);
+      expect(createHash("sha256").update(normalized).digest("hex"), file.path).toBe(file.sha256);
+    }
+  }, 30_000);
+
+  test("Given Windows and POSIX roots When paths and patches are formed Then IO is native and palette identities stay portable", () => {
+    for (const [flavor, root] of [[path.win32, "C:\\work\\BurnGuard"], [path.posix, "/work/BurnGuard"]] as const) {
+      const paths = bundledPalettePaths(root, "light", flavor);
+      expect(paths.state).toBe(flavor.join(root, "design system themes", "light", "palette", "state.json"));
+      expect(paths.css).toBe(flavor.join(root, "design system themes", "light", "palette", "scales.css"));
+      expect(paths.source).toBe(flavor.join(root, "design system themes", "light", "colors_and_type.css"));
+      expect(paths.relative).toBe("design system themes/light");
+    }
+    for (const slug of ["..", "../light", "..\\light", "C:\\light", "/light"]) {
+      expect(() => bundledPalettePaths("/work", slug)).toThrow(BundledPaletteGenerationError);
+    }
+    const relative = "design system themes/light/palette/state.json";
+    const patch = emitBundledPalettePatch([{ relative, before: null, after: "{}\n" }]);
+    expect(patch).toContain(`+++ "b/${relative}"\n`);
+    expect(patch).toContain("@@ -0,0 +1,1 @@\n+{}\n");
+    expect(patch).not.toContain("\\ No newline at end of file");
+    expect(emitBundledPalettePatch([])).toBe("");
+  });
+});
 
 describe("bundled design systems", () => {
   test("register the curated themes and ship the complete seed shape", async () => {

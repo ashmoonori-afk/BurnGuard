@@ -9,6 +9,9 @@ import { sampleLayoutFiles } from "../data/sample-layouts";
 import { resolveRepoRoot } from "../lib/paths";
 import { resolveWithin } from "../security/path-boundary";
 import { readManagedFile } from "./artifact-tree-storage";
+import { SystemContentError } from "./system-content-format";
+import { readPreservedFile } from "./system-content-tree";
+import type { ContentObservation } from "./system-content-publication";
 
 export type LayoutSystem = { readonly id: string; readonly dir_path: string; readonly tokens_css_path: string | null; readonly readme_md_path: string | null };
 const SAMPLE_KEYS = { "clearinvoice-static-saas": "split-saas", "taskly-liquid-glass": "liquid-orb", "mindloop-monochrome": "editorial", "velorah-cinematic": "cinematic", "pulse-fund-ops-dashboard": "dashboard", "daon-korean-saas": "editorial" } as const;
@@ -19,6 +22,24 @@ export async function readDesignSystemLayout(system: LayoutSystem): Promise<Desi
     system.tokens_css_path ? readDesignSystemSourceFile(root, path.relative(root, system.tokens_css_path)) : "",
     system.readme_md_path ? readDesignSystemSourceFile(root, path.relative(root, system.readme_md_path)) : "",
   ]);
+  return layoutFromSources(system, css, readme);
+}
+
+export async function readObservedDesignSystemLayout(base: ContentObservation): Promise<DesignSystemLayout> {
+  const tree = base.tree;
+  if (base.row === null || tree === null) throw new SystemContentError("system_content_unavailable");
+  const read = async (relative: string | null): Promise<string> => {
+    if (relative === null) return "";
+    const expected = tree.inventory.find(entry => entry[1] === relative);
+    if (expected === undefined) return "";
+    return (await readPreservedFile(base.live, relative, expected, 256 * 1024)).toString("utf8");
+  };
+  const [css, readme] = await Promise.all([read(base.recordPaths[2] ?? null), read(base.recordPaths[3] ?? null)]);
+  return layoutFromSources({ id: base.systemId, dir_path: base.live }, css, readme);
+}
+
+async function layoutFromSources(system: Pick<LayoutSystem, "id" | "dir_path">, css: string, readme: string): Promise<DesignSystemLayout> {
+  const root = system.dir_path;
   const local = extractDesignSystemLayout(css, readme);
   const preset = system.id === "splash" ? "splash" : system.id.startsWith("sample-system-") ? SAMPLE_KEYS[system.id.slice("sample-system-".length) as keyof typeof SAMPLE_KEYS] : undefined;
   if (preset) return supplementDesignSystemLayout(local, sampleLayoutFiles(preset).layout);

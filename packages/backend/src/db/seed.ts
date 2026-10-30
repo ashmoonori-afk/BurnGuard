@@ -38,6 +38,7 @@ import { PROMPT_SAMPLES, promptSampleDesignSystemId, renderPromptSampleHtml } fr
 import { renderInitialArtifact } from "./templates";
 import { parseStoredProjectOptions } from "../services/project-options";
 import { copyOriginalSample, findOriginalSample, originalSampleFormats, originalGraphicCanvas } from "../data/original-samples";
+import { preserveSystemFromSeed } from "../services/startup-system-seed-guard";
 
 export { isExampleProject, listHomeProjects } from "./home-project-list";
 
@@ -78,6 +79,7 @@ export async function seedCoreData() {
   }));
 
   for (const system of [...homeDesignSystemFixtures, ...bundledThemeFixtures]) {
+    if (await preserveSystemFromSeed(system.id)) continue;
     const hasBundledFiles =
       system.id === "northvale-capital" || system.id === "splash" ||
       system.id.startsWith("builtin-theme-");

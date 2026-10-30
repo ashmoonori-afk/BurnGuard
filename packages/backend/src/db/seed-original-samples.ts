@@ -4,6 +4,7 @@ import { copyOriginalSample, originalSamples, originalSampleFormats, originalSam
 import { systemsDir } from "../lib/paths";
 import { getDb, getSqlite } from "./client";
 import { designSystemsTable } from "./schema";
+import { canCreateSeedSystem, preserveSystemFromSeed } from "../services/startup-system-seed-guard";
 
 /** Durable per-item receipts preserve edits and deletions across app updates. */
 export async function seedOriginalSamplesOnce(): Promise<void> {
@@ -14,10 +15,12 @@ export async function seedOriginalSamplesOnce(): Promise<void> {
   const { createProjectRecord } = await import("./seed");
   for (const sample of originalSamples) {
     const id = originalSampleSystemId(sample.slug);
+    if (await preserveSystemFromSeed(id)) continue;
     const systemKey = `seed:original:v1:${sample.slug}:system`;
     if (!completed(systemKey)) {
       const existing = await db.select({ id: designSystemsTable.id }).from(designSystemsTable).where(eq(designSystemsTable.id, id));
       if (!existing.length) {
+        if (!(await canCreateSeedSystem(id))) continue;
         const dirPath = path.join(systemsDir, id);
         await copyOriginalSample(sample.slug, "design-system", dirPath);
         const now = Date.now();

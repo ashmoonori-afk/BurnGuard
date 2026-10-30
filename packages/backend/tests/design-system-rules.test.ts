@@ -10,10 +10,21 @@ import { systemsDir } from "../src/lib/paths";
 import { systemRoutes } from "../src/routes/system";
 import { classifyApiRoute } from "../src/server";
 import { appendDesignSystemContext, compactPinnedDesignSystemContext } from "../src/harness/prompt-design-system";
+import { addDesignSystemRule, addDesignSystemRules, deleteDesignSystemRule } from "../src/services/design-system-rules";
+import { authoringContentEnvironment, type AuthoringEnvironment } from "../src/services/design-system-authoring";
+import { getCurrentSystemContent } from "../src/db/catalog-repository";
+import { validateCatalogReceiptTree } from "../src/services/catalog-files";
+import { paletteContentEnvironment, readDesignSystemPalette, saveDesignSystemPalette } from "../src/services/design-system-palette";
+import { createDefaultPalette } from "@bg/shared/palette";
+import { buildExtractionProvenance } from "../src/services/extraction-provenance";
+import { parseContentJournal } from "../src/services/system-content-format";
+import { recoverSystemContent } from "../src/services/system-content-publication";
+import { inspectContentTree } from "../src/services/system-content-tree";
 
 const SYSTEM_ID = `rules-${process.pid}`;
 const OTHER_ID = `rules-other-${process.pid}`;
 const dirOf = (id: string) => path.join(systemsDir, id);
+const publicationIds: string[] = [];
 
 async function createSystem(id: string): Promise<void> {
   await fsp.mkdir(dirOf(id), { recursive: true });
@@ -27,7 +38,7 @@ async function call(method: string, url: string, body?: unknown): Promise<{ read
   return { status: response.status, json: await response.json() as never };
 }
 
-const detail = (id: string) => ({ id, name: id, status: "published", source_type: "manual", is_template: false, dir_path: dirOf(id), skill_md_path: null, tokens_css_path: null, readme_md_path: null, thumbnail_path: null, created_at: 1, updated_at: 1, archived_at: null } as const);
+const detail = (id: string) => ({ id, name: id, description: null, source_uri: null, status: "published", source_type: "manual", is_template: false, dir_path: dirOf(id), skill_md_path: null, tokens_css_path: null, readme_md_path: null, thumbnail_path: null, created_at: 1, updated_at: 1, archived_at: null } as const);
 const tagged = (text: string, tag: string): unknown => { const match = new RegExp(`<${tag}>\\n([^\\n]+)\\n</${tag}>`, "u").exec(text); return match ? JSON.parse(match[1]!) : null; };
 
 async function promptContext(id: string, mode: "compact" | "full", pinned = false): Promise<string> {
@@ -38,10 +49,134 @@ async function promptContext(id: string, mode: "compact" | "full", pinned = fals
 
 beforeAll(async () => { await createSystem(SYSTEM_ID); await createSystem(OTHER_ID); });
 afterAll(async () => {
-  for (const id of [SYSTEM_ID, OTHER_ID]) {
-    getSqlite().prepare("DELETE FROM design_systems WHERE id=?").run(id);
+  for (const id of [SYSTEM_ID, OTHER_ID, ...publicationIds]) {
+    getSqlite().query("DELETE FROM design_systems WHERE id=?").run(id);
     await fsp.rm(dirOf(id), { recursive: true, force: true });
   }
+});
+
+async function publicationSystem(baseline: "legacy" | "v1") {
+  const id = `rules-publication-${crypto.randomUUID()}`;
+  publicationIds.push(id);
+  await createSystem(id);
+  const dir = dirOf(id);
+  await fsp.mkdir(path.join(dir, ".git", "empty"), { recursive: true });
+  await fsp.mkdir(path.join(dir, "empty"));
+  await fsp.writeFile(path.join(dir, ".git/payload"), Buffer.from([0, 255, 13, 10]));
+  await fsp.writeFile(path.join(dir, "README.md"), "unchanged\r\n");
+  await fsp.writeFile(path.join(dir, "rules.json"), JSON.stringify({ schema_version: 1,
+    rules: [{ id: "initial", kind: "do", text: "Initial rule", origin: { type: "manual" }, created_at: 1 }] }));
+  let sidecar: string | null = null;
+  if (baseline === "v1") {
+    const extraction = buildExtractionProvenance([], 1);
+    sidecar = JSON.stringify(extraction);
+    await fsp.mkdir(path.join(dir, "fonts"));
+    await fsp.writeFile(path.join(dir, "SKILL.md"), "source\r\n");
+    await fsp.writeFile(path.join(dir, "colors_and_type.css"), ":root { --brand: #123456; }\r\n");
+    await fsp.writeFile(path.join(dir, "fonts/fonts.css"), "");
+    await fsp.writeFile(path.join(dir, "extraction-provenance.json"), sidecar);
+    const tree = await inspectContentTree(dir);
+    getSqlite().query(`INSERT INTO design_system_receipts(id,design_system_id,status,content_revision,schema_version,digest,manifest_json,provenance_json,created_at,updated_at)
+      VALUES (?,?,'committed',1,1,?,?,?,1,1)`).run(`extraction-${id}`, id, extraction.content_digest, JSON.stringify(tree.manifest), sidecar);
+  }
+  return { id, dir, sidecar, original: getCurrentSystemContent(getSqlite(), id) };
+}
+
+function mutateRules(id: string, action: "add" | "batch" | "delete", env: AuthoringEnvironment) {
+  switch (action) {
+    case "add": return addDesignSystemRule(id, { kind: "dont", text: "New rule" }, 2, env);
+    case "batch": return addDesignSystemRules(id, [
+      { kind: "do", text: "INITIAL RULE" }, { kind: "do", text: "" }, { kind: "dont", text: "New rule" },
+    ], { type: "imported" }, 2, env);
+    case "delete": return deleteDesignSystemRule(id, "initial", env);
+  }
+}
+
+test("Given committed v1 extraction When imported rules publish directly Then the v2 receipt keeps the extraction digest and sidecar unchanged", async () => {
+  const f = await publicationSystem("v1");
+  const rules = await mutateRules(f.id, "batch", authoringContentEnvironment());
+  expect(rules.rules).toHaveLength(2);
+  const receipt = getCurrentSystemContent(getSqlite(), f.id);
+  if (receipt === null || f.original === null || f.sidecar === null) throw new Error("Missing extraction fixture");
+  expect(receipt.schemaVersion).toBe(2);
+  expect(receipt.contentRevision).toBe(2);
+  expect(receipt.parentDigest).toBe(f.original.digest);
+  expect(JSON.parse(receipt.provenanceJson).source_extraction).toEqual({ receipt_id: f.original.id, digest: f.original.digest });
+  expect(await fsp.readFile(path.join(f.dir, "extraction-provenance.json"), "utf8")).toBe(f.sidecar);
+  await validateCatalogReceiptTree(f.dir, receipt);
+});
+
+for (const baseline of ["legacy", "v1"] as const) {
+  test.each(["add", "batch", "delete"] as const)(`Given a ${baseline} tree with palette When rules %s publishes Then one receipt preserves every unrelated byte`, async action => {
+    const f = await publicationSystem(baseline);
+    const paletteEnv = paletteContentEnvironment();
+    const initial = await readDesignSystemPalette(f.id, paletteEnv);
+    const palette = await saveDesignSystemPalette(f.id, { expected_digest: initial.expected_digest, state: createDefaultPalette() }, paletteEnv);
+    const before = await inspectContentTree(f.dir);
+
+    const result = await mutateRules(f.id, action, authoringContentEnvironment());
+
+    expect(result.rules.map(rule => rule.id === "initial")).toEqual(action === "delete" ? [] : [true, false]);
+    const receipt = getCurrentSystemContent(getSqlite(), f.id);
+    if (receipt === null) throw new Error("Missing rules receipt");
+    expect(receipt.contentRevision).toBe(palette.content_revision + 1);
+    expect(parseContentJournal(JSON.parse(receipt.metadataJson))).toMatchObject({ write_set: ["rules.json"], palette_history: null });
+    const after = await inspectContentTree(f.dir);
+    expect(after.inventory.filter(entry => entry[1] !== "rules.json")).toEqual(before.inventory.filter(entry => entry[1] !== "rules.json"));
+    await validateCatalogReceiptTree(f.dir, receipt);
+    expect((await readDesignSystemPalette(f.id, paletteEnv)).state).toEqual(palette.state);
+    if (f.original !== null && f.sidecar !== null) {
+      expect(await fsp.readFile(path.join(f.dir, "extraction-provenance.json"), "utf8")).toBe(f.sidecar);
+      expect(JSON.parse(receipt.provenanceJson).source_extraction).toEqual({ receipt_id: f.original.id, digest: f.original.digest });
+      expect(getSqlite().query("SELECT digest,manifest_json FROM design_system_receipts WHERE id=?").get(f.original.id))
+        .toEqual({ digest: f.original.digest, manifest_json: f.original.manifestJson });
+    }
+  });
+}
+
+test.each(["add", "batch", "delete"] as const)("Given rules %s and a before-commit fault When the writer fails Then the old complete tree and head survive repeated recovery", async action => {
+  const f = await publicationSystem("legacy");
+  const env = authoringContentEnvironment();
+  const before = await inspectContentTree(f.dir);
+  await expect(mutateRules(f.id, action, { ...env,
+    atBoundary: async name => { if (name === "before-commit") throw new Error("injected_before_commit"); },
+  })).rejects.toMatchObject({ code: "system_content_failed" });
+  expect(getCurrentSystemContent(getSqlite(), f.id)).toBeNull();
+  expect((await inspectContentTree(f.dir)).inventory).toEqual(before.inventory);
+  expect(await recoverSystemContent(env)).toMatchObject({ held: [] });
+  expect(await recoverSystemContent(env)).toMatchObject({ held: [] });
+  expect((await inspectContentTree(f.dir)).preservation_digest).toBe(before.preservation_digest);
+});
+
+test("Given palette staging owns the lease When rules are added Then both writes commit without loss and duplicate rules are no-ops", async () => {
+  const f = await publicationSystem("legacy");
+  const paletteEnv = paletteContentEnvironment();
+  const initial = await readDesignSystemPalette(f.id, paletteEnv);
+  let entered = () => {};
+  let release = () => {};
+  let enqueued = () => {};
+  const reached = new Promise<void>(resolve => { entered = resolve; });
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const queued = new Promise<void>(resolve => { enqueued = resolve; });
+  const saved = saveDesignSystemPalette(f.id, { expected_digest: initial.expected_digest, state: createDefaultPalette() }, {
+    ...paletteEnv, atBoundary: async name => { if (name === "stage-synced") { entered(); await gate; } },
+  });
+  let added: Promise<DesignSystemRules> | undefined;
+  try {
+    await Promise.race([reached, saved.then(() => { throw new Error("Missing stage barrier"); })]);
+    added = addDesignSystemRule(f.id, { kind: "dont", text: "New rule" }, 2, { ...authoringContentEnvironment(), onAccessQueued: enqueued });
+    await Promise.race([queued, added.then(() => { throw new Error("Writer bypassed shared access"); })]);
+    expect(getCurrentSystemContent(getSqlite(), f.id)).toBeNull();
+  } finally { release(); }
+  await Promise.all([saved, added]);
+  expect((await readDesignSystemPalette(f.id, paletteEnv)).state).toEqual(createDefaultPalette());
+  const receipt = getCurrentSystemContent(getSqlite(), f.id);
+  if (receipt === null) throw new Error("Missing concurrent rules receipt");
+  expect(receipt.contentRevision).toBe(2);
+  const result = await addDesignSystemRule(f.id, { kind: "dont", text: "NEW RULE" }, 3);
+  expect(result.rules).toHaveLength(2);
+  expect(getCurrentSystemContent(getSqlite(), f.id)?.id).toBe(receipt.id);
+  await validateCatalogReceiptTree(f.dir, receipt);
 });
 
 describe("design-system do/don't rules", () => {

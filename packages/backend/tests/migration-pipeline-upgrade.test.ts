@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { cp, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -8,7 +8,6 @@ import { getTableConfig, SQLiteSyncDialect } from "drizzle-orm/sqlite-core";
 import type { SQLiteTable } from "drizzle-orm/sqlite-core";
 import { MigrationError, runMigrationsFrom } from "../src/db/migrate";
 import { getSqlite } from "../src/db/sqlite-client";
-import { seedCoreData } from "../src/db/seed";
 import { designSystemsTable, eventsTable, exportsTable, projectsTable, sessionsTable } from "../src/db/pipeline-authorities";
 import { artifactOperationsTable, designSystemReceiptsTable, designSystemTagsTable, exportAttemptsTable, learningCheckpointsTable, learningItemsTable, learningProgressTable } from "../src/db/pipeline-schema";
 import { attachmentsTable, commentsTable, filesTable, tweaksTable } from "../src/db/schema";
@@ -34,6 +33,31 @@ async function migrationDirectory(last: string): Promise<string> {
   return directory;
 }
 
+/** Core seeding captures singleton DB and filesystem roots, so it must own a separate process/profile. */
+async function coreSeedProfile(scenario: "newer-version" | "fixture-thumbnails"): Promise<Database> {
+  const root = await mkdtemp(path.join(tmpdir(), "burnguard-core-seed-"));
+  directories.push(root);
+  const sharedSystems = getSqlite().query("SELECT * FROM design_systems ORDER BY id").all();
+  const child = Bun.spawn([process.execPath, path.join(import.meta.dir, "fixtures/core-seed-profile.ts"), scenario], {
+    env: { ...process.env, BG_APP_ROOT: root },
+    stdin: "ignore", stdout: "ignore", stderr: "pipe", timeout: 20_000,
+  });
+  const exited = child.exited;
+  try {
+    const [code, stderr] = await Promise.all([exited, new Response(child.stderr).text()]);
+    expect(code, stderr).toBe(0);
+  } finally {
+    child.kill();
+    await exited;
+  }
+  expect(getSqlite().query("SELECT * FROM design_systems ORDER BY id").all()).toEqual(sharedSystems);
+  const db = new Database(path.join(root, "burnguard.db"), { readonly: true });
+  databases.push(db);
+  expect(db.query("SELECT id FROM design_systems WHERE id IN ('builtin-theme-light','builtin-theme-timber-hall') ORDER BY id").all())
+    .toEqual([{ id: "builtin-theme-light" }, { id: "builtin-theme-timber-hall" }]);
+  return db;
+}
+
 afterEach(async () => {
   for (const db of databases.splice(0)) db.close();
   for (const directory of directories.splice(0)) await rm(directory, { recursive: true });
@@ -50,7 +74,7 @@ type ExpectedParity = {
 
 const parityTables: readonly ExpectedParity[] = [
   { table: designSystemTagsTable, checks: [], defaults: {}, namedIndexes: [], primaryKey: ["design_system_id", "tag"], unique: [["design_system_id", "ordinal"]] },
-  { table: designSystemReceiptsTable, checks: ["status in ('prepared','committed','recovering','failed')", "operation in ('content','duplicate','derive','trash','restore','purge')"], defaults: { status: "prepared", operation: "content", metadata_json: "{}" }, namedIndexes: ["idx_design_system_receipt_operation", "idx_design_system_receipts_system", "uq_design_system_nonterminal_receipt"], primaryKey: ["id"], unique: [["design_system_id", "content_revision"]] },
+  { table: designSystemReceiptsTable, checks: ["status in ('prepared','committed','recovering','failed')", "operation in ('content','duplicate','derive','trash','restore','purge')"], defaults: { status: "prepared", operation: "content", metadata_json: "{}" }, namedIndexes: ["idx_design_system_receipt_operation", "idx_design_system_receipts_system", "uq_design_system_pending_receipt"], primaryKey: ["id"], unique: [["design_system_id", "content_revision"]] },
   { table: learningItemsTable, checks: ["kind in ('lesson','example','skill-card')"], defaults: {}, namedIndexes: ["idx_learning_items_kind"], primaryKey: ["id"], unique: [] },
   { table: learningProgressTable, checks: ["state in ('not_started','in_progress','completed')"], defaults: { state: "not_started", revision: "0" }, namedIndexes: [], primaryKey: ["item_id"], unique: [] },
   { table: learningCheckpointsTable, checks: [], defaults: {}, namedIndexes: ["idx_learning_checkpoints_item"], primaryKey: ["id"], unique: [] },
@@ -75,6 +99,31 @@ function namedIndexes(db: Database, tableName: string) {
 }
 
  describe("pipeline migration", () => {
+  test("Given retained native statements When real migrations run Then the file database closes strictly", async () => {
+    // Given
+    const root = await mkdtemp(path.join(tmpdir(), "burnguard-migration-close-"));
+    directories.push(root);
+    const db = new Database(path.join(root, "app.sqlite"));
+    // Call through to SQLite and retain its statements in mock.results so GC cannot hide a leak.
+    const prepared = spyOn(db, "prepare");
+    try {
+      // When
+      await runMigrationsFrom(db, sourceDir, { directory: path.join(root, "backups"), appVersion: "1.2.3" });
+
+      // Then
+      expect(prepared).toHaveBeenCalled();
+      expect(() => db.close(true)).not.toThrow();
+    } finally {
+      try {
+        const returned = prepared.mock.results.filter((result) => result.type === "return");
+        for (const result of returned) result.value.finalize();
+      } finally {
+        prepared.mockRestore();
+        db.close();
+      }
+    }
+  });
+
   test("Given legacy missing paths When 0005 runs Then rows survive with deterministic backfills and no receipt inference", async () => {
     // Given
     const db = database();
@@ -379,33 +428,20 @@ function namedIndexes(db: Database, tableName: string) {
   });
 
   test("Given a newer stored app_version When seeding core data Then the stored version is not overwritten", async () => {
-    // Given
-    const sqlite = getSqlite();
-    const original = sqlite.query<{ value: string }, []>("SELECT value FROM meta_schema WHERE key='app_version'").get()?.value;
-    sqlite.query("INSERT INTO meta_schema (key, value) VALUES ('app_version', '999.0.0') ON CONFLICT(key) DO UPDATE SET value=excluded.value").run();
+    // Given / When: the owned child sets a newer version and runs the real seed.
+    const sqlite = await coreSeedProfile("newer-version");
 
-    try {
-      // When
-      await seedCoreData();
-
-      // Then
-      expect(sqlite.query("SELECT value FROM meta_schema WHERE key='app_version'").get()).toEqual({ value: "999.0.0" });
-    } finally {
-      if (original === undefined) sqlite.query("DELETE FROM meta_schema WHERE key='app_version'").run();
-      else sqlite.query("UPDATE meta_schema SET value=? WHERE key='app_version'").run(original);
-    }
+    // Then
+    expect(sqlite.query("SELECT value FROM meta_schema WHERE key='app_version'").get()).toEqual({ value: "999.0.0" });
   });
 
   test("Given a profile whose seeded systems store mock fixture thumbnails When seeding core data Then no stored thumbnail points at a fixture URL", async () => {
-    // Given
-    await seedCoreData();
-    const sqlite = getSqlite();
-    sqlite.query("UPDATE design_systems SET thumbnail_path='/fixtures/thumbnails/' || id || '.png' WHERE id IN ('northvale-capital','splash')").run();
-
-    // When
-    await seedCoreData();
+    // Given / When: the owned child seeds, stores mock thumbnails, then runs the real seed again.
+    const sqlite = await coreSeedProfile("fixture-thumbnails");
 
     // Then
+    expect(sqlite.query("SELECT id,thumbnail_path FROM design_systems WHERE id IN ('northvale-capital','splash') ORDER BY id").all())
+      .toEqual([{ id: "northvale-capital", thumbnail_path: null }, { id: "splash", thumbnail_path: null }]);
     expect(sqlite.query("SELECT id FROM design_systems WHERE thumbnail_path LIKE '/fixtures/%'").all()).toEqual([]);
   });
 });

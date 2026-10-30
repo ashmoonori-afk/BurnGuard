@@ -1,0 +1,38 @@
+:root {
+  --ink: #202020;
+  --surface: #eeeeee;
+  --brand: #446688; /* c-n11 */
+  --brand-alias: var(--brand);
+  --radius-sm: 4px; /* r-n11 */
+  --radius-md: 8px;
+  --radius-control: 8px;
+  --radius-lg: 16px;
+  --space-sm: 4px; /* s-n11 */
+  --space-md: 8px;
+  --space-lg: 16px;
+  --font-sm: 12px; /* f-n11 */
+  --font-md: 16px;
+  --font-lg: 24px;
+  --shadow-soft: 0 2px 4px #202020;
+  --shadow-flat: 0 0 2px #446688; /* h-n11 */
+  --shadow-alias: var(--shadow-flat);
+}
+:root[data-mode="dark"] {
+  --ink: #eeeeee;
+  --surface: #202020;
+  --brand: #446688;
+  --brand-alias: var(--brand);
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-control: 8px;
+  --radius-lg: 16px;
+  --space-sm: 4px;
+  --space-md: 8px;
+  --space-lg: 16px;
+  --font-sm: 12px;
+  --font-md: 16px;
+  --font-lg: 24px;
+  --shadow-soft: 0 2px 4px #eeeeee;
+  --shadow-flat: 0 0 2px #446688;
+  --shadow-alias: var(--shadow-flat);
+}

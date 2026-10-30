@@ -1,0 +1,18 @@
+type Inputs = { colour: string; radius: string; space: string; size: string; shadow: string };
+export const AuditInputs = (p: Inputs) => <>
+  <div data-case="c-p13" className="text-[#446688]" />
+  <div data-case="c-n13" className="text-[color:var(--brand)]" />
+  <div data-case="r-p13" className="rounded-[4px]" />
+  <div data-case="r-n13" className="rounded-[var(--radius-sm)]" />
+  <div data-case="s-p13" className="p-[8px]" />
+  <div data-case="s-n13" className="w-[8px]" />
+  <div data-case="f-p13" className="text-[length:16px]" />
+  <div data-case="f-n13" className="text-[length:var(--font-md)]" />
+  <div data-case="h-p13" className="shadow-[0_0_2px_#446688]" />
+  <div data-case="h-n13" className="shadow-[var(--shadow-soft)]" />
+  <div data-case="c-u01" style={{ color: p.colour }} />
+  <div data-case="r-u01" style={{ borderRadius: p.radius }} />
+  <div data-case="s-u01" className={`p-[${p.space}]`} />
+  <div data-case="f-u01" className={`text-[length:${p.size}]`} />
+  <div data-case="h-u01" style={{ boxShadow: p.shadow }} />
+</>;

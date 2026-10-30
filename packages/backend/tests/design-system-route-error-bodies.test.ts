@@ -5,6 +5,7 @@ import { createDesignSystemRecord } from "../src/db/seed";
 import { getSqlite } from "../src/db/sqlite-client";
 import { systemsDir } from "../src/lib/paths";
 import { systemRoutes } from "../src/routes/system";
+import { defaultManagedTreeIo } from "../src/services/artifact-tree-storage";
 
 const UNWRITABLE_ID = `route-error-unwritable-${process.pid}`;
 const LOCKED_ID = `route-error-locked-${process.pid}`;
@@ -47,10 +48,10 @@ afterAll(async () => {
 
 /** Makes the token write fail the way the OS would, with the given errno text, and records what the route logs. */
 async function saveColorWhileWriteFails(code: string, reason: string, privatePath: string) {
-  const original = fsp.rename;
-  // Token files are replaced by renaming a same-directory temp file over them, so that is where the OS fails.
-  const write = spyOn(fsp, "rename").mockImplementation(async (...args: Parameters<typeof fsp.rename>) => {
-    if (args[1] !== lockedTokenPath) return original(...args);
+  const original = defaultManagedTreeIo.rename;
+  // The content publisher replaces the system directory; fail its actual live-directory move.
+  const write = spyOn(defaultManagedTreeIo, "rename").mockImplementation(async (...args: Parameters<typeof defaultManagedTreeIo.rename>) => {
+    if (path.basename(args[0]) !== LOCKED_ID) return original(...args);
     throw Object.assign(new Error(`${code}: ${reason}, rename '${privatePath}'`), { code, errno: -1, syscall: "rename", path: privatePath });
   });
   const logged: unknown[][] = [];

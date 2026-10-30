@@ -61,6 +61,8 @@ jobs:
         run: >-
           bun test --timeout 30000
           packages/backend/tests/project-folder.test.ts
+          packages/backend/tests/system-content-publication.test.ts
+          packages/backend/tests/design-system-palette.test.ts
           packages/backend/tests/logo-tracer.test.ts
           packages/frontend/tests/canvas-device-width.test.ts
           packages/frontend/tests/toolbar-overflow.test.ts
@@ -84,7 +86,6 @@ jobs:
           packages/backend/tests/bundled-seed-themes.test.ts
           packages/backend/tests/northvale-preview-repair.test.ts
           packages/backend/tests/theme-previews.test.ts
-          packages/backend/tests/catalog.test.ts
           packages/backend/tests/artifact-anchor-routes.test.ts
           packages/frontend/tests/quick-comment.test.ts
           packages/frontend/tests/canvas-interaction.test.ts
@@ -189,6 +190,9 @@ jobs:
           scripts/qa/frontend-failure-evidence.test.ts
           scripts/qa/check-flake-patterns.test.ts
           scripts/qa/check-migration-order.test.ts
+          scripts/qa/theme-engine-fixtures.test.ts
+          scripts/qa/theme-engine-oracle.test.ts
+          scripts/qa/theme-engine-measure.test.ts
           scripts/whitespace-base.test.ts
           packages/frontend/tests/artifact-csp.test.ts
           packages/frontend/tests/client.test.ts
@@ -223,9 +227,13 @@ jobs:
           packages/backend/tests/logo-deliverables.test.ts
           packages/backend/tests/prompt-logo-set.test.ts
           packages/backend/tests/pipeline-repositories.test.ts
+          packages/backend/tests/catalog.test.ts
+          packages/backend/tests/migration-pipeline-upgrade.test.ts
           packages/backend/tests/runtime-diagnostics.test.ts
           packages/frontend/tests/runtime-diagnostics.test.ts
           packages/shared/tests/runtime-diagnostics.test.ts
+          packages/shared/tests/color.test.ts
+          packages/shared/tests/palette.test.ts
           scripts/qa/har-mask.test.ts
           scripts/qa/task-8-gates.test.ts
           packages/backend/tests/project-bundle-routes.test.ts
@@ -266,6 +274,8 @@ jobs:
           packages/frontend/tests/design-system-pin.browser.test.ts
           packages/frontend/tests/northvale-previews.browser.test.ts
           packages/frontend/tests/workspace-controls.browser.test.ts
+          packages/backend/tests/palette-editor.browser.test.ts
+          packages/backend/tests/design-direction-content-access.test.ts
           packages/frontend/tests/app-font.browser.test.ts
           packages/backend/tests/exports.test.ts
       # Every baseline suite (scripts/qa/os-matrix-baseline.txt) that an explicit list above does not already run, one

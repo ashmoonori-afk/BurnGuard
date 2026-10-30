@@ -1,0 +1,21 @@
+.c01 { color: #446688; } /* c-p01 */
+.c02 { background-color: rgb(68, 102, 136); } /* c-p02 */
+.c03 { border-color: #44668880; } /* c-p03 */
+.c04 { color: #202020; } /* c-p04 */
+[data-mode="dark"] .c05 { color: #202020; } /* c-p05 */
+.c06 { fill: #446689; } /* c-p06 */
+.c07 { & .child { stroke: #446688; } } /* c-p07 */
+.cdup { color: #446688; } /* c-p08 */
+.cdup { color: #446688; } /* c-p09 */
+.c10 { --local-ink: #446688; color: var(--local-ink); } /* c-p10 */
+.c11 { color: var(--missing, #446688); } /* c-p11 */
+.cn01 { color: var(--ink); } /* c-n01 */
+.cn02 { color: var(--brand-alias); } /* c-n02 */
+.cn03 { color: currentColor; } /* c-n03 */
+.cn04 { background-color: transparent; } /* c-n04 */
+.cn05 { color: inherit; } /* c-n05 */
+.cn06 { color: initial; } /* c-n06 */
+.cn07 { color: unset; } /* c-n07 */
+.cn08 { color: revert; } /* c-n08 */
+.cn09 { background: url("swatch.svg") no-repeat; } /* c-n09 */
+.cn10 { color: var(--missing, var(--brand)); } /* c-n10 */

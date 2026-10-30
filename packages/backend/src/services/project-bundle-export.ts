@@ -27,6 +27,11 @@ import {
   type BundleEntry,
 } from "./project-bundle-archive";
 import { ProjectBundleError } from "./project-bundle-error";
+import { withCatalogSnapshot, type CatalogAccessEvents } from "./catalog-snapshot";
+import { SystemContentError } from "./system-content-format";
+import { type SystemContentLease } from "./system-content-access";
+import { authenticatePaletteTransfer, DesignSystemPaletteError, paletteContentEnvironment } from "./design-system-palette";
+import { validateProjectBundlePaletteFiles } from "./project-bundle-validation";
 
 type AttachmentRow = {
   readonly turn_id: string | null;
@@ -39,12 +44,13 @@ type AttachmentRow = {
   readonly source_role_explicit: number;
 };
 
-type ProjectBundleExportFaults = {
+type ProjectBundleExportFaults = CatalogAccessEvents & {
   readonly afterProjectRead?: () => void | Promise<void>;
+  readonly afterSystemRead?: () => void | Promise<void>;
 };
 
 export async function exportProjectBundle(projectId: string, faults: ProjectBundleExportFaults = {}): Promise<{
-  readonly bytes: Uint8Array;
+  readonly bytes: Uint8Array<ArrayBuffer>;
   readonly filename: string;
   readonly manifest: ProjectBundleManifest;
 }> {
@@ -53,12 +59,14 @@ export async function exportProjectBundle(projectId: string, faults: ProjectBund
   const project = await getProjectDetail(projectId);
   if (!project) throw new ProjectBundleError("project_bundle_not_found");
   if (project.current_digest === null) throw new ProjectBundleError("project_bundle_unavailable");
+  const projectDigest = project.current_digest;
   const projectRoot = resolveManagedPath(projectsDir, project.dir_path);
   const live = await inspectCanonicalTree(projectRoot);
   if (live.tree_digest !== project.current_digest) throw new ProjectBundleError("project_bundle_unavailable");
   const budget = createBundleBudget();
   const projectEntries = await collectProjectBundleEntries(projectRoot, budget);
   await faults.afterProjectRead?.();
+  const snapshot = async (lease?: SystemContentLease) => {
   const system = project.design_system_id ? await getDesignSystemDetail(project.design_system_id) : null;
   let systemEntries: readonly BundleEntry[] = [];
   let systemRoot: string | null = null;
@@ -70,6 +78,8 @@ export async function exportProjectBundle(projectId: string, faults: ProjectBund
     if (system.source_type === "sample") {
       designSystem = { kind: "builtin", id: system.id, pin: portablePin(projectId) };
     } else {
+      if (lease === undefined) throw new ProjectBundleError("project_bundle_unavailable");
+      const paletteTransfer = await authenticatePaletteTransfer(paletteContentEnvironment(), system.id, lease);
       systemRoot = resolveManagedPath(systemsDir, system.dir_path);
       systemEntries = await collectDesignSystemBundleEntries(systemRoot, budget);
       designSystem = {
@@ -84,9 +94,16 @@ export async function exportProjectBundle(projectId: string, faults: ProjectBund
         tokens_css_path: relativeSystemPath(systemRoot, system.tokens_css_path),
         readme_md_path: relativeSystemPath(systemRoot, system.readme_md_path),
         pin: portablePin(projectId),
+        ...(paletteTransfer === null ? {} : { palette_transfer: paletteTransfer }),
       };
+      try { validateProjectBundlePaletteFiles(designSystem, systemEntries.map(entry => entry.file)); }
+      catch (error) {
+        if (error instanceof ProjectBundleError) throw new ProjectBundleError("project_bundle_unavailable");
+        throw error;
+      }
     }
   }
+  await faults.afterSystemRead?.();
   const entries = [...projectEntries, ...systemEntries].sort((left, right) => left.file.path.localeCompare(right.file.path));
   const attachments = attachmentRecords(projectId, projectRoot, entries);
   const manifest: ProjectBundleManifest = {
@@ -101,7 +118,7 @@ export async function exportProjectBundle(projectId: string, faults: ProjectBund
       backend_id: project.backend_id,
       options_json: project.options_json === null ? null : JSON.stringify(parseStoredProjectOptions(project.options_json)),
       current_revision: project.current_revision,
-      current_digest: project.current_digest,
+      current_digest: projectDigest,
     },
     files: entries.map((entry) => entry.file),
     attachments,
@@ -112,10 +129,19 @@ export async function exportProjectBundle(projectId: string, faults: ProjectBund
   };
   const confirmedProjectEntries = await collectProjectBundleEntries(projectRoot);
   const confirmedSystemEntries = systemRoot ? await collectDesignSystemBundleEntries(systemRoot) : [];
+  const confirmedSystem = project.design_system_id ? await getDesignSystemDetail(project.design_system_id) : null;
+  if (designSystem.kind === "custom") {
+    if (lease === undefined) throw new ProjectBundleError("project_bundle_unavailable");
+    const confirmedTransfer = await authenticatePaletteTransfer(paletteContentEnvironment(), designSystem.original_id, lease);
+    if (JSON.stringify(confirmedTransfer) !== JSON.stringify(designSystem.palette_transfer ?? null)) {
+      throw new ProjectBundleError("project_bundle_unavailable");
+    }
+  }
   const latestProject = await getProjectDetail(projectId);
   const liveAfter = await inspectCanonicalTree(projectRoot);
   if (!sameEntries(projectEntries, confirmedProjectEntries) ||
     !sameEntries(systemEntries, confirmedSystemEntries) ||
+    JSON.stringify(confirmedSystem) !== JSON.stringify(system) ||
     latestProject?.current_revision !== project.current_revision ||
     latestProject.current_digest !== project.current_digest ||
     latestProject.design_system_id !== project.design_system_id ||
@@ -124,7 +150,7 @@ export async function exportProjectBundle(projectId: string, faults: ProjectBund
     JSON.stringify(portablePin(projectId)) !== JSON.stringify(designSystem.pin)) {
     throw new ProjectBundleError("project_bundle_unavailable");
   }
-  const bytes = await createProjectBundleZip(manifest, entries);
+  const bytes = new Uint8Array(await createProjectBundleZip(manifest, entries));
   const name = Array.from(project.name)
     .map((character) => character.charCodeAt(0) < 32 || '<>:"/\\|?*'.includes(character) ? "_" : character)
     .join("").replace(/[ .]+$/, "").slice(0, 120) || "BurnGuard-project";
@@ -135,6 +161,12 @@ export async function exportProjectBundle(projectId: string, faults: ProjectBund
     filename = `BurnGuard-project-${project.id.slice(-8)}.burnguard-project`;
   }
   return { bytes, filename, manifest };
+  };
+  return await (project.design_system_id === null ? snapshot()
+    : withCatalogSnapshot(getSqlite(), systemsDir, project.design_system_id, snapshot, faults));
+  } catch (error) {
+    if (error instanceof SystemContentError || error instanceof DesignSystemPaletteError) throw new ProjectBundleError("project_bundle_unavailable");
+    throw error;
   } finally { release(); }
 }
 

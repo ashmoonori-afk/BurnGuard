@@ -5,6 +5,7 @@ import { LOGO_PAGE, type ExportFormat, type ExportOptions, type ExportProgress, 
 import { getExportJob } from "../db/exports";
 import { createExportAuthority, createRetryAuthority, advanceExportAttempt, failExportAttempt, recordExportAuditFindings, requestExportCancellation, type ExportIdentity } from "../db/export-lifecycle-repository";
 import { getProjectDetail } from "../db/project-read-repository";
+import { getCurrentSystemContent } from "../db/catalog-repository";
 import { getSqlite } from "../db/sqlite-client";
 import { exportsDir, projectsDir, resolveManagedPath, systemsDir } from "../lib/paths";
 import { assertSafeName, resolveWithin } from "../security/path-boundary";
@@ -328,7 +329,7 @@ async function exportContext(projectId: string, format: ExportFormat, options: E
 
 async function designDigest(id: string | null): Promise<string | null> {
   if (id === null) return null; const db = getSqlite(); const system = db.query<{ readonly dir_path: string }, [string]>("SELECT dir_path FROM design_systems WHERE id=?").get(id); if (system === null) return null;
-  const paths = await catalogPaths(systemsDir, id, system.dir_path); const receipt = db.query<{ readonly digest: string; readonly manifestJson: string; readonly provenanceJson: string; readonly metadataJson: string; readonly operation: string; readonly parentDigest: string | null }, [string]>("SELECT digest,manifest_json manifestJson,provenance_json provenanceJson,metadata_json metadataJson,operation,parent_digest parentDigest FROM design_system_receipts WHERE design_system_id=? AND status='committed' ORDER BY content_revision DESC LIMIT 1").get(id);
+  const paths = await catalogPaths(systemsDir, id, system.dir_path); const receipt = getCurrentSystemContent(db, id);
   return receipt === null ? (await inspectCatalogTree(paths.live)).digest : (await validateCatalogReceiptTree(paths.live, receipt)).digest;
 }
 function advance(input: RunInput, status: "running" | "validating", stage: "snapshotting" | "validating" | "publishing"): void { advanceExportAttempt(getSqlite(), { attemptId: input.attemptId, status, stage }); emit(input.context.identity, input, status, { stage, completed: stage === "snapshotting" ? 1 : stage === "validating" ? 3 : 4, total: 6 }, null); }

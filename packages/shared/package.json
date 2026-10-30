@@ -8,6 +8,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./app": "./src/app.ts",
+    "./color": "./src/color.ts",
+    "./palette": "./src/palette.ts",
     "./api": "./src/api.ts",
     "./artifact": "./src/artifact.ts",
     "./harness": "./src/harness.ts",

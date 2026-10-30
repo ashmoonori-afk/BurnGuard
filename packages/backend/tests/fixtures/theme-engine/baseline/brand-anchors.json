@@ -1,0 +1,791 @@
+{
+  "schema_version": 1,
+  "kind": "registered-brand-anchors",
+  "source": {
+    "path": "packages/backend/src/data/bundled-design-systems.ts",
+    "bytes": 3106,
+    "sha256": "b68f94c6bc02bca611fd4bab4d532b3d34bd82ef4cdd9142a209fcb39fd30413"
+  },
+  "selection": {
+    "role": "--primary-blue",
+    "coverage": 43,
+    "fallback": null,
+    "interpretation": "The semantic brand role is used literally, including neutral and non-blue values."
+  },
+  "rows": [
+    {
+      "id": "brand-light",
+      "registry_index": 0,
+      "system_id": "builtin-theme-light",
+      "slug": "light",
+      "name": "Light Built-in Theme",
+      "role": "--primary-blue",
+      "gamut": "srgb",
+      "hex": "#1C58D3",
+      "rgb": [
+        0.10980392156862745,
+        0.34509803921568627,
+        0.8274509803921568
+      ],
+      "source_path": "design system themes/light/colors_and_type.css",
+      "source_line": 22,
+      "source_sha256": "d5243b7b72ce0d0fb6efab95cae21d2b58e85fca08643c2ae77d4ae6a622a364"
+    },
+    {
+      "id": "brand-dark",
+      "registry_index": 1,
+      "system_id": "builtin-theme-dark",
+      "slug": "dark",
+      "name": "Dark Built-in Theme",
+      "role": "--primary-blue",
+      "gamut": "srgb",
+      "hex": "#699AFA",
+      "rgb": [
+        0.4117647058823529,
+        0.6039215686274509,
+        0.9803921568627451
+      ],
+      "source_path": "design system themes/dark/colors_and_type.css",
+      "source_line": 22,
+      "source_sha256": "89797bf74b0d671393a844c6782de380ec822630d721435995025d0a934b9b11"
+    },
+    {
+      "id": "brand-cupcake",
+      "registry_index": 2,
+      "system_id": "builtin-theme-cupcake",
+      "slug": "cupcake",
+      "name": "Cupcake Built-in Theme",
+      "role": "--primary-blue",
+      "gamut": "srgb",
+      "hex": "#7A62CF",
+      "rgb": [
+        0.47843137254901963,
+        0.3843137254901961,
+        0.8117647058823529
+      ],
+      "source_path": "design system themes/cupcake/colors_and_type.css",
+      "source_line": 22,
+      "source_sha256": "f8f56478480208873053b139bb315498ab6bd144bd3c2686bd93262876f8faef"
+    },
+    {
+      "id": "brand-retro",
+      "registry_index": 3,
+      "system_id": "builtin-theme-retro",
+      "slug": "retro",
+      "name": "Retro Built-in Theme",
+      "role": "--primary-blue",
+      "gamut": "srgb",
+      "hex": "#B95257",
+      "rgb": [
+        0.7254901960784313,
+        0.3215686274509804,
+        0.3411764705882353
+      ],
+      "source_path": "design system themes/retro/colors_and_type.css",
+      "source_line": 22,
+      "source_sha256": "4f09dd5929f3f12a88bea88c47bb9a7f14fdaa7c6a14488271bc306f44d6408a"
+    },
+    {
+      "id": "brand-cyberpunk",
+      "registry_index": 4,
+      "system_id": "builtin-theme-cyberpunk",
+      "slug": "cyberpunk",
+      "name": "Cyberpunk Built-in Theme",
+      "role": "--primary-blue",
+      "gamut": "srgb",
+      "hex": "#C5259C",
+      "rgb": [
+        0.7725490196078432,
+        0.1450980392156863,
+        0.611764705882353
+      ],
+      "source_path": "design system themes/cyberpunk/colors_and_type.css",
+      "source_line": 22,
+      "source_sha256": "a3462e3e6382588e6be6dcc298ac081ab7ed8f10e6fde525bc603c14be0f3737"
+    },
+    {
+      "id": "brand-synthwave",
+      "registry_index": 5,
+      "system_id": "builtin-theme-synthwave",
+      "slug": "synthwave",
+      "name": "Synthwave Built-in Theme",
+      "role": "--primary-blue",
+      "gamut": "srgb",
+      "hex": "#EE610F",
+      "rgb": [
+        0.9333333333333333,
+        0.3803921568627451,
+        0.058823529411764705
+      ],
+      "source_path": "design system themes/synthwave/colors_and_type.css",
+      "source_line": 22,
+      "source_sha256": "8e2c28c389c4224c9ffddf707552dbea28bb624bce2f5c9e6162162a216bb9db"
+    },
+    {
+      "id": "brand-luxury",
+      "registry_index": 6,
+      "system_id": "builtin-theme-luxury",
+      "slug": "luxury",
+      "name": "Luxury Built-in Theme",
+      "role": "--primary-blue",
+      "gamut": "srgb",
+      "hex": "#BF9005",
+      "rgb": [
+        0.7490196078431373,
+        0.5647058823529412,
+        0.0196078431372549
+      ],
+      "source_path": "design system themes/luxury/colors_and_type.css",
+      "source_line": 22,
+      "source_sha256": "8299e8c18eacceff72324ccef085e15954a33d646421a28591cb00b727ca952b"
+    },
+    {
+      "id": "brand-dracula",
+      "registry_index": 7,
+      "system_id": "builtin-theme-dracula",
+      "slug": "dracula",
+      "name": "Dracula Built-in Theme",
+      "role": "--primary-blue",
+      "gamut": "srgb",
+      "hex": "#F4388D",
+      "rgb": [
+        0.9568627450980393,
+        0.2196078431372549,
+        0.5529411764705883
+      ],
+      "source_path": "design system themes/dracula/colors_and_type.css",
+      "source_line": 22,
+      "source_sha256": "e0de895acad15754a97ec259600fcb25ae47d3119eeda95619d4ef212bbb4033"
+    },
+    {
+      "id": "brand-nord",
+      "registry_index": 8,
+      "system_id": "builtin-theme-nord",
+      "slug": "nord",
+      "name": "Nord Built-in Theme",
+      "role": "--primary-blue",
+      "gamut": "srgb",
+      "hex": "#0A5F97",
+      "rgb": [
+        0.0392156862745098,
+        0.37254901960784315,
+        0.592156862745098
+      ],
+      "source_path": "design system themes/nord/colors_and_type.css",
+      "source_line": 22,
+      "source_sha256": "77370a82d4b1804a53e86b569a89ab01da2b46f0ed2fbc22eeecaed52c083b08"
+    },
+    {
+      "id": "brand-business",
+      "registry_index": 9,
+      "system_id": "builtin-theme-business",
+      "slug": "business",
+      "name": "Business Built-in Theme",
+      "role": "--primary-blue",
+      "gamut": "srgb",
+      "hex": "#3470C1",
+      "rgb": [
+        0.20392156862745098,
+        0.4392156862745098,
+        0.7568627450980392
+      ],
+      "source_path": "design system themes/business/colors_and_type.css",
+      "source_line": 22,
+      "source_sha256": "ffd2f566e2e5864f33a116b2ec5002d07d59f1d019a610934ecefba9335915bf"
+    },
+    {
+      "id": "brand-cobalt-atelier",
+      "registry_index": 10,
+      "system_id": "builtin-theme-cobalt-atelier",
+      "slug": "cobalt-atelier",
+      "name": "Cobalt Atelier Theme",
+      "role": "--primary-blue",
+      "gamut": "srgb",
+      "hex": "#F2C14E",
+      "rgb": [
+        0.9490196078431372,
+        0.7568627450980392,
+        0.3058823529411765
+      ],
+      "source_path": "design system themes/cobalt-atelier/colors_and_type.css",
+      "source_line": 22,
+      "source_sha256": "d924a7040a2006dec06a185baef562c119fb9ae91df6e18a7093a9e440f399b2"
+    },
+    {
+      "id": "brand-signal-reel",
+      "registry_index": 11,
+      "system_id": "builtin-theme-signal-reel",
+      "slug": "signal-reel",
+      "name": "Signal Reel Theme",
+      "role": "--primary-blue",
+      "gamut": "srgb",
+      "hex": "#E11414",
+      "rgb": [
+        0.8823529411764706,
+        0.0784313725490196,
+        0.0784313725490196
+      ],
+      "source_path": "design system themes/signal-reel/colors_and_type.css",
+      "source_line": 22,
+      "source_sha256": "2b619b83a3e2e8e7c448bba09ab2f405a9628bac0ba262f652cb41cb9cdaa61c"
+    },
+    {
+      "id": "brand-daylight-press",
+      "registry_index": 12,
+      "system_id": "builtin-theme-daylight-press",
+      "slug": "daylight-press",
+      "name": "Daylight Press Theme",
+      "role": "--primary-blue",
+      "gamut": "srgb",
+      "hex": "#AD8C32",
+      "rgb": [
+        0.6784313725490196,
+        0.5490196078431373,
+        0.19607843137254902
+      ],
+      "source_path": "design system themes/daylight-press/colors_and_type.css",
+      "source_line": 22,
+      "source_sha256": "a2d511a2ecc0126664fb425fd930f11260910d7bf43b1adafa1bf4fb6840ad58"
+    },
+    {
+      "id": "brand-blueprint-manual",
+      "registry_index": 13,
+      "system_id": "builtin-theme-blueprint-manual",
+      "slug": "blueprint-manual",
+      "name": "Blueprint Manual Theme",
+      "role": "--primary-blue",
+      "gamut": "srgb",
+      "hex": "#2C3BE8",
+      "rgb": [
+        0.17254901960784313,
+        0.23137254901960785,
+        0.9098039215686274
+      ],
+      "source_path": "design system themes/blueprint-manual/colors_and_type.css",
+      "source_line": 22,
+      "source_sha256": "220400bcd63c4ecddadd51aa54c0b2bfdfe7058f0569ad0b283a5807927fcde5"
+    },
+    {
+      "id": "brand-ledger-index",
+      "registry_index": 14,
+      "system_id": "builtin-theme-ledger-index",
+      "slug": "ledger-index",
+      "name": "Ledger Index Theme",
+      "role": "--primary-blue",
+      "gamut": "srgb",
+      "hex": "#1A1A1A",
+      "rgb": [
+        0.10196078431372549,
+        0.10196078431372549,
+        0.10196078431372549
+      ],
+      "source_path": "design system themes/ledger-index/colors_and_type.css",
+      "source_line": 22,
+      "source_sha256": "b9a8cc79394f652dd23d80b71fd7cbcc6f0068c27da3963666c8a7d3a68b4ad4"
+    },
+    {
+      "id": "brand-dune-editorial",
+      "registry_index": 15,
+      "system_id": "builtin-theme-dune-editorial",
+      "slug": "dune-editorial",
+      "name": "Dune Editorial Theme",
+      "role": "--primary-blue",
+      "gamut": "srgb",
+      "hex": "#A77B43",
+      "rgb": [
+        0.6549019607843137,
+        0.4823529411764706,
+        0.2627450980392157
+      ],
+      "source_path": "design system themes/dune-editorial/colors_and_type.css",
+      "source_line": 22,
+      "source_sha256": "b41f0342cfcc1210cb2c7258d4b19913cc69c3b74dcd3e168c8a2015dae3384a"
+    },
+    {
+      "id": "brand-archive-folio",
+      "registry_index": 16,
+      "system_id": "builtin-theme-archive-folio",
+      "slug": "archive-folio",
+      "name": "Archive Folio Theme",
+      "role": "--primary-blue",
+      "gamut": "srgb",
+      "hex": "#2B2B2B",
+      "rgb": [
+        0.16862745098039217,
+        0.16862745098039217,
+        0.16862745098039217
+      ],
+      "source_path": "design system themes/archive-folio/colors_and_type.css",
+      "source_line": 22,
+      "source_sha256": "77efd9bc5d1978c51bf4057e811917b7fa7a91b770e5da1aefcb013e248e7b21"
+    },
+    {
+      "id": "brand-signal-console",
+      "registry_index": 17,
+      "system_id": "builtin-theme-signal-console",
+      "slug": "signal-console",
+      "name": "Signal Console Theme",
+      "role": "--primary-blue",
+      "gamut": "srgb",
+      "hex": "#3DDC97",
+      "rgb": [
+        0.23921568627450981,
+        0.8627450980392157,
+        0.592156862745098
+      ],
+      "source_path": "design system themes/signal-console/colors_and_type.css",
+      "source_line": 22,
+      "source_sha256": "7b22e9950a5172342ef201e04902447b85dad9c6a29d21103d3a343980bbda2c"
+    },
+    {
+      "id": "brand-paper-instrument",
+      "registry_index": 18,
+      "system_id": "builtin-theme-paper-instrument",
+      "slug": "paper-instrument",
+      "name": "Paper Instrument Theme",
+      "role": "--primary-blue",
+      "gamut": "srgb",
+      "hex": "#1D4ED8",
+      "rgb": [
+        0.11372549019607843,
+        0.3058823529411765,
+        0.8470588235294118
+      ],
+      "source_path": "design system themes/paper-instrument/colors_and_type.css",
+      "source_line": 22,
+      "source_sha256": "9ebf5ec869b66296be138411b0d77feae456c8d2c2ac9a8faf5caf88b55a41d7"
+    },
+    {
+      "id": "brand-quiet-runtime",
+      "registry_index": 19,
+      "system_id": "builtin-theme-quiet-runtime",
+      "slug": "quiet-runtime",
+      "name": "Quiet Runtime Theme",
+      "role": "--primary-blue",
+      "gamut": "srgb",
+      "hex": "#6E56CF",
+      "rgb": [
+        0.43137254901960786,
+        0.33725490196078434,
+        0.8117647058823529
+      ],
+      "source_path": "design system themes/quiet-runtime/colors_and_type.css",
+      "source_line": 22,
+      "source_sha256": "3be8b8196d824f6df48a3377fbac5f5313e7a3eb35f74c90cec69a31bb4e0bad"
+    },
+    {
+      "id": "brand-graphite-spec",
+      "registry_index": 20,
+      "system_id": "builtin-theme-graphite-spec",
+      "slug": "graphite-spec",
+      "name": "Graphite Spec Theme",
+      "role": "--primary-blue",
+      "gamut": "srgb",
+      "hex": "#E8A33D",
+      "rgb": [
+        0.9098039215686274,
+        0.6392156862745098,
+        0.23921568627450981
+      ],
+      "source_path": "design system themes/graphite-spec/colors_and_type.css",
+      "source_line": 22,
+      "source_sha256": "fe1933d269771131f7a038c1176c3d6e79a3c121096c318c8ca25df62b77dea3"
+    },
+    {
+      "id": "brand-exploded-field-module",
+      "registry_index": 21,
+      "system_id": "builtin-theme-exploded-field-module",
+      "slug": "exploded-field-module",
+      "name": "Exploded Field Module Theme",
+      "role": "--primary-blue",
+      "gamut": "srgb",
+      "hex": "#B82E16",
+      "rgb": [
+        0.7215686274509804,
+        0.1803921568627451,
+        0.08627450980392157
+      ],
+      "source_path": "design system themes/exploded-field-module/colors_and_type.css",
+      "source_line": 21,
+      "source_sha256": "534113e0224e5df5f9eb061014059ec06d5d4346175a120f1a8647a3e8e6f33a"
+    },
+    {
+      "id": "brand-long-form-press",
+      "registry_index": 22,
+      "system_id": "builtin-theme-long-form-press",
+      "slug": "long-form-press",
+      "name": "Long Form Press Theme",
+      "role": "--primary-blue",
+      "gamut": "srgb",
+      "hex": "#8A3324",
+      "rgb": [
+        0.5411764705882353,
+        0.2,
+        0.1411764705882353
+      ],
+      "source_path": "design system themes/long-form-press/colors_and_type.css",
+      "source_line": 22,
+      "source_sha256": "7cb79a21b5d8df12b2c85206ff299f2f3028116dfd08d956e4472da5e3cfdedb"
+    },
+    {
+      "id": "brand-wide-gutter-review",
+      "registry_index": 23,
+      "system_id": "builtin-theme-wide-gutter-review",
+      "slug": "wide-gutter-review",
+      "name": "Wide Gutter Review Theme",
+      "role": "--primary-blue",
+      "gamut": "srgb",
+      "hex": "#2C4BD8",
+      "rgb": [
+        0.17254901960784313,
+        0.29411764705882354,
+        0.8470588235294118
+      ],
+      "source_path": "design system themes/wide-gutter-review/colors_and_type.css",
+      "source_line": 22,
+      "source_sha256": "a393d8af9b152b6ace4f5d22680f459aea32521e4b6c6334a3100d83cbc9c5c0"
+    },
+    {
+      "id": "brand-quarterly-folio",
+      "registry_index": 24,
+      "system_id": "builtin-theme-quarterly-folio",
+      "slug": "quarterly-folio",
+      "name": "Quarterly Folio Theme",
+      "role": "--primary-blue",
+      "gamut": "srgb",
+      "hex": "#1F4B3F",
+      "rgb": [
+        0.12156862745098039,
+        0.29411764705882354,
+        0.24705882352941178
+      ],
+      "source_path": "design system themes/quarterly-folio/colors_and_type.css",
+      "source_line": 22,
+      "source_sha256": "828d065adb1caaee02979ab2356296f9a591721b10f891d1a26ef33da787bb51"
+    },
+    {
+      "id": "brand-night-edition",
+      "registry_index": 25,
+      "system_id": "builtin-theme-night-edition",
+      "slug": "night-edition",
+      "name": "Night Edition Theme",
+      "role": "--primary-blue",
+      "gamut": "srgb",
+      "hex": "#D98E3A",
+      "rgb": [
+        0.8509803921568627,
+        0.5568627450980392,
+        0.22745098039215686
+      ],
+      "source_path": "design system themes/night-edition/colors_and_type.css",
+      "source_line": 22,
+      "source_sha256": "bd036cd6488bd6c4dfff66fbc5cad9a1504671b4a5a57dbfe0e2184a98da77ea"
+    },
+    {
+      "id": "brand-studio-counter",
+      "registry_index": 26,
+      "system_id": "builtin-theme-studio-counter",
+      "slug": "studio-counter",
+      "name": "Studio Counter Theme",
+      "role": "--primary-blue",
+      "gamut": "srgb",
+      "hex": "#F2F1EF",
+      "rgb": [
+        0.9490196078431372,
+        0.9450980392156862,
+        0.9372549019607843
+      ],
+      "source_path": "design system themes/studio-counter/colors_and_type.css",
+      "source_line": 22,
+      "source_sha256": "d1cc43465e6ad42efb98dcaa36c4efb34e7f928c43acd3cd30f5b200bdcf6be6"
+    },
+    {
+      "id": "brand-atelier-counter",
+      "registry_index": 27,
+      "system_id": "builtin-theme-atelier-counter",
+      "slug": "atelier-counter",
+      "name": "Atelier Counter Theme",
+      "role": "--primary-blue",
+      "gamut": "srgb",
+      "hex": "#7A2E2E",
+      "rgb": [
+        0.47843137254901963,
+        0.1803921568627451,
+        0.1803921568627451
+      ],
+      "source_path": "design system themes/atelier-counter/colors_and_type.css",
+      "source_line": 22,
+      "source_sha256": "41785b418b09e9455d263400fc3505b45bac45d225bbaab57730d8a51c6e04c7"
+    },
+    {
+      "id": "brand-market-stack",
+      "registry_index": 28,
+      "system_id": "builtin-theme-market-stack",
+      "slug": "market-stack",
+      "name": "Market Stack Theme",
+      "role": "--primary-blue",
+      "gamut": "srgb",
+      "hex": "#E04E1B",
+      "rgb": [
+        0.8784313725490196,
+        0.3058823529411765,
+        0.10588235294117647
+      ],
+      "source_path": "design system themes/market-stack/colors_and_type.css",
+      "source_line": 22,
+      "source_sha256": "a99fd656cf3de928eb6fd94bd220a3b2447ab46bb6999af6c5c7aec401bc0438"
+    },
+    {
+      "id": "brand-vitrine-mono",
+      "registry_index": 29,
+      "system_id": "builtin-theme-vitrine-mono",
+      "slug": "vitrine-mono",
+      "name": "Vitrine Mono Theme",
+      "role": "--primary-blue",
+      "gamut": "srgb",
+      "hex": "#111213",
+      "rgb": [
+        0.06666666666666667,
+        0.07058823529411765,
+        0.07450980392156863
+      ],
+      "source_path": "design system themes/vitrine-mono/colors_and_type.css",
+      "source_line": 22,
+      "source_sha256": "9832bb16d6cd9d940376ffd3aa66848ad65922c2fa6877af9d4969d23e269afd"
+    },
+    {
+      "id": "brand-modular-configurator",
+      "registry_index": 30,
+      "system_id": "builtin-theme-modular-configurator",
+      "slug": "modular-configurator",
+      "name": "Modular Configurator Theme",
+      "role": "--primary-blue",
+      "gamut": "srgb",
+      "hex": "#1B4FD8",
+      "rgb": [
+        0.10588235294117647,
+        0.30980392156862746,
+        0.8470588235294118
+      ],
+      "source_path": "design system themes/modular-configurator/colors_and_type.css",
+      "source_line": 21,
+      "source_sha256": "70b227d39edaa028c7a626252a576ea2e3137c90024f2fe13f283a40506dea1c"
+    },
+    {
+      "id": "brand-night-marquee",
+      "registry_index": 31,
+      "system_id": "builtin-theme-night-marquee",
+      "slug": "night-marquee",
+      "name": "Night Marquee Theme",
+      "role": "--primary-blue",
+      "gamut": "srgb",
+      "hex": "#E6E4E1",
+      "rgb": [
+        0.9019607843137255,
+        0.8941176470588236,
+        0.8823529411764706
+      ],
+      "source_path": "design system themes/night-marquee/colors_and_type.css",
+      "source_line": 22,
+      "source_sha256": "eeda2871250f1e8e2c3d46066465e5e1ad5b21bcde0810519f5b22a69913253e"
+    },
+    {
+      "id": "brand-stencil-field",
+      "registry_index": 32,
+      "system_id": "builtin-theme-stencil-field",
+      "slug": "stencil-field",
+      "name": "Stencil Field Theme",
+      "role": "--primary-blue",
+      "gamut": "srgb",
+      "hex": "#0F7A3C",
+      "rgb": [
+        0.058823529411764705,
+        0.47843137254901963,
+        0.23529411764705882
+      ],
+      "source_path": "design system themes/stencil-field/colors_and_type.css",
+      "source_line": 22,
+      "source_sha256": "2b750a022bf150c05ab9350457a516d66b0aa27994fc57cb956a4c4db3e152cf"
+    },
+    {
+      "id": "brand-press-riso",
+      "registry_index": 33,
+      "system_id": "builtin-theme-press-riso",
+      "slug": "press-riso",
+      "name": "Press Riso Theme",
+      "role": "--primary-blue",
+      "gamut": "srgb",
+      "hex": "#D63A22",
+      "rgb": [
+        0.8392156862745098,
+        0.22745098039215686,
+        0.13333333333333333
+      ],
+      "source_path": "design system themes/press-riso/colors_and_type.css",
+      "source_line": 22,
+      "source_sha256": "c2a09c3804d27aec18b7d88ec8d00482abfb71270cc861bec4cdaf13a9a7f321"
+    },
+    {
+      "id": "brand-exhibit-wall",
+      "registry_index": 34,
+      "system_id": "builtin-theme-exhibit-wall",
+      "slug": "exhibit-wall",
+      "name": "Exhibit Wall Theme",
+      "role": "--primary-blue",
+      "gamut": "srgb",
+      "hex": "#7A3F2E",
+      "rgb": [
+        0.47843137254901963,
+        0.24705882352941178,
+        0.1803921568627451
+      ],
+      "source_path": "design system themes/exhibit-wall/colors_and_type.css",
+      "source_line": 22,
+      "source_sha256": "bd1962a707e65de8f297676d3471fa4024ad6a50bcadff413504a268710cca74"
+    },
+    {
+      "id": "brand-index-table",
+      "registry_index": 35,
+      "system_id": "builtin-theme-index-table",
+      "slug": "index-table",
+      "name": "Index Table Theme",
+      "role": "--primary-blue",
+      "gamut": "srgb",
+      "hex": "#2B4CC4",
+      "rgb": [
+        0.16862745098039217,
+        0.2980392156862745,
+        0.7686274509803922
+      ],
+      "source_path": "design system themes/index-table/colors_and_type.css",
+      "source_line": 22,
+      "source_sha256": "78c4ff135701dcdb63932e438ae2e15fb795a93d85091079f1c290818a3aeee9"
+    },
+    {
+      "id": "brand-facet-archive",
+      "registry_index": 36,
+      "system_id": "builtin-theme-facet-archive",
+      "slug": "facet-archive",
+      "name": "Facet Archive Theme",
+      "role": "--primary-blue",
+      "gamut": "srgb",
+      "hex": "#D8D8D4",
+      "rgb": [
+        0.8470588235294118,
+        0.8470588235294118,
+        0.8313725490196079
+      ],
+      "source_path": "design system themes/facet-archive/colors_and_type.css",
+      "source_line": 22,
+      "source_sha256": "d66b0fa9f65d3586e3650cf2dc92f5581c26db5bdd25e320cbb522b3eade1a6d"
+    },
+    {
+      "id": "brand-console-ledger",
+      "registry_index": 37,
+      "system_id": "builtin-theme-console-ledger",
+      "slug": "console-ledger",
+      "name": "Console Ledger Theme",
+      "role": "--primary-blue",
+      "gamut": "srgb",
+      "hex": "#3FA37A",
+      "rgb": [
+        0.24705882352941178,
+        0.6392156862745098,
+        0.47843137254901963
+      ],
+      "source_path": "design system themes/console-ledger/colors_and_type.css",
+      "source_line": 22,
+      "source_sha256": "c7644452d5a4dc9604feab19c36cb20fad76e65016b677d149ade01bf2c3ef4b"
+    },
+    {
+      "id": "brand-field-register",
+      "registry_index": 38,
+      "system_id": "builtin-theme-field-register",
+      "slug": "field-register",
+      "name": "Field Register Theme",
+      "role": "--primary-blue",
+      "gamut": "srgb",
+      "hex": "#0F6B6B",
+      "rgb": [
+        0.058823529411764705,
+        0.4196078431372549,
+        0.4196078431372549
+      ],
+      "source_path": "design system themes/field-register/colors_and_type.css",
+      "source_line": 22,
+      "source_sha256": "cd666dabc9daf99a0f6b34f8f4c7e66a7be404ebc9cae221aedd3f0abdf89bb6"
+    },
+    {
+      "id": "brand-warm-vestibule",
+      "registry_index": 39,
+      "system_id": "builtin-theme-warm-vestibule",
+      "slug": "warm-vestibule",
+      "name": "Warm Vestibule Theme",
+      "role": "--primary-blue",
+      "gamut": "srgb",
+      "hex": "#6E5232",
+      "rgb": [
+        0.43137254901960786,
+        0.3215686274509804,
+        0.19607843137254902
+      ],
+      "source_path": "design system themes/warm-vestibule/colors_and_type.css",
+      "source_line": 22,
+      "source_sha256": "0053659947c80dabb5b58d1089078230c0752182cc672e85565494ae39f265ae"
+    },
+    {
+      "id": "brand-stone-court",
+      "registry_index": 40,
+      "system_id": "builtin-theme-stone-court",
+      "slug": "stone-court",
+      "name": "Stone Court Theme",
+      "role": "--primary-blue",
+      "gamut": "srgb",
+      "hex": "#455A64",
+      "rgb": [
+        0.27058823529411763,
+        0.35294117647058826,
+        0.39215686274509803
+      ],
+      "source_path": "design system themes/stone-court/colors_and_type.css",
+      "source_line": 22,
+      "source_sha256": "a4a8d5162a6cb225adf5fa4568505823e88ca9cafc34c3b1d4536bb8a133babb"
+    },
+    {
+      "id": "brand-linen-retreat",
+      "registry_index": 41,
+      "system_id": "builtin-theme-linen-retreat",
+      "slug": "linen-retreat",
+      "name": "Linen Retreat Theme",
+      "role": "--primary-blue",
+      "gamut": "srgb",
+      "hex": "#8A6A4B",
+      "rgb": [
+        0.5411764705882353,
+        0.41568627450980394,
+        0.29411764705882354
+      ],
+      "source_path": "design system themes/linen-retreat/colors_and_type.css",
+      "source_line": 22,
+      "source_sha256": "f42d1fb7d667f2d249da0ec58aaa32363846ab90f888fe2489b8fc8111ba1c71"
+    },
+    {
+      "id": "brand-timber-hall",
+      "registry_index": 42,
+      "system_id": "builtin-theme-timber-hall",
+      "slug": "timber-hall",
+      "name": "Timber Hall Theme",
+      "role": "--primary-blue",
+      "gamut": "srgb",
+      "hex": "#C08A4E",
+      "rgb": [
+        0.7529411764705882,
+        0.5411764705882353,
+        0.3058823529411765
+      ],
+      "source_path": "design system themes/timber-hall/colors_and_type.css",
+      "source_line": 22,
+      "source_sha256": "d8a6e3a239fa0ecfe9a07e97917af892a4ddd0950d4f0053522930ba8b3e0c2f"
+    }
+  ]
+}

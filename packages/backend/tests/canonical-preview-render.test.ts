@@ -27,9 +27,14 @@ beforeAll(async () => {
   const source = await mkdtemp(path.join(tmpdir(), "bg-preview-source-"));
   try {
     const analysis = await analyzeLocalTree(source, "Preview fixture", new AbortController().signal);
-    await persistCanonicalExtraction({ requestedId: id, brandName: "Preview fixture", sourceType: "upload", sourceReference: "fixture.pdf", lineage: null, analysis, signal: new AbortController().signal });
+    const custom = path.join(source, "custom.html");
+    await writeFile(custom, '<!doctype html><html><head><style>body{margin:7px;font-family:serif;color:rgb(11,22,33)}</style></head><body><p id="authored">Custom</p></body></html>');
+    await persistCanonicalExtraction({
+      requestedId: id, brandName: "Preview fixture", sourceType: "upload", sourceReference: "fixture.pdf", lineage: null,
+      analysis: { ...analysis, artifactCopies: [...analysis.artifactCopies, { absolutePath: custom, relPath: "preview/custom.html" }] },
+      signal: new AbortController().signal,
+    });
   } finally { await rm(source, { recursive: true, force: true }); }
-  await writeFile(path.join(root, "preview", "custom.html"), '<!doctype html><style>body{margin:7px;font-family:serif;color:rgb(11,22,33)}</style><p id="authored">Custom</p>');
   let app: ReturnType<typeof createApp>;
   server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: request => {
     if (new URL(request.url).pathname === "/preview-test") return new Response('<!doctype html><html><body></body></html>', { headers: { "Content-Type": "text/html" } });
@@ -124,7 +129,7 @@ test("all uploaded font roles resolve through authenticated relative CSS and rea
   }
   const frame = await preview("type-body");
   const state = await frame.evaluate(async () => {
-    const roles = [];
+    const roles: { readonly role: string; readonly token: string; readonly family: string; readonly statuses: readonly FontFaceLoadStatus[] }[] = [];
     for (const role of ["sans", "display", "serif", "mono"]) {
       const probe = document.createElement("span");
       probe.textContent = "Font probe";

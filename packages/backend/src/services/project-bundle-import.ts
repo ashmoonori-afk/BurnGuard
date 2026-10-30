@@ -9,6 +9,7 @@ import {
   type ProjectBundleImportResponse,
   type ProjectBundleImportWarning,
 } from "@bg/shared";
+import type { PaletteTransferProof } from "@bg/shared/palette";
 import { getSqlite } from "../db/sqlite-client";
 import { createDesignSystemRecord, createProjectRecord, getDesignSystemDetail } from "../db/seed";
 import { projectsDir, resolveRepoRoot, systemsDir } from "../lib/paths";
@@ -25,8 +26,22 @@ import { clearProjectBundleImportReceipt, projectBundlePayloadStage, projectBund
 import { commitDesignSystemReceipt, prepareDesignSystemReceipt } from "../db/design-system-repository";
 import { getDb } from "../db/client";
 import { ExtractionSidecarError, readValidatedExtractionSidecar } from "./extraction-sidecar";
+import { assertSystemContentLease, withSystemContentAccess, type SystemContentLease } from "./system-content-access";
+import { pathStat, safeContentChild } from "./system-content-tree";
+import { SystemContentError } from "./system-content-format";
+import { acquireArtifactProjectLock } from "./artifact-project-lock";
+import { DesignSystemPaletteError, validatePaletteTransferAtRoot } from "./design-system-palette";
+import { getPendingSystemOperation } from "../db/catalog-repository";
+import { PaletteTransferRepositoryError, validatePaletteTransferReceipt } from "../db/palette-transfer-repository";
+import { CatalogFileError, validateCatalogReceiptTree } from "./catalog-files";
 
-export async function importProjectBundleFile(file: File, name?: string): Promise<ProjectBundleImportResponse> {
+type ImportOwnership = { readonly operationId: string; readonly projectId: string; readonly systemId: string | null };
+type ProjectBundleImportEvents = {
+  readonly atBoundary?: (name: "system-reserved" | "system-restored" | "project-created" | "before-commit" | "outer-committed" | "owner-removed", owner: ImportOwnership) => Promise<void>;
+  readonly getLocalFonts?: typeof getLocalFonts;
+};
+
+export async function importProjectBundleFile(file: File, name?: string, events: ProjectBundleImportEvents = {}): Promise<ProjectBundleImportResponse> {
   const operationId = ulid();
   const projectId = ulid();
   const payloadStage = projectBundlePayloadStage(operationId);
@@ -36,12 +51,15 @@ export async function importProjectBundleFile(file: File, name?: string): Promis
   try {
     await mkdir(payloadStage, { recursive: false });
     ({ manifest, entries } = await readProjectBundleZip(file, payloadStage, validateProjectBundleMetadata));
+    if (manifest.design_system.kind === "custom" && manifest.design_system.palette_transfer !== undefined) {
+      await validateImportedPalette(resolveWithin(payloadStage, "design-system"), manifest.design_system.palette_transfer);
+    }
   } catch (error) {
     await rm(payloadStage, { recursive: true, force: true });
     await clearProjectBundleImportReceipt(operationId);
     throw error;
   }
-  try { return await importStagedBundle(manifest, entries, name, operationId, projectId, payloadStage); }
+  try { return await importStagedBundle(manifest, entries, name, operationId, projectId, payloadStage, events); }
   finally { await rm(payloadStage, { recursive: true, force: true }); }
 }
 
@@ -52,6 +70,7 @@ async function importStagedBundle(
   operationId: string,
   projectId: string,
   payloadStage: string,
+  events: ProjectBundleImportEvents,
 ): Promise<ProjectBundleImportResponse> {
   const projectName = name?.trim() || manifest.project.name;
   if (!projectName || projectName.length > 200) throw new ProjectBundleError("invalid_project_bundle");
@@ -62,6 +81,22 @@ async function importStagedBundle(
   const plannedSystem = manifest.design_system.kind === "custom"
     ? (() => { const id = `bundle-${ulid().toLowerCase()}`; return { id, stage: projectBundleSystemStage(id) }; })()
     : null;
+  const owner = { operationId, projectId, systemId: plannedSystem?.id ?? null };
+  const validatePaletteReceipt = async (receiptId: string): Promise<void> => {
+    try {
+      if (customSystemId === null || customSystemDir === null) throw new ProjectBundleError("project_bundle_unavailable");
+      const receipt = getPendingSystemOperation(getSqlite(), customSystemId);
+      if (receipt === null || receipt.id !== receiptId) throw new ProjectBundleError("project_bundle_unavailable");
+      await validateCatalogReceiptTree(customSystemDir, receipt);
+      const proof = validatePaletteTransferReceipt(getSqlite(), receipt);
+      const declared = manifest.design_system.kind === "custom" ? manifest.design_system.palette_transfer ?? null : null;
+      if (JSON.stringify(proof) !== JSON.stringify(declared)) throw new ProjectBundleError("project_bundle_digest");
+      if (proof !== null) await validateImportedPalette(customSystemDir, proof);
+    } catch (error) {
+      if (error instanceof PaletteTransferRepositoryError || error instanceof CatalogFileError) throw new ProjectBundleError("project_bundle_digest");
+      throw error;
+    }
+  };
   await writeProjectBundleImportReceipt({
     schema_version: 1,
     operation_id: operationId,
@@ -69,10 +104,7 @@ async function importStagedBundle(
     system_id: plannedSystem?.id ?? null,
     phase: "pending",
   });
-  try {
-    const system = await restoreDesignSystem(manifest.design_system, entries, manifest.files, plannedSystem, operationId);
-    customSystemId = system.created_id;
-    customSystemDir = system.created_dir;
+  const initializeProject = async () => {
     createdProject = await createProjectRecord({
       projectId,
       beforeInsert: (dirPath) => writeBundleImportOwnerMarker(dirPath, operationId),
@@ -92,26 +124,46 @@ async function importStagedBundle(
         include: (entry) => !entry.path.startsWith("project/docs/attachments/"),
       }),
     });
+    await events.atBoundary?.("project-created", owner);
+  };
+  let started = false;
+  const run = async (lease?: SystemContentLease) => {
+  started = true;
+  let outerCommitted = false;
+  try {
+    const project = createdProject;
+    if (project === null) throw new ProjectBundleError("project_bundle_unavailable");
+    if (plannedSystem !== null) {
+      if (lease === undefined) throw new ProjectBundleError("project_bundle_unavailable");
+      assertSystemContentLease(lease, systemsDir, plannedSystem.id);
+      if (await getDesignSystemDetail(plannedSystem.id) !== null ||
+        await pathStat(await safeContentChild(systemsDir, plannedSystem.id)) !== null ||
+        await pathStat(plannedSystem.stage) !== null) throw new ProjectBundleError("project_bundle_unavailable");
+      await events.atBoundary?.("system-reserved", owner);
+    }
+    const system = await restoreDesignSystem(manifest.design_system, entries, manifest.files, plannedSystem, operationId, lease);
+    customSystemId = system.created_id;
+    customSystemDir = system.created_dir;
+    await events.atBoundary?.("system-restored", owner);
     await writeEntries({
-      root: createdProject.dir_path,
+      root: project.dir_path,
       entries,
       files: manifest.files,
       prefix: "project/",
       kinds: new Set(["attachment", "checkpoint"]),
     });
     await writeEntries({
-      root: createdProject.dir_path,
+      root: project.dir_path,
       entries,
       files: manifest.files,
       prefix: "project/",
       kinds: new Set(["project"]),
       include: (entry) => entry.path.startsWith("project/docs/attachments/"),
     });
-    const actual = await inspectCanonicalTree(createdProject.dir_path);
+    const actual = await inspectCanonicalTree(project.dir_path);
     if (actual.tree_digest !== manifest.project.current_digest) throw new ProjectBundleError("project_bundle_digest");
     const selectedSystemId = system.selected_id;
     const db = getSqlite();
-    const project = createdProject;
     db.transaction(() => {
       db.prepare("UPDATE projects SET design_system_id=?,missing_design_system_ref=?,current_revision=?,current_digest=? WHERE id=?")
         .run(selectedSystemId, system.missing_builtin, manifest.project.current_revision, manifest.project.current_digest, project.id);
@@ -127,20 +179,33 @@ async function importStagedBundle(
       }
     })();
     // Archive pin text is untrusted prompt input; the pin is rebuilt by the app renderer from the restored system.
-    if (selectedSystemId !== null) await ensureProjectDesignSystemPin(createdProject.id);
-    await indexProjectFiles(createdProject.id);
+    if (selectedSystemId !== null) await ensureProjectDesignSystemPin(project.id, plannedSystem === null ? undefined : lease);
+    await indexProjectFiles(project.id);
+    const warnings = await importWarnings(manifest.fonts.families, system.missing_builtin, events.getLocalFonts ?? getLocalFonts);
+    await events.atBoundary?.("before-commit", owner);
+    if (system.receipt !== null) await validatePaletteReceipt(system.receipt.id);
     await writeProjectBundleImportReceipt({ schema_version: 1, operation_id: operationId, project_id: projectId, system_id: plannedSystem?.id ?? null, phase: "committed" });
-    await removeBundleImportOwnerMarker(createdProject.dir_path);
+    outerCommitted = true;
+    await events.atBoundary?.("outer-committed", owner);
+    await removeBundleImportOwnerMarker(project.dir_path);
     if (customSystemDir !== null) await removeBundleImportOwnerMarker(customSystemDir);
+    await events.atBoundary?.("owner-removed", owner);
+    if (system.receipt !== null) {
+      await validatePaletteReceipt(system.receipt.id);
+      commitDesignSystemReceipt(getDb(), { ...system.receipt, updatedAt: Date.now() });
+    }
     await rm(payloadStage, { recursive: true, force: true });
     await clearProjectBundleImportReceipt(operationId);
     return {
-      id: createdProject.id,
-      session_id: createdProject.session_id,
-      entrypoint: createdProject.entrypoint,
-      warnings: await importWarnings(manifest.fonts.families, system.missing_builtin),
+      id: project.id,
+      session_id: project.session_id,
+      entrypoint: project.entrypoint,
+      warnings,
     };
   } catch (error) {
+    // A durable outer commit retains the imported system. Pending v1 authority blocks access
+    // until startup finalizes it if owner cleanup or the inner receipt commit was interrupted.
+    if (outerCommitted) throw new ProjectBundleError("project_bundle_unavailable");
     const cleanupFailed = await cleanupImportedBundle({
       project: createdProject,
       customSystemId,
@@ -150,6 +215,27 @@ async function importStagedBundle(
     if (cleanupFailed) throw new ProjectBundleError("project_bundle_unavailable");
     await rm(payloadStage, { recursive: true, force: true });
     await clearProjectBundleImportReceipt(operationId);
+    if (error instanceof ProjectBundleError) throw error;
+    throw new ProjectBundleError("invalid_project_bundle");
+  }
+  };
+  try {
+    // Artifact initialization acquires its own project locks before any system access.
+    await initializeProject();
+    const release = await acquireArtifactProjectLock(getSqlite(), projectId);
+    try {
+      if (plannedSystem === null) return await run();
+      await mkdir(systemsDir, { recursive: true });
+      return await withSystemContentAccess(getSqlite(), systemsDir, [plannedSystem.id], run);
+    } finally { release(); }
+  }
+  catch (error) {
+    if (!started) {
+      const cleanupFailed = await cleanupImportedBundle({ project: createdProject, customSystemId: null, customSystemDir: null });
+      if (cleanupFailed) throw new ProjectBundleError("project_bundle_unavailable");
+      await clearProjectBundleImportReceipt(operationId);
+    }
+    if (error instanceof SystemContentError) throw new ProjectBundleError("project_bundle_unavailable");
     if (error instanceof ProjectBundleError) throw error;
     throw new ProjectBundleError("invalid_project_bundle");
   }
@@ -177,16 +263,20 @@ async function restoreDesignSystem(
   files: readonly ProjectBundleFile[],
   planned: { readonly id: string; readonly stage: string } | null,
   operationId: string,
-): Promise<{ readonly selected_id: string | null; readonly created_id: string | null; readonly created_dir: string | null; readonly missing_builtin: string | null }> {
-  if (system.kind === "none") return { selected_id: null, created_id: null, created_dir: null, missing_builtin: null };
+  lease?: SystemContentLease,
+): Promise<{ readonly selected_id: string | null; readonly created_id: string | null; readonly created_dir: string | null; readonly missing_builtin: string | null; readonly receipt: { readonly id: string; readonly digest: string } | null }> {
+  if (system.kind === "none") return { selected_id: null, created_id: null, created_dir: null, missing_builtin: null, receipt: null };
   if (system.kind === "builtin") {
     const present = await getDesignSystemDetail(system.id);
-    return { selected_id: present ? system.id : null, created_id: null, created_dir: null, missing_builtin: present ? null : system.id };
+    return { selected_id: present ? system.id : null, created_id: null, created_dir: null, missing_builtin: present ? null : system.id, receipt: null };
   }
-  if (planned === null) throw new ProjectBundleError("invalid_project_bundle");
+  if (planned === null || lease === undefined) throw new ProjectBundleError("invalid_project_bundle");
   const { id, stage } = planned;
+  assertSystemContentLease(lease, systemsDir, id);
   const destination = resolveWithin(systemsDir, id);
   await mkdir(stage, { recursive: false });
+  let published = false;
+  let rowCreated = false;
   try {
     await writeEntries({
       root: stage,
@@ -202,8 +292,11 @@ async function restoreDesignSystem(
       if (error instanceof ExtractionSidecarError) throw new ProjectBundleError("invalid_project_bundle");
       throw error;
     }
+    if (system.palette_transfer !== undefined) await validateImportedPalette(stage, system.palette_transfer);
     await writeBundleImportOwnerMarker(stage, operationId);
+    if (await pathStat(destination) !== null) throw new ProjectBundleError("project_bundle_unavailable");
     await rename(stage, destination);
+    published = true;
     await createDesignSystemRecord({
       id,
       name: system.name,
@@ -218,21 +311,22 @@ async function restoreDesignSystem(
       readmeMdPath: system.readme_md_path ? resolveWithin(destination, system.readme_md_path) : null,
       thumbnailPath: null,
     });
-    await recordImportedContentReceipt(id, destination);
+    rowCreated = true;
+    const receipt = await recordImportedContentReceipt(id, destination, system.palette_transfer);
+    return { selected_id: id, created_id: id, created_dir: destination, missing_builtin: null, receipt };
   } catch (error) {
     const cleanupFailed = await cleanupImportedBundle({
       project: null,
-      customSystemId: id,
-      customSystemDir: destination,
+      customSystemId: rowCreated ? id : null,
+      customSystemDir: published ? destination : null,
       extraPaths: [stage],
     });
     if (cleanupFailed) throw new BundleCleanupFailure();
     throw error;
   }
-  return { selected_id: id, created_id: id, created_dir: destination, missing_builtin: null };
 }
 
-async function recordImportedContentReceipt(systemId: string, root: string): Promise<void> {
+async function recordImportedContentReceipt(systemId: string, root: string, paletteTransfer?: PaletteTransferProof): Promise<{ readonly id: string; readonly digest: string }> {
   const sidecar = await readValidatedExtractionSidecar(root);
   const manifest = await inspectCanonicalTree(root);
   const provenance: unknown = JSON.parse(await readFile(path.join(root, "extraction-provenance.json"), "utf8"));
@@ -248,8 +342,18 @@ async function recordImportedContentReceipt(systemId: string, root: string): Pro
     manifest,
     provenance: provenance as Readonly<Record<string, unknown>>,
     createdAt: now,
+    ...(paletteTransfer === undefined ? {} : { paletteTransfer }),
   });
-  commitDesignSystemReceipt(getDb(), { id: receiptId, digest: sidecar.content_digest, updatedAt: now });
+  return { id: receiptId, digest: sidecar.content_digest };
+}
+
+async function validateImportedPalette(root: string, proof: PaletteTransferProof): Promise<void> {
+  try { await validatePaletteTransferAtRoot(root, proof); }
+  catch (error) {
+    if (error instanceof DesignSystemPaletteError) throw new ProjectBundleError("invalid_project_bundle");
+    if (error instanceof SystemContentError) throw new ProjectBundleError("project_bundle_digest");
+    throw error;
+  }
 }
 
 type WriteEntriesInput = {
@@ -273,11 +377,12 @@ async function writeEntries(input: WriteEntriesInput): Promise<void> {
   }
 }
 
-async function importWarnings(families: readonly string[], missingBuiltin: string | null): Promise<readonly ProjectBundleImportWarning[]> {
+async function importWarnings(families: readonly string[], missingBuiltin: string | null, fonts: typeof getLocalFonts): Promise<readonly ProjectBundleImportWarning[]> {
   const warnings: ProjectBundleImportWarning[] = [];
   if (missingBuiltin) warnings.push({ code: "missing_builtin_design_system", reference: missingBuiltin });
+  if (families.length === 0) return warnings;
   let installed: readonly string[] = [];
-  try { installed = (await getLocalFonts()).families; }
+  try { installed = (await fonts()).families; }
   catch (error) {
     if (!(error instanceof Error)) throw error;
     installed = [];

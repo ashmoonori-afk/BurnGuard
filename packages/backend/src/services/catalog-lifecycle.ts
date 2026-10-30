@@ -1,9 +1,9 @@
 import type { Database } from "bun:sqlite";
-import { mkdir, readdir, rm } from "node:fs/promises";
-import path from "node:path";
+import { validatePaletteTransferReceipt } from "../db/palette-transfer-repository";
+import { readdir, rm } from "node:fs/promises";
 import {
   CatalogRepositoryError, commitCatalogOperation, createCatalogChild, deleteCatalogSystem, failCatalogOperation,
-  getCatalogRow, getCatalogUsage, getContentReceipt, getLatestCatalogOperation, listPendingCatalogReceipts,
+  getCatalogRow, getCatalogUsage, getCurrentSystemContent, getPendingSystemOperation, getLatestCatalogOperation, listPendingCatalogReceipts,
   prepareCatalogOperation, type CatalogReceiptRow, type CatalogRow,
 } from "../db/catalog-repository";
 import { assertSafeName, resolveWithin } from "../security/path-boundary";
@@ -11,6 +11,11 @@ import {
   CatalogFileError, catalogPaths, copyCatalogTree, exists, moveCatalogTree,
   publishCatalogCopy, removeCatalogTree, validateCatalogReceiptTree,
 } from "./catalog-files";
+import { withSystemContentAccess, withSystemContentLocks } from "./system-content-access";
+import type { CatalogAccessEvents } from "./catalog-snapshot";
+import { SystemContentError } from "./system-content-format";
+import { authenticatePaletteTransfer, paletteContentEnvironment, validatePaletteTransferAtRoot } from "./design-system-palette";
+import { pathStat, safeContentChild } from "./system-content-tree";
 
 export class CatalogLifecycleError extends Error {
   readonly name = "CatalogLifecycleError";
@@ -25,48 +30,65 @@ type ChildInput = {
   readonly metadata: Readonly<Record<string, string>>;
 };
 
-export async function copyCatalogSystem(db: Database, root: string, parentId: string, input: ChildInput): Promise<string> {
-  const parent = requiredRow(db, parentId);
-  const parentReceipt = getContentReceipt(db, parentId);
-  if (parentReceipt === null || parentReceipt.status !== "committed") throw new CatalogLifecycleError("lineage_parent_mismatch", "Parent content receipt is unavailable");
-  if (input.parentReceiptId !== undefined && input.parentReceiptId !== parentReceipt.id) throw new CatalogLifecycleError("lineage_parent_mismatch", "Parent receipt is stale");
-  if (input.parentDigest !== undefined && input.parentDigest !== parentReceipt.digest) throw new CatalogLifecycleError("lineage_parent_mismatch", "Parent digest is stale");
-  const paths = await catalogPaths(root, parent.id, parent.dirPath);
-  return catalogLock(root, parentId, async () => {
+export async function copyCatalogSystem(db: Database, root: string, parentId: string, input: ChildInput, events: CatalogAccessEvents = {}): Promise<string> {
+  const pending = withSystemContentAccess(db, root, [parentId, input.id], async lease => {
+    const parent = requiredRow(db, parentId);
+    const parentReceipt = getCurrentSystemContent(db, parentId);
+    if (parentReceipt === null || parentReceipt.status !== "committed") throw new CatalogLifecycleError("lineage_parent_mismatch", "Parent content receipt is unavailable");
+    if (input.parentReceiptId !== undefined && input.parentReceiptId !== parentReceipt.id) throw new CatalogLifecycleError("lineage_parent_mismatch", "Parent receipt is stale");
+    if (input.parentDigest !== undefined && input.parentDigest !== parentReceipt.digest) throw new CatalogLifecycleError("lineage_parent_mismatch", "Parent digest is stale");
+    const paths = await catalogPaths(root, parent.id, parent.dirPath);
     await validateReceiptTree(paths.live, parentReceipt, parent.id);
+    let paletteTransfer: Awaited<ReturnType<typeof authenticatePaletteTransfer>>;
+    try { paletteTransfer = await authenticatePaletteTransfer(paletteContentEnvironment(db, root), parentId, lease); }
+    catch { throw new CatalogFileError("catalog_digest_mismatch", "Palette transfer authority is unavailable"); }
     if (getCatalogRow(db, input.id) !== null) throw new CatalogLifecycleError("id_conflict", "Child ID already exists");
     const destination = resolveWithin(root, assertSafeName(input.id));
+    const childPaths = await catalogPaths(root, input.id, destination);
+    if (await exists(childPaths.live) || await exists(childPaths.trash)) throw new CatalogLifecycleError("id_conflict", "Child storage is occupied");
     const now = Date.now();
     const operation = operationInput(input.id, input.operation, parentReceipt, parent, paths.live, destination, input.reason, input.metadata, now);
-    const receiptId = createCatalogChild(db, parent, input.id, input.name, operation);
+    const receiptId = createCatalogChild(db, parent, input.id, input.name, { ...operation, ...(paletteTransfer === null ? {} : { paletteTransfer }) });
     if (fault(`prepared:${input.operation}:${input.id}`)) throw new CatalogLifecycleError("catalog_operation_failed", "Injected prepared receipt fault");
     let staging: string | null = null;
+    let published = false;
     try {
+      const childReceipt = getPendingSystemOperation(db, input.id);
+      if (childReceipt === null || childReceipt.id !== receiptId) throw new CatalogRepositoryError("operation_conflict", input.id);
       const copy = await copyCatalogTree(root, input.id, paths.live);
       staging = copy.staging;
       await validateReceiptTree(copy.staging, parentReceipt, parent.id);
+      await validatePaletteReceipt(db, copy.staging, childReceipt);
       await publishCatalogCopy(copy.staging, copy.destination);
+      published = true;
       staging = null;
       await validateReceiptTree(copy.destination, parentReceipt, parent.id);
+      await validatePaletteReceipt(db, copy.destination, childReceipt);
       if (fault(`db-after-fs:${input.operation}:${input.id}`)) throw new InjectedCatalogFault();
       commitCatalogOperation(db, receiptId, "active", Date.now());
       return input.id;
     } catch (error) {
       if (error instanceof InjectedCatalogFault) throw new CatalogLifecycleError("catalog_operation_failed", error.message);
+      // Once published, recovery owns the receipt and destination. A failed validation is not
+      // permission to delete newly divergent bytes or erase the child's durable ownership.
+      if (published) throw translate(error);
       if (staging !== null) await removeCatalogTree(staging);
-      await removeCatalogTree(destination);
       deleteCatalogSystem(db, input.id);
       throw translate(error);
     }
   });
+  events.onAccessQueued?.();
+  try { return await pending; }
+  catch (error) {
+    if (error instanceof SystemContentError && error.code === "system_content_unavailable") throw new CatalogRepositoryError("operation_conflict", parentId);
+    throw error;
+  }
 }
 
-export async function trashCatalogSystem(db: Database, root: string, id: string): Promise<void> {
-  const initial = requiredRow(db, id);
-  if (initial.isTemplate === 1) throw new CatalogLifecycleError("is_template", "Template systems cannot be trashed");
-  if (getCatalogUsage(db, id).length > 0) throw new CatalogLifecycleError("has_active_projects", "Active projects reference this system");
-  await catalogLock(root, id, async () => {
+export async function trashCatalogSystem(db: Database, root: string, id: string, events: CatalogAccessEvents = {}): Promise<void> {
+  await catalogLock(db, root, id, async () => {
     const row = requiredRow(db, id);
+    if (row.isTemplate === 1) throw new CatalogLifecycleError("is_template", "Template systems cannot be trashed");
     if (row.lifecycle !== "active") throw new CatalogLifecycleError("invalid_lifecycle", "Only active systems can be trashed");
     if (getCatalogUsage(db, id).length > 0) throw new CatalogLifecycleError("has_active_projects", "Active projects reference this system");
     const paths = await catalogPaths(root, id, row.dirPath);
@@ -82,11 +104,11 @@ export async function trashCatalogSystem(db: Database, root: string, id: string)
       failCatalogOperation(db, receiptId, Date.now());
       throw translate(error);
     }
-  });
+  }, events);
 }
 
 export async function restoreCatalogSystem(db: Database, root: string, id: string): Promise<void> {
-  await catalogLock(root, id, async () => {
+  await catalogLock(db, root, id, async () => {
     const row = requiredRow(db, id);
     if (row.lifecycle !== "trashed") throw new CatalogLifecycleError("invalid_lifecycle", "Only trashed systems can be restored");
     if (getCatalogUsage(db, id).length > 0) throw new CatalogLifecycleError("has_active_projects", "Active projects reference this system");
@@ -109,7 +131,7 @@ export async function restoreCatalogSystem(db: Database, root: string, id: strin
 }
 
 export async function purgeCatalogSystem(db: Database, root: string, id: string): Promise<void> {
-  await catalogLock(root, id, async () => {
+  await catalogLock(db, root, id, async () => {
     const row = requiredRow(db, id);
     if (row.lifecycle !== "trashed") throw new CatalogLifecycleError("invalid_lifecycle", "Only trashed systems can be purged");
     if (getCatalogUsage(db, id).length > 0) throw new CatalogLifecycleError("has_active_projects", "Active projects reference this system");
@@ -135,6 +157,7 @@ export async function reconcileCatalogState(db: Database, root: string): Promise
       if (receipt.operation === "duplicate" || receipt.operation === "derive") {
         if (row === null || receipt.destinationPath === null || !(await exists(receipt.destinationPath))) throw new MissingCatalogState();
         await validateReceiptTree(receipt.destinationPath, receipt, receipt.designSystemId);
+        await validatePaletteReceipt(db, receipt.destinationPath, receipt);
         commitCatalogOperation(db, receipt.id, "active", Date.now());
       } else if (receipt.operation === "trash" || receipt.operation === "restore") {
         if (row === null) throw new MissingCatalogState();
@@ -176,21 +199,17 @@ export async function reconcileCatalogState(db: Database, root: string): Promise
 }
 
 function operationInput(systemId: string, operation: Exclude<CatalogReceiptRow["operation"], "content">, receipt: CatalogReceiptRow, parent: CatalogRow, sourcePath: string, destinationPath: string, reason: string | null, metadata: Readonly<Record<string, string>>, now: number) {
-  return { systemId, operation, digest: receipt.digest, manifestJson: receipt.manifestJson, provenanceJson: receipt.provenanceJson, parentSystemId: parent.id, parentReceiptId: receipt.operation === "content" ? receipt.id : receipt.parentReceiptId, parentDigest: receipt.digest, reason, metadata, sourcePath, destinationPath, now };
+  return { systemId, operation, digest: receipt.digest, manifestJson: receipt.manifestJson, provenanceJson: receipt.provenanceJson, parentSystemId: parent.id, parentReceiptId: operation === "duplicate" || operation === "derive" || receipt.operation === "content" ? receipt.id : receipt.parentReceiptId, parentDigest: receipt.digest, reason, metadata, sourcePath, destinationPath, now };
 }
 
 async function contentIdentity(db: Database, treePath: string, id: string): Promise<{ readonly receipt: CatalogReceiptRow }> {
-  const receipt = getContentReceipt(db, id) ?? getLatestLineageReceipt(db, id);
+  const receipt = getCurrentSystemContent(db, id);
   if (receipt !== null) {
     if (receipt.status !== "committed") throw new CatalogFileError("catalog_digest_mismatch", "Catalog content receipt is not committed");
     await validateReceiptTree(treePath, receipt, id);
     return { receipt };
   }
   throw new CatalogFileError("catalog_manifest_unverifiable", `Catalog ${id} has no trusted tree manifest`);
-}
-
-function getLatestLineageReceipt(db: Database, id: string): CatalogReceiptRow | null {
-  return getLatestCatalogOperation(db, id, "derive") ?? getLatestCatalogOperation(db, id, "duplicate");
 }
 
 async function validateReceiptTree(target: string, receipt: CatalogReceiptRow, expectedSystemId: string): Promise<void> {
@@ -215,23 +234,33 @@ function requiredRow(db: Database, id: string): CatalogRow {
   return row;
 }
 
-async function catalogLock<T>(root: string, id: string, operation: () => Promise<T>): Promise<T> {
-  const lockRoot = resolveWithin(root, ".catalog-locks");
-  await mkdir(lockRoot, { recursive: true });
-  const lock = resolveWithin(lockRoot, assertSafeName(id));
-  try { await mkdir(lock); }
+async function catalogLock<T>(db: Database, root: string, id: string, operation: () => Promise<T>, events: CatalogAccessEvents = {}): Promise<T> {
+  const pending = withSystemContentLocks(root, [id], async () => {
+    if (getPendingSystemOperation(db, id) !== null) throw new CatalogRepositoryError("operation_conflict", id);
+    return operation();
+  });
+  events.onAccessQueued?.();
+  try { return await pending; }
   catch (error) {
-    if (error instanceof Error && "code" in error && error.code === "EEXIST") throw new CatalogLifecycleError("catalog_operation_conflict", "Catalog operation is already active");
+    if (error instanceof SystemContentError && error.code === "system_content_unavailable") throw new CatalogRepositoryError("operation_conflict", id);
     throw error;
   }
-  try { return await operation(); }
-  finally { await rm(lock, { recursive: true, force: true }); }
 }
 
 async function cleanupCatalogControls(root: string): Promise<void> {
   const entries = await readdir(root, { withFileTypes: true });
   if (entries.some((entry) => entry.isDirectory() && /^\..+\.catalog-staging-/.test(entry.name))) return;
-  await rm(resolveWithin(root, ".catalog-locks"), { recursive: true, force: true });
+  const lockRoot = await safeContentChild(root, ".catalog-locks");
+  if (await pathStat(lockRoot) === null) return;
+  // Occupied locks, including incomplete/unknown owners, need startup classification rather than blanket deletion.
+  if ((await readdir(lockRoot)).length === 0) await rm(lockRoot, { recursive: true });
+}
+
+async function validatePaletteReceipt(db: Database, root: string, receipt: CatalogReceiptRow): Promise<void> {
+  try {
+    const proof = validatePaletteTransferReceipt(db, receipt);
+    if (proof !== null) await validatePaletteTransferAtRoot(root, proof);
+  } catch { throw new CatalogFileError("catalog_digest_mismatch", "Palette transfer does not match its receipt"); }
 }
 
 function translate(error: unknown): CatalogLifecycleError {

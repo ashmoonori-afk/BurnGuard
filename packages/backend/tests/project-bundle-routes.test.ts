@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { afterAll, beforeAll, expect, spyOn, test } from "bun:test";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import { createProjectRecord } from "../src/db/seed";
 import { runMigrations } from "../src/db/migrate-local";
@@ -6,6 +6,7 @@ import { getSqlite } from "../src/db/sqlite-client";
 import { getProjectDetail } from "../src/db/project-read-repository";
 import { createApp } from "../src/server";
 import { closeProjectWatcher } from "../src/services/watcher-registry";
+import * as localFonts from "../src/services/local-fonts";
 
 const capability = "bundle-route-capability";
 const authority = "127.0.0.1:14070";
@@ -66,6 +67,44 @@ test("Given launch authority When a project bundle is downloaded and uploaded Th
   expect(body.data?.warnings).toEqual([]);
   const restored = body.data ? await getProjectDetail(body.data.id) : null;
   expect(restored ? await readFile(restored.dir_path + "/index.html", "utf8") : null).toContain("route portable");
+});
+
+test.each([
+  ["no external fonts", null, 0],
+  ["an external font", "Missing Route Font QA", 1],
+] as const)("Given a bundle with %s When imported Then only requested font families require OS enumeration", async (_label, family, calls) => {
+  // Given
+  const source = await createProjectRecord({
+    name: "Font lookup boundary", type: "prototype", designSystemId: null,
+    backendId: "codex", optionsJson: null, entrypoint: "index.html", thumbnailPath: null,
+    initializeArtifact: async stage => {
+      await writeFile(`${stage}/index.html`, family === null ? "<h1>No font request</h1>" : `<style>body{font-family:"${family}"}</style><h1>Font request</h1>`);
+    },
+  });
+  created.push(source.id);
+  const app = createApp({ capability, appAuthority: authority });
+  const exported = await app.request(new Request(`http://${authority}/api/projects/${source.id}/bundle`, {
+    headers: { host: authority, "x-burnguard-capability": capability },
+  }));
+  expect(exported.status).toBe(200);
+  const form = new FormData();
+  form.set("source", "bundle");
+  form.set("files", new File([await exported.arrayBuffer()], "font-boundary.burnguard-project"));
+  const enumerate = spyOn(localFonts, "getLocalFonts").mockResolvedValue({ schema_version: 1, families: [] });
+  try {
+    // When
+    const imported = await app.request(new Request(`http://${authority}/api/projects/import`, {
+      method: "POST",
+      headers: { host: authority, origin: `http://${authority}`, "x-burnguard-capability": capability },
+      body: form,
+    }));
+    const body = await imported.json() as { data?: { id: string; warnings: unknown[] } };
+    if (body.data) created.push(body.data.id);
+    // Then
+    expect(imported.status).toBe(201);
+    expect(body.data?.warnings).toEqual(family === null ? [] : [{ code: "missing_font", reference: family }]);
+    expect(enumerate).toHaveBeenCalledTimes(calls);
+  } finally { enumerate.mockRestore(); }
 });
 
 test("Given no launch authority When bundle routes are requested Then the shared gate denies export and import", async () => {

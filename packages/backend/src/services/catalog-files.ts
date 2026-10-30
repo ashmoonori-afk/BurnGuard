@@ -1,12 +1,14 @@
 import { randomUUID } from "node:crypto";
-import { cp, mkdir, rename, rm, stat } from "node:fs/promises";
+import { lstat, mkdir, rename, rm } from "node:fs/promises";
 import path from "node:path";
 import { resolveManagedPath } from "../lib/paths";
 import { PathBoundaryError, assertSafeName, resolveWithin } from "../security/path-boundary";
 import {
-  CanonicalTreeManifestError, inspectCanonicalTree, parseCanonicalTreeManifest, validateCanonicalTree,
+  CanonicalTreeManifestError, parseCanonicalTreeManifest, validateCanonicalTree,
 } from "./canonical-tree-manifest";
 import { ExtractionSidecarError, readValidatedExtractionSidecar } from "./extraction-sidecar";
+import { parseContentProvenance, SystemContentError } from "./system-content-format";
+import { cloneContentTree, inspectContentTree, safeContentChild } from "./system-content-tree";
 
 export type CatalogFileIdentity = {
   readonly files: readonly string[];
@@ -29,7 +31,7 @@ export class CatalogFileError extends Error {
 export async function catalogPaths(root: string, id: string, dbPath: string): Promise<CatalogPaths> {
   await mkdir(root, { recursive: true });
   const safeId = assertSafeName(id);
-  const trashRoot = resolveWithin(root, ".catalog-trash");
+  const trashRoot = await safeContentChild(root, ".catalog-trash");
   await mkdir(trashRoot, { recursive: true });
   let live: string;
   try { live = resolveManagedPath(root, dbPath); }
@@ -39,12 +41,13 @@ export async function catalogPaths(root: string, id: string, dbPath: string): Pr
   }
   const canonical = resolveWithin(root, safeId);
   if (live !== canonical) throw new CatalogFileError("unsafe_catalog_path", "Design system path is not canonical");
-  return { live, trash: resolveWithin(trashRoot, safeId) };
+  await safeContentChild(root, safeId);
+  return { live, trash: await safeContentChild(trashRoot, safeId) };
 }
 
 export async function inspectCatalogTree(root: string): Promise<CatalogFileIdentity> {
   try {
-    const manifest = await inspectCanonicalTree(root);
+    const manifest = (await inspectContentTree(root)).manifest;
     const files = manifest.files.map((entry) => entry.path);
     const preview = ["README.md", "index.html", "preview.html", "SKILL.md", "colors_and_type.css"].find((candidate) => files.includes(candidate)) ?? null;
     return { files, digest: manifest.tree_digest, preview };
@@ -53,11 +56,13 @@ export async function inspectCatalogTree(root: string): Promise<CatalogFileIdent
       throw new CatalogFileError("unsafe_catalog_path", error.message);
     }
     if (error instanceof CanonicalTreeManifestError && error.code === "tree_missing") throw new CatalogFileError("catalog_bytes_missing", error.message);
+    if (error instanceof Error && "code" in error && (error.code === "ENOENT" || error.code === "ENOTDIR")) throw new CatalogFileError("catalog_bytes_missing", "Catalog bytes are missing");
     throw error;
   }
 }
 
 export async function validateCatalogReceiptTree(target: string, receipt: {
+  readonly schemaVersion: number;
   readonly digest: string;
   readonly manifestJson: string;
   readonly provenanceJson: string;
@@ -72,13 +77,19 @@ export async function validateCatalogReceiptTree(target: string, receipt: {
     if (receipt.operation !== "content" && receipt.parentDigest !== receipt.digest) throw new CatalogFileError("catalog_digest_mismatch", "Catalog parent digest is stale");
     await validateCanonicalTree(target, manifest);
     const tree = await inspectCatalogTree(target);
+    if (receipt.schemaVersion === 2) {
+      parseContentProvenance(JSON.parse(receipt.provenanceJson));
+      if (receipt.digest !== manifest.tree_digest) throw new CatalogFileError("catalog_digest_mismatch", "Catalog content digest is stale");
+      return { ...tree, digest: manifest.tree_digest };
+    }
+    if (receipt.schemaVersion !== 1) throw new CatalogFileError("catalog_manifest_unverifiable", "Unknown catalog receipt format");
     const sidecar = await readValidatedExtractionSidecar(target);
     if (sidecar.content_digest !== receipt.digest) throw new CatalogFileError("catalog_digest_mismatch", "Catalog receipt provenance digest is stale");
     return { ...tree, digest: sidecar.content_digest };
   } catch (error) {
     if (error instanceof CatalogFileError) throw error;
     if (error instanceof CanonicalTreeManifestError && error.code === "manifest_unverifiable") throw new CatalogFileError("catalog_manifest_unverifiable", error.message);
-    if (error instanceof CanonicalTreeManifestError || error instanceof ExtractionSidecarError || error instanceof SyntaxError) throw new CatalogFileError("catalog_digest_mismatch", "Catalog receipt or canonical bytes are corrupt");
+    if (error instanceof CanonicalTreeManifestError || error instanceof ExtractionSidecarError || error instanceof SystemContentError || error instanceof SyntaxError) throw new CatalogFileError("catalog_digest_mismatch", "Catalog receipt or canonical bytes are corrupt");
     throw error;
   }
 }
@@ -86,10 +97,9 @@ export async function validateCatalogReceiptTree(target: string, receipt: {
 export async function copyCatalogTree(root: string, childId: string, source: string): Promise<{ readonly staging: string; readonly destination: string }> {
   const destination = resolveWithin(root, assertSafeName(childId));
   if (await exists(destination)) throw new CatalogFileError("catalog_destination_occupied", "Catalog destination is occupied");
-  await inspectCatalogTree(source);
+  const tree = await inspectContentTree(source);
   const staging = resolveWithin(root, `.${childId}.catalog-staging-${randomUUID()}`);
-  await cp(source, staging, { recursive: true, errorOnExist: true, force: false });
-  await inspectCatalogTree(staging);
+  await cloneContentTree(source, staging, tree);
   return { staging, destination };
 }
 
@@ -109,7 +119,11 @@ export async function removeCatalogTree(target: string): Promise<void> {
 }
 
 export async function exists(target: string): Promise<boolean> {
-  return (await stat(target).catch(() => null)) !== null;
+  try { await lstat(target); return true; }
+  catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") return false;
+    throw error;
+  }
 }
 
 function parseRecord(raw: string): Readonly<Record<string, unknown>> {

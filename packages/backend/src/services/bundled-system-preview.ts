@@ -1,12 +1,13 @@
 import path from "node:path";
 import { bundledDesignSystemId, bundledDesignSystems } from "../data/bundled-design-systems";
-import { bundledFontStylesheet } from "../data/bundled-fonts";
 import { resolveRepoRoot } from "../lib/paths";
 import { readManagedFile } from "./artifact-tree-storage";
 import { inspectCanonicalTree } from "./canonical-tree-manifest";
 import { readDesignSystemSourceFile } from "./design-system-layout";
 import { renderDeckReferencePreview } from "./deck-reference-preview";
 import { deckReferenceFor } from "../data/deck-references";
+import { SystemContentError } from "./system-content-format";
+import { readPreservedFile } from "./system-content-tree";
 
 export const BUNDLED_WEBSITE_PREVIEW = "preview/website.html";
 export const BUNDLED_SLIDES_PREVIEW = "preview/slides.html";
@@ -28,6 +29,26 @@ function bundledManifest(repoRoot: string) {
     void pending.catch(() => manifests.delete(root));
   }
   return { root, pending };
+}
+
+async function previewFontStylesheet(repoRoot: string): Promise<Buffer<ArrayBuffer> | null> {
+  const root = path.join(repoRoot, "assets/fonts");
+  let pending = manifests.get(root);
+  if (pending === undefined) {
+    pending = inspectCanonicalTree(root);
+    manifests.set(root, pending);
+    void pending.catch(() => manifests.delete(root));
+  }
+  const manifest = await pending;
+  const stylesheet = manifest.files.find(entry => entry.path === "fonts.css");
+  if (stylesheet === undefined) return null;
+  if (stylesheet.size > 256 * 1024) throw new SystemContentError("system_content_corrupt");
+  const css = (await readPreservedFile(root, "fonts.css", ["file", "fonts.css", stylesheet.size, stylesheet.sha256], 256 * 1024)).toString("utf8");
+  const fonts = new Map(manifest.files.map(entry => [entry.path, entry]));
+  return Buffer.from(css.replace(/url\('\.\/([^']+)'\)/g, (source, name: string) => {
+    const font = fonts.get(name);
+    return font !== undefined && name.endsWith(".woff2") ? `url('/runtime/fonts/${font.sha256}/${name}')` : source;
+  }));
 }
 
 export async function hasBundledSystemPreview(id: string, repoRoot = resolveRepoRoot()): Promise<boolean> {
@@ -54,7 +75,7 @@ export async function readBundledSystemPreview(id: string, relative: string, rep
     : relative === "preview/slides-thumbnail.webp" ? `thumbnails/slides-${theme.slug}.webp`
     : relative === BUNDLED_WEBSITE_THUMBNAIL ? `thumbnails/${theme.slug}.webp`
     : relative === `preview/media/${theme.slug}.webp` ? `media/${theme.slug}.webp` : null;
-  if (file === null) return relative === "preview/fonts.css" ? Buffer.from(await bundledFontStylesheet(repoRoot)) : null;
+  if (file === null) return relative === "preview/fonts.css" ? previewFontStylesheet(repoRoot) : null;
   const { root, pending } = bundledManifest(repoRoot);
   const entry = (await pending).files.find(entry => entry.path === file);
   if (!entry) return null;

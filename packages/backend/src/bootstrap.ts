@@ -36,9 +36,14 @@ import { reconcileExportState } from "./services/export-recovery";
 import { createProductionResearchRecoveryDependencies } from "./routes/research";
 import { reconcileResearchState, type ResearchRecoveryDependencies } from "./services/research-recovery";
 import { recoverVisualAlternatives } from "./services/visual-alternative-recovery";
-import { bundledThemeHistory, installedThemeState, recoverBundledTheme, refreshBundledTheme, type BundledThemeHistory, type BundledThemeRefresh } from "./services/bundled-theme-refresh";
+import { bundledAdditionValidator, bundledThemeHistory, recoverBundledTheme, refreshBundledTheme, type BundledThemeHistory, type BundledThemeRefresh } from "./services/bundled-theme-refresh";
 import { reapPersistedSessionProcesses } from "./services/session-process-recovery";
 import { repairNorthvalePreviews } from "./services/northvale-preview-repair";
+import { canCreateSeedSystem, preserveSystemFromSeed } from "./services/startup-system-seed-guard";
+import { reconcileSystemContentLocks } from "./services/system-content-access";
+import { recoverSystemContent } from "./services/system-content-publication";
+import { paletteContentEnvironment } from "./services/design-system-palette";
+import { authoringContentValidators } from "./services/design-system-authoring";
 
 async function exists(target: string): Promise<boolean> {
   try {
@@ -75,6 +80,7 @@ export async function seedBundledDesignSystems(
   destinationRoot = systemsDir,
   themeHistory: BundledThemeHistory = bundledThemeHistory,
   refresh: BundledThemeRefresh = refreshBundledTheme,
+  pass: "all" | "create-missing" | "refresh-existing" = "all",
 ): Promise<void> {
   const themesSource = path.join(repoRoot, "design system themes");
   await Promise.all(
@@ -84,13 +90,13 @@ export async function seedBundledDesignSystems(
         bundledDesignSystemId(slug),
       );
       try {
-        await recoverBundledTheme(destination);
+        const id = bundledDesignSystemId(slug);
+        // Legacy leftovers predate receipts. Never restore them over journal-owned storage.
+        if (!(await preserveSystemFromSeed(id, destinationRoot))) await recoverBundledTheme(destination);
         if (await exists(destination)) {
-          // An untouched copy from an older release takes the installed bundle; edited copies stay as they are.
+          // Refresh only app-owned additions; legacy bytes must survive until old projects pin them.
           const source = path.join(themesSource, slug);
-          if (await installedThemeState(destination, source, slug, themeHistory) === "outdated") {
-            await refresh(bundledDesignSystemId(slug), source, destination, (stage) => copyBundledFonts(stage, repoRoot));
-          }
+          if (pass !== "create-missing") await refresh(id, source, destination, themeHistory);
           return;
         }
       } catch (error) {
@@ -98,6 +104,7 @@ export async function seedBundledDesignSystems(
         console.warn("[seed] bundled theme upgrade skipped", slug, error instanceof Error && "code" in error ? String(error.code) : "unknown");
         return;
       }
+      if (pass === "refresh-existing" || !(await canCreateSeedSystem(bundledDesignSystemId(slug), destinationRoot))) return;
       // Publish only a complete theme; startup extraction recovery removes a stage left by a killed first launch.
       const stage = path.join(destinationRoot, `.${bundledDesignSystemId(slug)}.staging-${randomUUID()}`);
       try {
@@ -118,7 +125,7 @@ export async function seedSampleDesignSystems(
   const sampleSource = path.join(repoRoot, "design system sample");
   const sampleDestination = path.join(destinationRoot, "northvale-capital");
 
-  if (!(await exists(sampleDestination))) {
+  if (await canCreateSeedSystem("northvale-capital", destinationRoot)) {
     const stage = path.join(destinationRoot, `.northvale-capital.staging-${randomUUID()}`);
     try {
       await cp(sampleSource, stage, {
@@ -131,7 +138,7 @@ export async function seedSampleDesignSystems(
     }
   }
 
-  await seedBundledDesignSystems(repoRoot, destinationRoot);
+  await seedBundledDesignSystems(repoRoot, destinationRoot, bundledThemeHistory, refreshBundledTheme, "create-missing");
 }
 
 export async function reconcileResearchOnStartup(db: Database, researchRecovery = createProductionResearchRecoveryDependencies(db)): Promise<void> {
@@ -153,20 +160,38 @@ export async function bootstrapLocalAppData(researchRecovery?: ResearchRecoveryD
     mkdir(logsDir, { recursive: true }),
   ]);
   await ensureConfig();
-  await seedSampleDesignSystems();
   await runMigrations();
+  await reconcileProjectBundleImports(getSqlite());
   await reapPersistedSessionProcesses(getSqlite());
   await reconcileProjectDeletions(getSqlite());
   await purgeExpiredProjectDeletions(getSqlite());
-  await reconcileProjectBundleImports(getSqlite());
   await reconcileResearchOnStartup(getSqlite(), researchRecovery);
+  reconcilePipelineRows(getDb());
+  await reconcileSystemContentLocks(getSqlite(), systemsDir);
+  const contentEnvironment = paletteContentEnvironment();
+  await recoverSystemContent({
+    ...contentEnvironment,
+    validators: { ...contentEnvironment.validators, ...authoringContentValidators, "bundled-addition": bundledAdditionValidator() },
+  });
+  for (const { slug } of bundledDesignSystems) {
+    const id = bundledDesignSystemId(slug);
+    if (await preserveSystemFromSeed(id)) continue;
+    try { await recoverBundledTheme(path.join(systemsDir, id)); }
+    catch (error) {
+      if (!(error instanceof Error)) throw error;
+      console.warn("[seed] bundled theme recovery deferred", slug, "code" in error ? String(error.code) : "unknown");
+    }
+  }
+  await reconcileCatalogState(getSqlite(), systemsDir);
+  await reconcileExtractionState();
+  // Legacy create owners can be released only after their v1 recovery has settled.
+  await reconcileSystemContentLocks(getSqlite(), systemsDir);
+  await seedSampleDesignSystems();
   await seedCoreData();
   await seedTutorialsOnce();
   await seedOriginalSamplesOnce();
   seedLearningItems(getSqlite());
-  reconcilePipelineRows(getDb());
-  await reconcileCatalogState(getSqlite(), systemsDir);
-  await reconcileExtractionState();
+  await seedBundledDesignSystems(resolveRepoRoot(), systemsDir, bundledThemeHistory, refreshBundledTheme, "refresh-existing");
   const northvaleRepair = await repairNorthvalePreviews(getSqlite(), {
     systemsRoot: systemsDir,
     sourceRoot: path.join(resolveRepoRoot(), "design system sample"),

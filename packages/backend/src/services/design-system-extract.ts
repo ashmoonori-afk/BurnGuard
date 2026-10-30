@@ -1,4 +1,4 @@
-import { readDesignSystemLayout } from "./design-system-layout";
+import { readDesignSystemLayout, type LayoutSystem } from "./design-system-layout";
 import { readDesignSystemAssetGuide } from "./design-system-assets";
 import { buildAssetGuideReadme, paletteTone, toHexColor } from "./extraction-assets";
 import { collectSourceEvidence, withoutFunctions, type SourceEvidence } from "./extraction-evidence";
@@ -20,7 +20,14 @@ import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { isValidFontData } from "./font-validation";
-import { readManagedCssForEdit, writeTextFileAtomically } from "./atomic-text-file";
+import { readManagedCssForEdit } from "./atomic-text-file";
+import { authoringContentEnvironment, authoringTokenPath, publishAuthoringFiles, withEditableSystemContent, type AuthoringEnvironment } from "./design-system-authoring";
+import { contentObservationDigest, observeSystemContent, type ContentEnvironment } from "./system-content-publication";
+import { withSystemContentAccess, type SystemContentLease } from "./system-content-access";
+import { getSqlite } from "../db/sqlite-client";
+import { readPreservedFile, safeContentChild } from "./system-content-tree";
+import { SystemContentError } from "./system-content-format";
+import { withCatalogSnapshot, type CatalogAccessEvents } from "./catalog-snapshot";
 import { parse } from "node-html-parser";
 import {
   APP_VERSION,
@@ -374,6 +381,7 @@ type CanonicalExtractionInput = {
   readonly lineage: NonNullable<CreateDesignSystemExtractionRequest["lineage"]> | null;
   readonly analysis: SourceAnalysis;
   readonly signal: AbortSignal;
+  readonly atBoundary?: (name: "receipt-prepared" | "candidate-published" | "receipt-committed", systemId: string) => Promise<void>;
 };
 
 type CanonicalWriteResult = {
@@ -385,7 +393,7 @@ export async function persistCanonicalExtraction(
   input: CanonicalExtractionInput,
 ): Promise<CreateDesignSystemExtractionResponse> {
   throwIfAcquisitionAborted(input.signal);
-  const reservation = await reserveAvailableSystemId(input.requestedId);
+  return withAvailableSystemId(input.requestedId, async reservation => {
   const analysis = stabilizeSourceAnalysis(input.analysis);
   let rowCreated = false;
   try {
@@ -428,8 +436,10 @@ export async function persistCanonicalExtraction(
       provenance: written.provenance,
       createdAt: Date.now(),
     });
+    await input.atBoundary?.("receipt-prepared", reservation.id);
     throwIfAcquisitionAborted(input.signal);
     await publishExtractionBundle(reservation, input.signal, validation.manifest);
+    await input.atBoundary?.("candidate-published", reservation.id);
     if (
       process.env.BG_EXTRACTION_FAULT === "after_publish" ||
       process.env.BG_EXTRACTION_FAULT_AFTER_PUBLISH_ID === reservation.id
@@ -437,6 +447,7 @@ export async function persistCanonicalExtraction(
       throw new DesignSystemExtractError("publication_failed", "Injected extraction publication fault");
     }
     commitDesignSystemReceipt(getDb(), { id: receiptId, digest: written.provenance.content_digest, updatedAt: Date.now() });
+    await input.atBoundary?.("receipt-committed", reservation.id);
     await completeExtractionPublication(reservation);
     return {
       system: {
@@ -470,6 +481,7 @@ export async function persistCanonicalExtraction(
     }
     throw error;
   }
+  });
 }
 
 function stabilizeSourceAnalysis(analysis: SourceAnalysis): SourceAnalysis {
@@ -504,37 +516,39 @@ function stabilizeSourceAnalysis(analysis: SourceAnalysis): SourceAnalysis {
   };
 }
 
-async function reserveAvailableSystemId(baseSlug: string): Promise<ExtractionReservation> {
+async function withAvailableSystemId<T>(baseSlug: string, run: (reservation: ExtractionReservation) => Promise<T>): Promise<T> {
+  await mkdir(systemsDir, { recursive: true });
   const safeBase = slugify(baseSlug || "design-system");
   for (let ordinal = 1; ordinal < 10_000; ordinal += 1) {
     const candidate = ordinal === 1 ? safeBase : `${safeBase}-${ordinal}`;
     if (await getDesignSystemDetail(candidate)) continue;
-    try {
-      return await reserveExtractionBundle(systemsDir, candidate);
-    } catch (error) {
-      if (error instanceof ExtractionPublicationError && error.code === "system_id_conflict") continue;
-      throw error;
-    }
+    const result = await withSystemContentAccess(getSqlite(), systemsDir, [candidate], async () => {
+      // Recheck after acquisition: another creator may have committed while this request queued.
+      if (await getDesignSystemDetail(candidate)) return null;
+      let reservation: ExtractionReservation;
+      try { reservation = await reserveExtractionBundle(systemsDir, candidate); }
+      catch (error) {
+        if (error instanceof ExtractionPublicationError && error.code === "system_id_conflict") return null;
+        throw error;
+      }
+      return { value: await run(reservation) };
+    });
+    if (result !== null) return result.value;
   }
   throw new DesignSystemExtractError("system_id_conflict", "Could not allocate a unique design system id");
 }
 
-export async function readDesignSystemTokens(systemId: string) {
-  const detail = await getDesignSystemDetail(systemId);
-  if (!detail) {
-    throw new DesignSystemAssetEditError(
-      "design_system_not_found",
-      "Design system not found",
-    );
-  }
+export async function readDesignSystemTokens(systemId: string, env: ContentEnvironment = authoringContentEnvironment(), events: CatalogAccessEvents = {}) {
+  return withCatalogSnapshot(env.db, env.systemsRoot, systemId,
+    lease => readDesignSystemTokensWithLease(systemId, env, lease), events);
+}
+
+async function tokensForSystem(detail: LayoutSystem, tokenPath: string | null, css: string | null) {
   const [layout, assets, pages, rules] = await Promise.all([readDesignSystemLayout(detail), readDesignSystemAssetGuide(detail), readDesignSystemPageCoverage(detail), readDesignSystemRules(detail)]);
   const extras = { layout, assets, rules, ...(pages ? { pages } : {}) };
-  if (!detail.tokens_css_path) {
+  if (tokenPath === null) {
     return { ...extras, colors: [], token_file_path: null };
   }
-
-  const tokenPath = resolveDesignSystemRecordPath(systemId, detail.dir_path, detail.tokens_css_path);
-  const css = await readFile(tokenPath, "utf8").catch(() => null);
   if (css === null) {
     return { ...extras, colors: [], token_file_path: tokenPath };
   }
@@ -546,45 +560,47 @@ export async function readDesignSystemTokens(systemId: string) {
   return { ...extras, colors, token_file_path: tokenPath };
 }
 
+/** Caller-owned genuine lease, including the response's constituent reads; never reacquires it. */
+export async function readDesignSystemTokensWithLease(systemId: string, env: ContentEnvironment, lease: SystemContentLease) {
+  const base = await observeSystemContent(env, systemId, lease);
+  if (base.row === null) throw new DesignSystemAssetEditError("design_system_not_found", "Design system not found");
+  const token = base.recordPaths[2];
+  const readme = base.recordPaths[3];
+  const tokenPath = token == null ? null : await safeContentChild(base.live, ...token.split("/"));
+  const entry = base.tree?.inventory.find(item => item[1] === token && item[0] === "file");
+  const css = token == null || entry === undefined ? null : (await readPreservedFile(base.live, token, entry)).toString("utf8");
+  const result = await tokensForSystem({
+    id: systemId, dir_path: base.live, tokens_css_path: tokenPath,
+    readme_md_path: readme == null ? null : await safeContentChild(base.live, ...readme.split("/")),
+  }, tokenPath, css);
+  if (contentObservationDigest(await observeSystemContent(env, systemId, lease)) !== contentObservationDigest(base)) throw new SystemContentError("system_content_conflict");
+  return result;
+}
+
+/** Pure staged transform shared with logo authoring, without public saves or nested leases. */
+export function transformDesignSystemColorTokens(css: string, inputs: readonly { readonly name: string; readonly value: string }[]): string {
+  for (const input of inputs) {
+    const tokenName = normalizeCssTokenName(input.name);
+    if (!tokenName) throw new DesignSystemAssetEditError("invalid_color_token", "Color token name must contain letters, numbers, dashes, or underscores");
+    const colorValue = input.value.trim();
+    if (!isColorTokenValue(colorValue)) throw new DesignSystemAssetEditError("invalid_color_value", "Color value must be a safe CSS color value");
+    css = upsertCssCustomProperty(css, tokenName, colorValue);
+  }
+  return css;
+}
+
 export async function upsertDesignSystemColorToken(
   systemId: string,
   input: { name: string; value: string },
+  env: AuthoringEnvironment = authoringContentEnvironment(),
 ) {
-  const detail = await getDesignSystemDetail(systemId);
-  if (!detail) {
-    throw new DesignSystemAssetEditError(
-      "design_system_not_found",
-      "Design system not found",
-    );
-  }
-  if (!detail.tokens_css_path) {
-    throw new DesignSystemAssetEditError(
-      "tokens_file_missing",
-      "Design system does not have a colors_and_type.css token file",
-    );
-  }
-
-  const tokenName = normalizeCssTokenName(input.name);
-  if (!tokenName) {
-    throw new DesignSystemAssetEditError(
-      "invalid_color_token",
-      "Color token name must contain letters, numbers, dashes, or underscores",
-    );
-  }
-
-  const colorValue = input.value.trim();
-  if (!isColorTokenValue(colorValue)) {
-    throw new DesignSystemAssetEditError(
-      "invalid_color_value",
-      "Color value must be a safe CSS color value",
-    );
-  }
-
-  const tokenPath = resolveDesignSystemRecordPath(systemId, detail.dir_path, detail.tokens_css_path);
-  const existingCss = await readManagedCssForEdit(tokenPath);
-  const nextCss = upsertCssCustomProperty(existingCss, tokenName, colorValue);
-  await writeTextFileAtomically(tokenPath, nextCss);
-  return await readDesignSystemTokens(systemId);
+  return withEditableSystemContent(env, systemId, async (base, lease) => {
+    const token = authoringTokenPath(base);
+    const existingCss = await readManagedCssForEdit(await safeContentChild(base.live, ...token.split("/")));
+    const nextCss = transformDesignSystemColorTokens(existingCss, [input]);
+    await publishAuthoringFiles(env, base, lease, "token", [{ path: token, bytes: nextCss }]);
+    return readDesignSystemTokensWithLease(systemId, env, lease);
+  });
 }
 
 export async function uploadDesignSystemFont(input: {
@@ -592,15 +608,7 @@ export async function uploadDesignSystemFont(input: {
   file: File;
   family?: string;
   role?: "display" | "sans" | "serif" | "mono" | null;
-}) {
-  const detail = await getDesignSystemDetail(input.systemId);
-  if (!detail) {
-    throw new DesignSystemAssetEditError(
-      "design_system_not_found",
-      "Design system not found",
-    );
-  }
-
+}, env: AuthoringEnvironment = authoringContentEnvironment()) {
   const originalName = input.file.name?.trim();
   if (!originalName) {
     throw new DesignSystemAssetEditError(
@@ -622,59 +630,46 @@ export async function uploadDesignSystemFont(input: {
     );
   }
   const fontBytes = new Uint8Array(await input.file.arrayBuffer());
-  if (!(await isValidFontData(fontBytes))) {
+  if (fontBytes.byteLength !== input.file.size || fontBytes.byteLength > MAX_FONT_UPLOAD_BYTES || !(await isValidFontData(fontBytes))) {
     throw new DesignSystemAssetEditError(
       "invalid_font_upload",
       "Uploaded file is not a valid font",
     );
   }
 
-  const managedSystemDir = resolveDesignSystemRecordPath(input.systemId, detail.dir_path, detail.dir_path);
-  const fontsDir = resolveWithin(managedSystemDir, "fonts");
-  await mkdir(fontsDir, { recursive: true });
   const fileName = safeFileName(originalName);
-  const fontPath = path.join(fontsDir, fileName);
   const family = normalizeFontFamily(input.family) || humanizeSlug(path.basename(fileName, ext));
   const role = input.role ?? null;
 
-  // Read every CSS file this upload will rewrite first, so an unreadable one fails before anything is installed.
-  const tokenPath = role && detail.tokens_css_path
-    ? resolveDesignSystemRecordPath(input.systemId, detail.dir_path, detail.tokens_css_path)
-    : null;
-  const existingCss = tokenPath ? await readManagedCssForEdit(tokenPath) : "";
-  await readManagedCssForEdit(path.join(fontsDir, "fonts.css"));
-
-  await writeFile(fontPath, fontBytes);
-  await appendFontFaceRule(path.join(fontsDir, "fonts.css"), family, fileName);
-
-  if (role && tokenPath) {
-    const fontsCss = await readManagedCssForEdit(path.join(fontsDir, "fonts.css"));
-    const tokens = await extractCssCustomProperties(existingCss);
-    const fallbackDefined = tokens.has(`font-${role}-fallback`) || (await extractCssCustomProperties(fontsCss)).has(`font-${role}-fallback`);
-    // `var(--font-<role>-fallback)` only resolves when a token or fonts.css defines it (extracted
-    // systems do); otherwise keep the current stack behind the new family so its fallbacks survive.
-    const existingStack = tokens.get(`font-${role}`);
-    const [leadingFamily, ...trailingFamilies] = existingStack?.split(",") ?? [];
-    const stack = leadingFamily !== undefined && leadingFamily.trim().replace(/^["']|["']$/gu, "") === family
-      ? trailingFamilies.join(",").trim()
-      : existingStack;
-    const fallback = fallbackDefined
-      ? `var(--font-${role}-fallback)`
-      : stack || `"Pretendard", ${role === "serif" ? "serif" : role === "mono" ? "monospace" : "sans-serif"}`;
-    const nextCss = upsertCssCustomProperty(
-      ensureTokensCssImportsFonts(existingCss),
-      `font-${role}`,
-      `${cssString(family)}, ${fallback}`,
-    );
-    await writeTextFileAtomically(tokenPath, nextCss);
-  }
-
-  return {
-    file_name: fileName,
-    family,
-    role,
-    rel_path: `fonts/${fileName}`,
-  };
+  return withEditableSystemContent(env, input.systemId, async (base, lease) => {
+    const token = role ? base.recordPaths[2] : null;
+    const tokenPath = token == null ? null : await safeContentChild(base.live, ...token.split("/"));
+    const existingCss = tokenPath ? await readManagedCssForEdit(tokenPath) : "";
+    const fontsCss = appendFontFaceCss(await readManagedCssForEdit(await safeContentChild(base.live, "fonts", "fonts.css")), family, fileName);
+    const files = [{ path: `fonts/${fileName}`, bytes: fontBytes }, { path: "fonts/fonts.css", bytes: fontsCss }];
+    if (role && token != null) {
+      const tokens = await extractCssCustomProperties(existingCss);
+      const fallbackDefined = tokens.has(`font-${role}-fallback`) || (await extractCssCustomProperties(fontsCss)).has(`font-${role}-fallback`);
+      // `var(--font-<role>-fallback)` only resolves when a token or fonts.css defines it (extracted
+      // systems do); otherwise keep the current stack behind the new family so its fallbacks survive.
+      const existingStack = tokens.get(`font-${role}`);
+      const [leadingFamily, ...trailingFamilies] = existingStack?.split(",") ?? [];
+      const stack = leadingFamily !== undefined && leadingFamily.trim().replace(/^["']|["']$/gu, "") === family
+        ? trailingFamilies.join(",").trim()
+        : existingStack;
+      const fallback = fallbackDefined
+        ? `var(--font-${role}-fallback)`
+        : stack || `"Pretendard", ${role === "serif" ? "serif" : role === "mono" ? "monospace" : "sans-serif"}`;
+      const nextCss = upsertCssCustomProperty(
+        ensureTokensCssImportsFonts(existingCss),
+        `font-${role}`,
+        `${cssString(family)}, ${fallback}`,
+      );
+      files.push({ path: token, bytes: nextCss });
+    }
+    await publishAuthoringFiles(env, base, lease, "font", files);
+    return { file_name: fileName, family, role, rel_path: `fonts/${fileName}` };
+  });
 }
 
 /**
@@ -2649,12 +2644,11 @@ function normalizeFontFamily(value: string | undefined): string | null {
   return normalized;
 }
 
-async function appendFontFaceRule(
-  fontsCssPath: string,
+function appendFontFaceCss(
+  existing: string,
   family: string,
   fileName: string,
-) {
-  const existing = await readManagedCssForEdit(fontsCssPath);
+): string {
   const safeFamily = family.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
   const safeUrl = fileName.replace(/\\/g, "/").replace(/'/g, "%27");
   // A single static face declares one weight; a 100 900 range would make the browser reuse these
@@ -2671,8 +2665,7 @@ async function appendFontFaceRule(
     existing.includes(`url('./${safeUrl}')`) || existing.includes(`url("${safeUrl}")`)
       ? existing
       : `${existing.trimEnd()}\n\n${rule}`.trimStart();
-  await mkdir(path.dirname(fontsCssPath), { recursive: true });
-  await writeTextFileAtomically(fontsCssPath, next.endsWith("\n") ? next : `${next}\n`);
+  return next.endsWith("\n") ? next : `${next}\n`;
 }
 
 function fontFormatForFile(fileName: string): string {

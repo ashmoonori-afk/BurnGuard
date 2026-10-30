@@ -66,6 +66,8 @@ jobs:
           packages/backend/tests/os-portability.test.ts
           packages/backend/tests/decomposed-file-names.test.ts
           packages/backend/tests/artifact-tree-durability.test.ts
+          packages/backend/tests/system-content-publication.test.ts
+          packages/backend/tests/design-system-palette.test.ts
           packages/backend/tests/design-system-wireframe.test.ts
           packages/backend/tests/design-system-visual-diff.test.ts
           packages/backend/tests/design-system-hero-assets.test.ts
@@ -141,9 +143,13 @@ jobs:
           packages/backend/tests/logo-deliverables.test.ts
           packages/backend/tests/prompt-logo-set.test.ts
           packages/backend/tests/pipeline-repositories.test.ts
+          packages/backend/tests/catalog.test.ts
+          packages/backend/tests/migration-pipeline-upgrade.test.ts
           packages/backend/tests/runtime-diagnostics.test.ts
           packages/frontend/tests/runtime-diagnostics.test.ts
           packages/shared/tests/runtime-diagnostics.test.ts
+          packages/shared/tests/color.test.ts
+          packages/shared/tests/palette.test.ts
           packages/backend/tests/session-routes.test.ts
           packages/backend/tests/turn-error-sanitizer.test.ts
           scripts/qa/har-mask.test.ts
@@ -173,6 +179,9 @@ jobs:
           scripts/qa/frontend-failure-evidence.test.ts
           scripts/qa/check-flake-patterns.test.ts
           scripts/qa/check-migration-order.test.ts
+          scripts/qa/theme-engine-fixtures.test.ts
+          scripts/qa/theme-engine-oracle.test.ts
+          scripts/qa/theme-engine-measure.test.ts
           scripts/whitespace-base.test.ts
           packages/backend/tests/mac-updates-version-order.test.ts
           packages/backend/tests/mac-updates.test.ts
@@ -238,6 +247,8 @@ jobs:
           packages/frontend/tests/design-system-pin.browser.test.ts
           packages/frontend/tests/northvale-previews.browser.test.ts
           packages/frontend/tests/workspace-controls.browser.test.ts
+          packages/backend/tests/palette-editor.browser.test.ts
+          packages/backend/tests/design-direction-content-access.test.ts
           packages/frontend/tests/app-font.browser.test.ts
       - name: Chromium popup and deck runtime
         env:

@@ -1,0 +1,99 @@
+{
+  "schema_version": 1,
+  "kind": "theme-engine-baseline-data",
+  "scope": "Fixed baseline inputs and captured export values, covered by the parent corpus manifest.",
+  "full_corpus_frozen": true,
+  "calibration": "calibration.json contains 12 requested/delivered comparisons and one separately marked gamut-switch observation. No missing quantity or expected mapping output has been inferred.",
+  "immutability": {
+    "policy": "Reuse these exact input files, IDs and values in every later round. Never regenerate from production engine outputs or randomness.",
+    "hash_algorithm": "sha256",
+    "hash_bytes": "Exact authored UTF-8 bytes with LF and trailing newline."
+  },
+  "counts": {
+    "registered_brands": 43,
+    "captured_reference_rows": 144,
+    "boundary_rgb_rows": 54,
+    "oracle_rows_per_gamut": 4096,
+    "oracle_rows_total": 8192
+  },
+  "files": [
+    {
+      "path": "brand-anchors.json",
+      "bytes": 25060,
+      "sha256": "152b27158f51627ceddb26e001965c376785d5e5c3f3ec4440032a0bbbe593e7"
+    },
+    {
+      "path": "legacy-inventory.json",
+      "bytes": 129252,
+      "sha256": "c08848023cfc7c8a152e7761cf1b3abd9e32f302ebeaaf93c28d89566eaaeb9c"
+    },
+    {
+      "path": "captured-reference.json",
+      "bytes": 39746,
+      "sha256": "1ae98b3322f9f9519ddf9ecc446b4ba49c1a12aea5de992c1c86326e405a9893"
+    },
+    {
+      "path": "boundary-colors.json",
+      "bytes": 9903,
+      "sha256": "16720b7d4365a16fd221715122236f00ad5e344b45830d81fcb5d76e42ec4f27"
+    },
+    {
+      "path": "oracle-srgb.json",
+      "bytes": 437884,
+      "sha256": "d514c2a4b860fa31fcc5388133ac3eabbf8cc6113a1789c84c3f620e59a4a753"
+    },
+    {
+      "path": "oracle-display-p3.json",
+      "bytes": 462466,
+      "sha256": "c42a61b74989cd1083a806ee7b649a3f23aafc47099095e5bdd2949cea9e3ef2"
+    }
+  ],
+  "reference_sources": [
+    {
+      "source_root": "reference-evidence",
+      "path": ".omo/evidence/bg-themes-1028/reference/default-srgb.json",
+      "bytes": 10677,
+      "sha256": "b106a45c54abf5f2e8011762d046a003223e7073dd340e9f810f847cf519b952"
+    },
+    {
+      "source_root": "reference-evidence",
+      "path": ".omo/evidence/bg-themes-1028/reference/default-p3.json",
+      "bytes": 10683,
+      "sha256": "d06e58a55de5557c1ba63bb5b179cb1904a11e2c63c81f4f617bc8b8ce21c961"
+    }
+  ],
+  "legacy_inventory": "legacy-inventory.json",
+  "brand_selection": "Use actual --primary-blue for all 43 registered systems, even when the role is not visually blue.",
+  "oracle_contract": {
+    "gamuts": [
+      "srgb",
+      "display-p3"
+    ],
+    "dimensions": [
+      16,
+      16,
+      16
+    ],
+    "channel_values": [
+      0,
+      0.06666666666666667,
+      0.13333333333333333,
+      0.2,
+      0.26666666666666666,
+      0.3333333333333333,
+      0.4,
+      0.4666666666666667,
+      0.5333333333333333,
+      0.6,
+      0.6666666666666666,
+      0.7333333333333333,
+      0.8,
+      0.8666666666666667,
+      0.9333333333333333,
+      1
+    ],
+    "channel_encoding": "Nonlinear native-gamut RGB, not linear-light RGB.",
+    "id_ownership": "Every row ID is globally unique across these fixtures; repeated RGB values across datasets are deliberate.",
+    "outputs": "Oracle inputs only; no expected conversion results."
+  }
+}

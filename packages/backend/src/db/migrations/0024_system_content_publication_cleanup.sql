@@ -1,0 +1,1 @@
+DROP INDEX uq_design_system_nonterminal_receipt;

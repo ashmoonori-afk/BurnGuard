@@ -1,4 +1,6 @@
 import type { Database } from "bun:sqlite";
+import type { PaletteTransferProof } from "@bg/shared/palette";
+import { insertPaletteTransfer, validatePaletteTransferReceipt } from "./palette-transfer-repository";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import type { CatalogKind, CatalogLicense, CatalogProvenance, DesignSystemSourceType, ProjectType } from "@bg/shared";
@@ -34,6 +36,7 @@ type OperationInput = {
   readonly parentSystemId: string | null; readonly parentReceiptId: string | null; readonly parentDigest: string | null;
   readonly reason: string | null; readonly metadata: Readonly<Record<string, string>>;
   readonly sourcePath: string; readonly destinationPath: string; readonly now: number;
+  readonly paletteTransfer?: PaletteTransferProof;
 };
 
 export class CatalogRepositoryError extends Error {
@@ -48,7 +51,10 @@ export function listCatalogRows(db: Database): readonly CatalogRow[] {
     is_template isTemplate,dir_path dirPath,skill_md_path skillMdPath,tokens_css_path tokensCssPath,readme_md_path readmeMdPath,
     thumbnail_path thumbnailPath,created_at createdAt,updated_at updatedAt,archived_at archivedAt,
     metadata_revision metadataRevision,catalog_kind kind,catalog_owner owner,lifecycle,provenance_state provenance,
-    license_state license,trashed_at trashedAt FROM design_systems ORDER BY id`).all();
+    license_state license,trashed_at trashedAt FROM design_systems
+    WHERE NOT EXISTS (SELECT 1 FROM design_system_receipts r WHERE r.design_system_id=design_systems.id
+      AND r.schema_version=2 AND r.operation='content' AND r.source_path IS NULL AND r.status IN ('prepared','recovering'))
+    ORDER BY id`).all();
 }
 
 export function getCatalogRow(db: Database, id: string): CatalogRow | null {
@@ -77,7 +83,15 @@ export function getCatalogPreviewProjects(db: Database, id: string) {
 }
 
 export function getContentReceipt(db: Database, id: string): CatalogReceiptRow | null {
-  return db.query<CatalogReceiptRow, [string]>(`${RECEIPT_SELECT} WHERE design_system_id=? AND operation='content' ORDER BY content_revision DESC LIMIT 1`).get(id);
+  return db.query<CatalogReceiptRow, [string]>(`${RECEIPT_SELECT} WHERE design_system_id=? AND operation='content' AND status='committed' AND content_revision>0 ORDER BY content_revision DESC LIMIT 1`).get(id);
+}
+
+export function getCurrentSystemContent(db: Database, id: string): CatalogReceiptRow | null {
+  return getContentReceipt(db, id) ?? getLineageReceipt(db, id);
+}
+
+export function getPendingSystemOperation(db: Database, id: string): CatalogReceiptRow | null {
+  return db.query<CatalogReceiptRow, [string]>(`${RECEIPT_SELECT} WHERE design_system_id=? AND status IN ('prepared','recovering') LIMIT 1`).get(id);
 }
 
 export function getLineageReceipt(db: Database, id: string): CatalogReceiptRow | null {
@@ -85,6 +99,7 @@ export function getLineageReceipt(db: Database, id: string): CatalogReceiptRow |
 }
 
 export function listPendingCatalogReceipts(db: Database): readonly CatalogReceiptRow[] {
+  // This is the lifecycle recovery dispatch list, not the system pending guard.
   return db.query<CatalogReceiptRow, []>(`${RECEIPT_SELECT} WHERE operation!='content' AND status IN ('prepared','recovering') ORDER BY design_system_id,created_at,id`).all();
 }
 
@@ -95,8 +110,9 @@ export function getLatestCatalogOperation(db: Database, id: string, operation: C
 export function updateCatalogMetadata(db: Database, input: MetadataInput): void {
   const tags = [...new Set(input.tags.map((tag) => tag.normalize("NFC").trim().toLowerCase()).filter(Boolean))].sort();
   db.transaction(() => {
+    if (getPendingSystemOperation(db, input.id) !== null) throw new CatalogRepositoryError("operation_conflict", input.id);
     const changed = db.prepare(`UPDATE design_systems SET name=?,description=?,status=?,catalog_kind=?,provenance_state=?,license_state=?,lifecycle=?,archived_at=?,
-      metadata_revision=metadata_revision+1,updated_at=? WHERE id=? AND metadata_revision=?`).run(
+      metadata_revision=metadata_revision+1,updated_at=? WHERE id=? AND metadata_revision=? AND lifecycle IN ('active','archived')`).run(
         input.name, input.description, input.status, input.kind, input.provenance, input.license, input.lifecycle,
         input.lifecycle === "archived" ? input.updatedAt : null, input.updatedAt, input.id, input.expectedRevision,
       ).changes;
@@ -111,6 +127,7 @@ export function createCatalogChild(db: Database, parent: CatalogRow, childId: st
   const receiptId = `catalog-${input.operation}-${childId}-${randomUUID()}`;
   try {
     db.transaction(() => {
+      if (getPendingSystemOperation(db, parent.id) !== null) throw new CatalogRepositoryError("operation_conflict", parent.id);
       db.prepare(`INSERT INTO design_systems(id,name,description,status,source_type,source_uri,is_template,dir_path,skill_md_path,tokens_css_path,readme_md_path,thumbnail_path,
         created_at,updated_at,metadata_revision,catalog_kind,catalog_owner,lifecycle,provenance_state,license_state)
         VALUES (?,?,?,?,?,?,0,?,?,?,?,?,?,?,0,?,'local','active',?,?)`).run(
@@ -119,6 +136,7 @@ export function createCatalogChild(db: Database, parent: CatalogRow, childId: st
           childPath(input.destinationPath, parent.readmeMdPath), parent.thumbnailPath, input.now, input.now, parent.kind, parent.provenance, parent.license,
         );
       insertOperation(db, receiptId, input);
+      if (input.paletteTransfer !== undefined) insertPaletteTransfer(db, receiptId, input.paletteTransfer);
     })();
   } catch (error) {
     if (error instanceof Error && "code" in error && error.code === "SQLITE_CONSTRAINT") throw new CatalogRepositoryError("id_conflict", childId);
@@ -129,7 +147,7 @@ export function createCatalogChild(db: Database, parent: CatalogRow, childId: st
 
 export function prepareCatalogOperation(db: Database, input: OperationInput): string {
   const receiptId = `catalog-${input.operation}-${input.systemId}-${randomUUID()}`;
-  try { insertOperation(db, receiptId, input); }
+  try { db.transaction(() => insertOperation(db, receiptId, input))(); }
   catch (error) {
     if (error instanceof Error && "code" in error && error.code === "SQLITE_CONSTRAINT") throw new CatalogRepositoryError("operation_conflict", input.systemId);
     throw error;
@@ -139,15 +157,17 @@ export function prepareCatalogOperation(db: Database, input: OperationInput): st
 
 export function commitCatalogOperation(db: Database, receiptId: string, lifecycle: "active" | "trashed", now: number): void {
   db.transaction(() => {
-    const receipt = db.query<{ readonly designSystemId: string; readonly operation: string }, [string]>("SELECT design_system_id designSystemId,operation FROM design_system_receipts WHERE id=? AND status IN ('prepared','recovering')").get(receiptId);
+    const receipt = db.query<CatalogReceiptRow, [string]>(`${RECEIPT_SELECT} WHERE id=? AND operation!='content' AND status IN ('prepared','recovering')`).get(receiptId);
     if (receipt === null) throw new CatalogRepositoryError("operation_conflict", receiptId);
-    db.prepare("UPDATE design_system_receipts SET status='committed',updated_at=? WHERE id=?").run(now, receiptId);
+    validatePaletteTransferReceipt(db, receipt);
+    const changed = db.prepare("UPDATE design_system_receipts SET status='committed',updated_at=? WHERE id=? AND operation!='content' AND status IN ('prepared','recovering')").run(now, receiptId).changes;
+    if (changed !== 1) throw new CatalogRepositoryError("operation_conflict", receiptId);
     db.prepare("UPDATE design_systems SET lifecycle=?,trashed_at=?,updated_at=? WHERE id=?").run(lifecycle, lifecycle === "trashed" ? now : null, now, receipt.designSystemId);
   })();
 }
 
 export function failCatalogOperation(db: Database, receiptId: string, now: number): void {
-  db.prepare("UPDATE design_system_receipts SET status='failed',updated_at=? WHERE id=? AND status IN ('prepared','recovering')").run(now, receiptId);
+  db.prepare("UPDATE design_system_receipts SET status='failed',updated_at=? WHERE id=? AND operation!='content' AND status IN ('prepared','recovering')").run(now, receiptId);
 }
 
 export function deleteCatalogSystem(db: Database, id: string): void {
@@ -155,11 +175,15 @@ export function deleteCatalogSystem(db: Database, id: string): void {
 }
 
 function insertOperation(db: Database, receiptId: string, input: OperationInput): void {
+  if (getPendingSystemOperation(db, input.systemId) !== null) throw new CatalogRepositoryError("operation_conflict", input.systemId);
   const ordinal = db.query<{ readonly count: number }, [string]>("SELECT COUNT(*) count FROM design_system_receipts WHERE design_system_id=? AND operation!='content'").get(input.systemId)?.count ?? 0;
-  db.prepare(`INSERT INTO design_system_receipts(id,design_system_id,status,content_revision,schema_version,digest,manifest_json,
+  const source = input.parentReceiptId === null ? null : db.query<CatalogReceiptRow, [string]>(`${RECEIPT_SELECT} WHERE id=? AND status='committed'`).get(input.parentReceiptId);
+  const schemaVersion = source?.schemaVersion ?? 1;
+  if (schemaVersion !== 1 && schemaVersion !== 2 || source !== null && source.digest !== input.digest) throw new CatalogRepositoryError("operation_conflict", input.systemId);
+  db.query(`INSERT INTO design_system_receipts(id,design_system_id,status,content_revision,schema_version,digest,manifest_json,
     provenance_json,created_at,updated_at,operation,parent_system_id,parent_receipt_id,parent_digest,reason,metadata_json,source_path,destination_path)
-    VALUES (?,?,'prepared',?,1,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
-      receiptId, input.systemId, -(ordinal + 1), input.digest, input.manifestJson, input.provenanceJson,
+    VALUES (?,?,'prepared',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+      receiptId, input.systemId, -(ordinal + 1), schemaVersion, input.digest, input.manifestJson, input.provenanceJson,
       input.now, input.now, input.operation, input.parentSystemId, input.parentReceiptId, input.parentDigest,
       input.reason, JSON.stringify(input.metadata), input.sourcePath, input.destinationPath,
     );

@@ -1,6 +1,7 @@
 import { BACKEND_IDS, type BackendId, type ProjectType } from "./app";
-import { isRecord, type UnknownRecord } from "./contract-parser";
+import { isRecord, UpgradeContractError, type UnknownRecord } from "./contract-parser";
 import type { DesignSystemSourceType } from "./design-system";
+import { parsePaletteTransferProof, type PaletteTransferProof } from "./palette";
 
 export const PROJECT_BUNDLE_FORMAT_VERSION = 1 as const;
 export const PROJECT_BUNDLE_MANIFEST_PATH = "burnguard-project.json";
@@ -69,6 +70,7 @@ export type ProjectBundleDesignSystem =
       readonly skill_md_path: string | null;
       readonly tokens_css_path: string | null;
       readonly readme_md_path: string | null;
+      readonly palette_transfer?: PaletteTransferProof;
     });
 
 export interface ProjectBundleManifest {
@@ -209,7 +211,13 @@ function parseDesignSystem(input: unknown): ProjectBundleDesignSystem {
     return { kind: "builtin", id: text(value["id"], 200), pin: parsePin(value["pin"]) };
   }
   if (input["kind"] !== "custom") invalid();
-  const value = record(input, ["kind", "original_id", "name", "description", "status", "source_type", "is_template", "skill_md_path", "tokens_css_path", "readme_md_path", "pin"]);
+  let paletteTransfer: PaletteTransferProof | undefined;
+  if ("palette_transfer" in input) {
+    try { paletteTransfer = parsePaletteTransferProof(input["palette_transfer"]); }
+    catch (error) { if (error instanceof UpgradeContractError) invalid(); throw error; }
+  }
+  const keys = ["kind", "original_id", "name", "description", "status", "source_type", "is_template", "skill_md_path", "tokens_css_path", "readme_md_path", "pin"];
+  const value = record(input, paletteTransfer === undefined ? keys : [...keys, "palette_transfer"]);
   const description = nullableText(value["description"], 4_000);
   const sourceType = value["source_type"] === null ? null : member(value["source_type"], SOURCE_TYPES);
   return {
@@ -218,6 +226,7 @@ function parseDesignSystem(input: unknown): ProjectBundleDesignSystem {
     is_template: boolean(value["is_template"]), skill_md_path: nullablePath(value["skill_md_path"]),
     tokens_css_path: nullablePath(value["tokens_css_path"]), readme_md_path: nullablePath(value["readme_md_path"]),
     pin: parsePin(value["pin"]),
+    ...(paletteTransfer === undefined ? {} : { palette_transfer: paletteTransfer }),
   };
 }
 

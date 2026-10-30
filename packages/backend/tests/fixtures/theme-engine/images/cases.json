@@ -1,0 +1,2355 @@
+{
+  "schema_version": 1,
+  "policy": "policy.json",
+  "payloads": "payloads.json",
+  "cases": [
+    {
+      "id": "png-four-blocks",
+      "format": "png",
+      "truth": "known-colour",
+      "width": 64,
+      "height": 64,
+      "tolerance": "png-opaque",
+      "expected": {
+        "disposition": "accept",
+        "anchors": [
+          {
+            "rgb": [
+              224,
+              32,
+              48
+            ],
+            "role": "foreground"
+          },
+          {
+            "rgb": [
+              32,
+              96,
+              224
+            ],
+            "role": "foreground"
+          },
+          {
+            "rgb": [
+              240,
+              192,
+              32
+            ],
+            "role": "foreground"
+          },
+          {
+            "rgb": [
+              255,
+              255,
+              255
+            ],
+            "role": "foreground"
+          }
+        ],
+        "foreground_pixel_count": 4096,
+        "transparent_pixel_count": 0
+      },
+      "source_regions": [
+        {
+          "rect": [
+            0,
+            0,
+            32,
+            32
+          ],
+          "rgba": [
+            224,
+            32,
+            48,
+            255
+          ],
+          "role": "foreground"
+        },
+        {
+          "rect": [
+            32,
+            0,
+            32,
+            32
+          ],
+          "rgba": [
+            32,
+            96,
+            224,
+            255
+          ],
+          "role": "foreground"
+        },
+        {
+          "rect": [
+            0,
+            32,
+            32,
+            32
+          ],
+          "rgba": [
+            240,
+            192,
+            32,
+            255
+          ],
+          "role": "foreground"
+        },
+        {
+          "rect": [
+            32,
+            32,
+            32,
+            32
+          ],
+          "rgba": [
+            255,
+            255,
+            255,
+            255
+          ],
+          "role": "foreground"
+        }
+      ],
+      "probes": [
+        [
+          16,
+          16
+        ],
+        [
+          48,
+          16
+        ],
+        [
+          16,
+          48
+        ],
+        [
+          48,
+          48
+        ]
+      ]
+    },
+    {
+      "id": "png-blue-logo-clean-alpha",
+      "format": "png",
+      "truth": "known-colour",
+      "width": 64,
+      "height": 64,
+      "tolerance": "png-alpha",
+      "expected": {
+        "disposition": "accept",
+        "anchors": [
+          {
+            "rgb": [
+              32,
+              96,
+              224
+            ],
+            "role": "foreground"
+          }
+        ],
+        "foreground_pixel_count": 1024,
+        "transparent_pixel_count": 3072
+      },
+      "source_regions": [
+        {
+          "rect": [
+            0,
+            0,
+            64,
+            16
+          ],
+          "rgba": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "role": "background"
+        },
+        {
+          "rect": [
+            0,
+            48,
+            64,
+            16
+          ],
+          "rgba": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "role": "background"
+        },
+        {
+          "rect": [
+            0,
+            16,
+            16,
+            32
+          ],
+          "rgba": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "role": "background"
+        },
+        {
+          "rect": [
+            48,
+            16,
+            16,
+            32
+          ],
+          "rgba": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "role": "background"
+        },
+        {
+          "rect": [
+            16,
+            16,
+            32,
+            32
+          ],
+          "rgba": [
+            32,
+            96,
+            224,
+            255
+          ],
+          "role": "foreground"
+        }
+      ],
+      "probes": [
+        [
+          32,
+          32
+        ],
+        [
+          0,
+          0
+        ]
+      ]
+    },
+    {
+      "id": "png-blue-logo-hidden-rgb",
+      "format": "png",
+      "truth": "known-colour",
+      "width": 64,
+      "height": 64,
+      "tolerance": "png-alpha",
+      "expected": {
+        "disposition": "accept",
+        "anchors": [
+          {
+            "rgb": [
+              32,
+              96,
+              224
+            ],
+            "role": "foreground"
+          }
+        ],
+        "foreground_pixel_count": 1024,
+        "transparent_pixel_count": 3072
+      },
+      "source_regions": [
+        {
+          "rect": [
+            0,
+            0,
+            64,
+            16
+          ],
+          "rgba": [
+            17,
+            231,
+            99,
+            0
+          ],
+          "role": "background"
+        },
+        {
+          "rect": [
+            0,
+            48,
+            64,
+            16
+          ],
+          "rgba": [
+            17,
+            231,
+            99,
+            0
+          ],
+          "role": "background"
+        },
+        {
+          "rect": [
+            0,
+            16,
+            16,
+            32
+          ],
+          "rgba": [
+            17,
+            231,
+            99,
+            0
+          ],
+          "role": "background"
+        },
+        {
+          "rect": [
+            48,
+            16,
+            16,
+            32
+          ],
+          "rgba": [
+            17,
+            231,
+            99,
+            0
+          ],
+          "role": "background"
+        },
+        {
+          "rect": [
+            16,
+            16,
+            32,
+            32
+          ],
+          "rgba": [
+            32,
+            96,
+            224,
+            255
+          ],
+          "role": "foreground"
+        }
+      ],
+      "probes": [
+        [
+          32,
+          32
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "relation": {
+        "same_visible_pixels_as": "png-blue-logo-clean-alpha",
+        "same_expected_anchors": true
+      },
+      "hidden_rgb_must_survive_encoding": true
+    },
+    {
+      "id": "png-partial-alpha",
+      "format": "png",
+      "truth": "known-colour",
+      "width": 64,
+      "height": 64,
+      "tolerance": "png-alpha",
+      "expected": {
+        "disposition": "accept",
+        "anchors": [
+          {
+            "rgb": [
+              224,
+              32,
+              48
+            ],
+            "role": "foreground"
+          },
+          {
+            "rgb": [
+              32,
+              96,
+              224
+            ],
+            "role": "foreground"
+          }
+        ],
+        "foreground_pixel_count": 1024,
+        "transparent_pixel_count": 3072
+      },
+      "source_regions": [
+        {
+          "rect": [
+            0,
+            0,
+            64,
+            16
+          ],
+          "rgba": [
+            17,
+            231,
+            99,
+            0
+          ],
+          "role": "background"
+        },
+        {
+          "rect": [
+            0,
+            48,
+            64,
+            16
+          ],
+          "rgba": [
+            17,
+            231,
+            99,
+            0
+          ],
+          "role": "background"
+        },
+        {
+          "rect": [
+            0,
+            16,
+            16,
+            32
+          ],
+          "rgba": [
+            17,
+            231,
+            99,
+            0
+          ],
+          "role": "background"
+        },
+        {
+          "rect": [
+            48,
+            16,
+            16,
+            32
+          ],
+          "rgba": [
+            17,
+            231,
+            99,
+            0
+          ],
+          "role": "background"
+        },
+        {
+          "rect": [
+            16,
+            16,
+            16,
+            32
+          ],
+          "rgba": [
+            224,
+            32,
+            48,
+            128
+          ],
+          "role": "foreground"
+        },
+        {
+          "rect": [
+            32,
+            16,
+            16,
+            32
+          ],
+          "rgba": [
+            32,
+            96,
+            224,
+            64
+          ],
+          "role": "foreground"
+        }
+      ],
+      "probes": [
+        [
+          24,
+          32
+        ],
+        [
+          40,
+          32
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "expected_alpha_weighted_foreground_pixels": 385.50588235294117
+    },
+    {
+      "id": "png-border-and-enclosed-same-red",
+      "format": "png",
+      "truth": "known-colour",
+      "width": 64,
+      "height": 64,
+      "tolerance": "png-opaque",
+      "expected": {
+        "disposition": "accept",
+        "anchors": [
+          {
+            "rgb": [
+              224,
+              32,
+              48
+            ],
+            "role": "background"
+          },
+          {
+            "rgb": [
+              32,
+              96,
+              224
+            ],
+            "role": "foreground"
+          },
+          {
+            "rgb": [
+              224,
+              32,
+              48
+            ],
+            "role": "foreground"
+          }
+        ],
+        "foreground_pixel_count": 2304,
+        "transparent_pixel_count": 0
+      },
+      "source_regions": [
+        {
+          "rect": [
+            0,
+            0,
+            64,
+            8
+          ],
+          "rgba": [
+            224,
+            32,
+            48,
+            255
+          ],
+          "role": "background"
+        },
+        {
+          "rect": [
+            0,
+            56,
+            64,
+            8
+          ],
+          "rgba": [
+            224,
+            32,
+            48,
+            255
+          ],
+          "role": "background"
+        },
+        {
+          "rect": [
+            0,
+            8,
+            8,
+            48
+          ],
+          "rgba": [
+            224,
+            32,
+            48,
+            255
+          ],
+          "role": "background"
+        },
+        {
+          "rect": [
+            56,
+            8,
+            8,
+            48
+          ],
+          "rgba": [
+            224,
+            32,
+            48,
+            255
+          ],
+          "role": "background"
+        },
+        {
+          "rect": [
+            8,
+            8,
+            48,
+            16
+          ],
+          "rgba": [
+            32,
+            96,
+            224,
+            255
+          ],
+          "role": "foreground"
+        },
+        {
+          "rect": [
+            8,
+            40,
+            48,
+            16
+          ],
+          "rgba": [
+            32,
+            96,
+            224,
+            255
+          ],
+          "role": "foreground"
+        },
+        {
+          "rect": [
+            8,
+            24,
+            16,
+            16
+          ],
+          "rgba": [
+            32,
+            96,
+            224,
+            255
+          ],
+          "role": "foreground"
+        },
+        {
+          "rect": [
+            40,
+            24,
+            16,
+            16
+          ],
+          "rgba": [
+            32,
+            96,
+            224,
+            255
+          ],
+          "role": "foreground"
+        },
+        {
+          "rect": [
+            24,
+            24,
+            16,
+            16
+          ],
+          "rgba": [
+            224,
+            32,
+            48,
+            255
+          ],
+          "role": "foreground"
+        }
+      ],
+      "probes": [
+        [
+          0,
+          0
+        ],
+        [
+          16,
+          16
+        ],
+        [
+          32,
+          32
+        ]
+      ],
+      "topology": {
+        "edge_connected_red_pixels": 1792,
+        "enclosed_red_foreground_pixels": 256,
+        "blue_foreground_pixels": 2048
+      },
+      "note": "Do not discard the enclosed red square merely because its RGB equals the red border."
+    },
+    {
+      "id": "png-white-logo",
+      "format": "png",
+      "truth": "known-colour",
+      "width": 64,
+      "height": 64,
+      "tolerance": "png-alpha",
+      "expected": {
+        "disposition": "accept",
+        "anchors": [
+          {
+            "rgb": [
+              255,
+              255,
+              255
+            ],
+            "role": "foreground"
+          }
+        ],
+        "foreground_pixel_count": 1024,
+        "transparent_pixel_count": 3072
+      },
+      "source_regions": [
+        {
+          "rect": [
+            0,
+            0,
+            64,
+            16
+          ],
+          "rgba": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "role": "background"
+        },
+        {
+          "rect": [
+            0,
+            48,
+            64,
+            16
+          ],
+          "rgba": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "role": "background"
+        },
+        {
+          "rect": [
+            0,
+            16,
+            16,
+            32
+          ],
+          "rgba": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "role": "background"
+        },
+        {
+          "rect": [
+            48,
+            16,
+            16,
+            32
+          ],
+          "rgba": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "role": "background"
+        },
+        {
+          "rect": [
+            16,
+            16,
+            32,
+            32
+          ],
+          "rgba": [
+            255,
+            255,
+            255,
+            255
+          ],
+          "role": "foreground"
+        }
+      ],
+      "probes": [
+        [
+          32,
+          32
+        ],
+        [
+          0,
+          0
+        ]
+      ]
+    },
+    {
+      "id": "png-black-logo",
+      "format": "png",
+      "truth": "known-colour",
+      "width": 64,
+      "height": 64,
+      "tolerance": "png-alpha",
+      "expected": {
+        "disposition": "accept",
+        "anchors": [
+          {
+            "rgb": [
+              0,
+              0,
+              0
+            ],
+            "role": "foreground"
+          }
+        ],
+        "foreground_pixel_count": 1024,
+        "transparent_pixel_count": 3072
+      },
+      "source_regions": [
+        {
+          "rect": [
+            0,
+            0,
+            64,
+            16
+          ],
+          "rgba": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "role": "background"
+        },
+        {
+          "rect": [
+            0,
+            48,
+            64,
+            16
+          ],
+          "rgba": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "role": "background"
+        },
+        {
+          "rect": [
+            0,
+            16,
+            16,
+            32
+          ],
+          "rgba": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "role": "background"
+        },
+        {
+          "rect": [
+            48,
+            16,
+            16,
+            32
+          ],
+          "rgba": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "role": "background"
+        },
+        {
+          "rect": [
+            16,
+            16,
+            32,
+            32
+          ],
+          "rgba": [
+            0,
+            0,
+            0,
+            255
+          ],
+          "role": "foreground"
+        }
+      ],
+      "probes": [
+        [
+          32,
+          32
+        ],
+        [
+          0,
+          0
+        ]
+      ]
+    },
+    {
+      "id": "png-gray-logo",
+      "format": "png",
+      "truth": "known-colour",
+      "width": 64,
+      "height": 64,
+      "tolerance": "png-alpha",
+      "expected": {
+        "disposition": "accept",
+        "anchors": [
+          {
+            "rgb": [
+              128,
+              128,
+              128
+            ],
+            "role": "foreground"
+          }
+        ],
+        "foreground_pixel_count": 1024,
+        "transparent_pixel_count": 3072
+      },
+      "source_regions": [
+        {
+          "rect": [
+            0,
+            0,
+            64,
+            16
+          ],
+          "rgba": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "role": "background"
+        },
+        {
+          "rect": [
+            0,
+            48,
+            64,
+            16
+          ],
+          "rgba": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "role": "background"
+        },
+        {
+          "rect": [
+            0,
+            16,
+            16,
+            32
+          ],
+          "rgba": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "role": "background"
+        },
+        {
+          "rect": [
+            48,
+            16,
+            16,
+            32
+          ],
+          "rgba": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "role": "background"
+        },
+        {
+          "rect": [
+            16,
+            16,
+            32,
+            32
+          ],
+          "rgba": [
+            128,
+            128,
+            128,
+            255
+          ],
+          "role": "foreground"
+        }
+      ],
+      "probes": [
+        [
+          32,
+          32
+        ],
+        [
+          0,
+          0
+        ]
+      ]
+    },
+    {
+      "id": "png-all-transparent-hidden-rgb",
+      "format": "png",
+      "truth": "known-colour",
+      "width": 64,
+      "height": 64,
+      "tolerance": "png-alpha",
+      "expected": {
+        "disposition": "accept",
+        "anchors": [],
+        "foreground_pixel_count": 0,
+        "transparent_pixel_count": 4096
+      },
+      "source_regions": [
+        {
+          "rect": [
+            0,
+            0,
+            64,
+            64
+          ],
+          "rgba": [
+            17,
+            231,
+            99,
+            0
+          ],
+          "role": "background"
+        }
+      ],
+      "probes": [
+        [
+          0,
+          0
+        ],
+        [
+          32,
+          32
+        ]
+      ],
+      "hidden_rgb_must_survive_encoding": true
+    },
+    {
+      "id": "png-no-foreground-white",
+      "format": "png",
+      "truth": "known-colour",
+      "width": 64,
+      "height": 64,
+      "tolerance": "png-opaque",
+      "expected": {
+        "disposition": "accept",
+        "anchors": [
+          {
+            "rgb": [
+              255,
+              255,
+              255
+            ],
+            "role": "background"
+          }
+        ],
+        "foreground_pixel_count": 0,
+        "transparent_pixel_count": 0
+      },
+      "source_regions": [
+        {
+          "rect": [
+            0,
+            0,
+            64,
+            64
+          ],
+          "rgba": [
+            255,
+            255,
+            255,
+            255
+          ],
+          "role": "background"
+        }
+      ],
+      "probes": [
+        [
+          0,
+          0
+        ],
+        [
+          32,
+          32
+        ]
+      ]
+    },
+    {
+      "id": "png-no-foreground-blue",
+      "format": "png",
+      "truth": "known-colour",
+      "width": 64,
+      "height": 64,
+      "tolerance": "png-opaque",
+      "expected": {
+        "disposition": "accept",
+        "anchors": [
+          {
+            "rgb": [
+              32,
+              96,
+              224
+            ],
+            "role": "background"
+          }
+        ],
+        "foreground_pixel_count": 0,
+        "transparent_pixel_count": 0
+      },
+      "source_regions": [
+        {
+          "rect": [
+            0,
+            0,
+            64,
+            64
+          ],
+          "rgba": [
+            32,
+            96,
+            224,
+            255
+          ],
+          "role": "background"
+        }
+      ],
+      "probes": [
+        [
+          0,
+          0
+        ],
+        [
+          32,
+          32
+        ]
+      ]
+    },
+    {
+      "id": "jpeg-four-blocks-q95",
+      "format": "jpeg",
+      "truth": "known-colour",
+      "width": 64,
+      "height": 64,
+      "tolerance": "jpeg-q95",
+      "expected": {
+        "disposition": "accept",
+        "anchors": [
+          {
+            "rgb": [
+              224,
+              32,
+              48
+            ],
+            "role": "foreground"
+          },
+          {
+            "rgb": [
+              32,
+              96,
+              224
+            ],
+            "role": "foreground"
+          },
+          {
+            "rgb": [
+              240,
+              192,
+              32
+            ],
+            "role": "foreground"
+          },
+          {
+            "rgb": [
+              255,
+              255,
+              255
+            ],
+            "role": "foreground"
+          }
+        ],
+        "foreground_pixel_count": 4096,
+        "transparent_pixel_count": 0
+      },
+      "source_regions": [
+        {
+          "rect": [
+            0,
+            0,
+            32,
+            32
+          ],
+          "rgba": [
+            224,
+            32,
+            48,
+            255
+          ],
+          "role": "foreground"
+        },
+        {
+          "rect": [
+            32,
+            0,
+            32,
+            32
+          ],
+          "rgba": [
+            32,
+            96,
+            224,
+            255
+          ],
+          "role": "foreground"
+        },
+        {
+          "rect": [
+            0,
+            32,
+            32,
+            32
+          ],
+          "rgba": [
+            240,
+            192,
+            32,
+            255
+          ],
+          "role": "foreground"
+        },
+        {
+          "rect": [
+            32,
+            32,
+            32,
+            32
+          ],
+          "rgba": [
+            255,
+            255,
+            255,
+            255
+          ],
+          "role": "foreground"
+        }
+      ],
+      "probes": [
+        [
+          16,
+          16
+        ],
+        [
+          48,
+          16
+        ],
+        [
+          16,
+          48
+        ],
+        [
+          48,
+          48
+        ]
+      ],
+      "encoding": {
+        "quality": 95
+      },
+      "source_counts_not_decoded_histogram": true
+    },
+    {
+      "id": "jpeg-white-logo-black-background-q95",
+      "format": "jpeg",
+      "truth": "known-colour",
+      "width": 64,
+      "height": 64,
+      "tolerance": "jpeg-q95",
+      "expected": {
+        "disposition": "accept",
+        "anchors": [
+          {
+            "rgb": [
+              255,
+              255,
+              255
+            ],
+            "role": "foreground"
+          },
+          {
+            "rgb": [
+              0,
+              0,
+              0
+            ],
+            "role": "background"
+          }
+        ],
+        "foreground_pixel_count": 1024,
+        "transparent_pixel_count": 0
+      },
+      "source_regions": [
+        {
+          "rect": [
+            0,
+            0,
+            64,
+            16
+          ],
+          "rgba": [
+            0,
+            0,
+            0,
+            255
+          ],
+          "role": "background"
+        },
+        {
+          "rect": [
+            0,
+            48,
+            64,
+            16
+          ],
+          "rgba": [
+            0,
+            0,
+            0,
+            255
+          ],
+          "role": "background"
+        },
+        {
+          "rect": [
+            0,
+            16,
+            16,
+            32
+          ],
+          "rgba": [
+            0,
+            0,
+            0,
+            255
+          ],
+          "role": "background"
+        },
+        {
+          "rect": [
+            48,
+            16,
+            16,
+            32
+          ],
+          "rgba": [
+            0,
+            0,
+            0,
+            255
+          ],
+          "role": "background"
+        },
+        {
+          "rect": [
+            16,
+            16,
+            32,
+            32
+          ],
+          "rgba": [
+            255,
+            255,
+            255,
+            255
+          ],
+          "role": "foreground"
+        }
+      ],
+      "probes": [
+        [
+          32,
+          32
+        ],
+        [
+          8,
+          8
+        ]
+      ],
+      "encoding": {
+        "quality": 95
+      },
+      "source_counts_not_decoded_histogram": true
+    },
+    {
+      "id": "webp-four-blocks-q95",
+      "format": "webp",
+      "truth": "known-colour",
+      "width": 64,
+      "height": 64,
+      "tolerance": "webp-q95",
+      "expected": {
+        "disposition": "accept",
+        "anchors": [
+          {
+            "rgb": [
+              224,
+              32,
+              48
+            ],
+            "role": "foreground"
+          },
+          {
+            "rgb": [
+              32,
+              96,
+              224
+            ],
+            "role": "foreground"
+          },
+          {
+            "rgb": [
+              240,
+              192,
+              32
+            ],
+            "role": "foreground"
+          },
+          {
+            "rgb": [
+              255,
+              255,
+              255
+            ],
+            "role": "foreground"
+          }
+        ],
+        "foreground_pixel_count": 4096,
+        "transparent_pixel_count": 0
+      },
+      "source_regions": [
+        {
+          "rect": [
+            0,
+            0,
+            32,
+            32
+          ],
+          "rgba": [
+            224,
+            32,
+            48,
+            255
+          ],
+          "role": "foreground"
+        },
+        {
+          "rect": [
+            32,
+            0,
+            32,
+            32
+          ],
+          "rgba": [
+            32,
+            96,
+            224,
+            255
+          ],
+          "role": "foreground"
+        },
+        {
+          "rect": [
+            0,
+            32,
+            32,
+            32
+          ],
+          "rgba": [
+            240,
+            192,
+            32,
+            255
+          ],
+          "role": "foreground"
+        },
+        {
+          "rect": [
+            32,
+            32,
+            32,
+            32
+          ],
+          "rgba": [
+            255,
+            255,
+            255,
+            255
+          ],
+          "role": "foreground"
+        }
+      ],
+      "probes": [
+        [
+          16,
+          16
+        ],
+        [
+          48,
+          16
+        ],
+        [
+          16,
+          48
+        ],
+        [
+          48,
+          48
+        ]
+      ],
+      "encoding": {
+        "quality": 95
+      },
+      "source_counts_not_decoded_histogram": true
+    },
+    {
+      "id": "webp-partial-alpha-q95",
+      "format": "webp",
+      "truth": "known-colour",
+      "width": 64,
+      "height": 64,
+      "tolerance": "webp-alpha-q95",
+      "expected": {
+        "disposition": "accept",
+        "anchors": [
+          {
+            "rgb": [
+              224,
+              32,
+              48
+            ],
+            "role": "foreground"
+          },
+          {
+            "rgb": [
+              32,
+              96,
+              224
+            ],
+            "role": "foreground"
+          }
+        ],
+        "foreground_pixel_count": 1024,
+        "transparent_pixel_count": 3072
+      },
+      "source_regions": [
+        {
+          "rect": [
+            0,
+            0,
+            64,
+            16
+          ],
+          "rgba": [
+            17,
+            231,
+            99,
+            0
+          ],
+          "role": "background"
+        },
+        {
+          "rect": [
+            0,
+            48,
+            64,
+            16
+          ],
+          "rgba": [
+            17,
+            231,
+            99,
+            0
+          ],
+          "role": "background"
+        },
+        {
+          "rect": [
+            0,
+            16,
+            16,
+            32
+          ],
+          "rgba": [
+            17,
+            231,
+            99,
+            0
+          ],
+          "role": "background"
+        },
+        {
+          "rect": [
+            48,
+            16,
+            16,
+            32
+          ],
+          "rgba": [
+            17,
+            231,
+            99,
+            0
+          ],
+          "role": "background"
+        },
+        {
+          "rect": [
+            16,
+            16,
+            16,
+            32
+          ],
+          "rgba": [
+            224,
+            32,
+            48,
+            128
+          ],
+          "role": "foreground"
+        },
+        {
+          "rect": [
+            32,
+            16,
+            16,
+            32
+          ],
+          "rgba": [
+            32,
+            96,
+            224,
+            64
+          ],
+          "role": "foreground"
+        }
+      ],
+      "probes": [
+        [
+          24,
+          32
+        ],
+        [
+          40,
+          32
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "encoding": {
+        "quality": 95
+      },
+      "source_counts_not_decoded_histogram": true,
+      "hidden_rgb_must_survive_encoding": false
+    },
+    {
+      "id": "svg-four-blocks",
+      "format": "svg",
+      "truth": "known-colour",
+      "width": 64,
+      "height": 64,
+      "tolerance": "svg-flat",
+      "expected": {
+        "disposition": "accept",
+        "anchors": [
+          {
+            "rgb": [
+              224,
+              32,
+              48
+            ],
+            "role": "foreground"
+          },
+          {
+            "rgb": [
+              32,
+              96,
+              224
+            ],
+            "role": "foreground"
+          },
+          {
+            "rgb": [
+              240,
+              192,
+              32
+            ],
+            "role": "foreground"
+          },
+          {
+            "rgb": [
+              255,
+              255,
+              255
+            ],
+            "role": "foreground"
+          }
+        ],
+        "foreground_pixel_count": 4096,
+        "transparent_pixel_count": 0
+      },
+      "source_regions": [
+        {
+          "rect": [
+            0,
+            0,
+            32,
+            32
+          ],
+          "rgba": [
+            224,
+            32,
+            48,
+            255
+          ],
+          "role": "foreground"
+        },
+        {
+          "rect": [
+            32,
+            0,
+            32,
+            32
+          ],
+          "rgba": [
+            32,
+            96,
+            224,
+            255
+          ],
+          "role": "foreground"
+        },
+        {
+          "rect": [
+            0,
+            32,
+            32,
+            32
+          ],
+          "rgba": [
+            240,
+            192,
+            32,
+            255
+          ],
+          "role": "foreground"
+        },
+        {
+          "rect": [
+            32,
+            32,
+            32,
+            32
+          ],
+          "rgba": [
+            255,
+            255,
+            255,
+            255
+          ],
+          "role": "foreground"
+        }
+      ],
+      "probes": [
+        [
+          16,
+          16
+        ],
+        [
+          48,
+          16
+        ],
+        [
+          16,
+          48
+        ],
+        [
+          48,
+          48
+        ]
+      ]
+    },
+    {
+      "id": "svg-blue-logo",
+      "format": "svg",
+      "truth": "known-colour",
+      "width": 64,
+      "height": 64,
+      "tolerance": "svg-flat",
+      "expected": {
+        "disposition": "accept",
+        "anchors": [
+          {
+            "rgb": [
+              32,
+              96,
+              224
+            ],
+            "role": "foreground"
+          }
+        ],
+        "foreground_pixel_count": 1024,
+        "transparent_pixel_count": 3072
+      },
+      "source_regions": [
+        {
+          "rect": [
+            0,
+            0,
+            64,
+            16
+          ],
+          "rgba": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "role": "background"
+        },
+        {
+          "rect": [
+            0,
+            48,
+            64,
+            16
+          ],
+          "rgba": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "role": "background"
+        },
+        {
+          "rect": [
+            0,
+            16,
+            16,
+            32
+          ],
+          "rgba": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "role": "background"
+        },
+        {
+          "rect": [
+            48,
+            16,
+            16,
+            32
+          ],
+          "rgba": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "role": "background"
+        },
+        {
+          "rect": [
+            16,
+            16,
+            32,
+            32
+          ],
+          "rgba": [
+            32,
+            96,
+            224,
+            255
+          ],
+          "role": "foreground"
+        }
+      ],
+      "probes": [
+        [
+          32,
+          32
+        ],
+        [
+          0,
+          0
+        ]
+      ]
+    },
+    {
+      "id": "svg-local-fragment-use",
+      "format": "svg",
+      "truth": "known-colour",
+      "width": 64,
+      "height": 64,
+      "tolerance": "svg-flat",
+      "expected": {
+        "disposition": "accept",
+        "anchors": [
+          {
+            "rgb": [
+              32,
+              96,
+              224
+            ],
+            "role": "foreground"
+          }
+        ],
+        "foreground_pixel_count": 1024,
+        "transparent_pixel_count": 3072
+      },
+      "source_regions": [
+        {
+          "rect": [
+            0,
+            0,
+            64,
+            16
+          ],
+          "rgba": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "role": "background"
+        },
+        {
+          "rect": [
+            0,
+            48,
+            64,
+            16
+          ],
+          "rgba": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "role": "background"
+        },
+        {
+          "rect": [
+            0,
+            16,
+            16,
+            32
+          ],
+          "rgba": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "role": "background"
+        },
+        {
+          "rect": [
+            48,
+            16,
+            16,
+            32
+          ],
+          "rgba": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "role": "background"
+        },
+        {
+          "rect": [
+            16,
+            16,
+            32,
+            32
+          ],
+          "rgba": [
+            32,
+            96,
+            224,
+            255
+          ],
+          "role": "foreground"
+        }
+      ],
+      "probes": [
+        [
+          32,
+          32
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "svg_body": "<defs><rect id=\"mark\" width=\"32\" height=\"32\" fill=\"#2060e0\"/></defs><use xmlns:xlink=\"http://www.w3.org/1999/xlink\" xlink:href=\"#mark\" x=\"16\" y=\"16\"/>",
+      "note": "Positive control: local fragment-only reference is not an external reference."
+    },
+    {
+      "id": "svg-no-foreground-white",
+      "format": "svg",
+      "truth": "known-colour",
+      "width": 64,
+      "height": 64,
+      "tolerance": "svg-flat",
+      "expected": {
+        "disposition": "accept",
+        "anchors": [
+          {
+            "rgb": [
+              255,
+              255,
+              255
+            ],
+            "role": "background"
+          }
+        ],
+        "foreground_pixel_count": 0,
+        "transparent_pixel_count": 0
+      },
+      "source_regions": [
+        {
+          "rect": [
+            0,
+            0,
+            64,
+            64
+          ],
+          "rgba": [
+            255,
+            255,
+            255,
+            255
+          ],
+          "role": "background"
+        }
+      ],
+      "probes": [
+        [
+          0,
+          0
+        ],
+        [
+          32,
+          32
+        ]
+      ]
+    },
+    {
+      "id": "png-truncated-header",
+      "format": "png",
+      "truth": "negative",
+      "expected": {
+        "disposition": "reject",
+        "reason": "malformed",
+        "anchors": []
+      },
+      "facts": "PNG signature and only four IHDR length bytes; no complete header."
+    },
+    {
+      "id": "png-bad-ihdr-crc",
+      "format": "png",
+      "truth": "negative",
+      "expected": {
+        "disposition": "reject",
+        "reason": "malformed",
+        "anchors": []
+      },
+      "facts": "Complete small PNG with exactly one flipped IHDR CRC bit."
+    },
+    {
+      "id": "png-oversized-header",
+      "format": "png",
+      "truth": "negative",
+      "expected": {
+        "disposition": "reject",
+        "reason": "dimension-limit",
+        "anchors": []
+      },
+      "facts": "CRC-valid IHDR claims 100000 by 100000; header only, no pixel allocation.",
+      "claimed_width": 100000,
+      "claimed_height": 100000
+    },
+    {
+      "id": "jpeg-truncated-header",
+      "format": "jpeg",
+      "truth": "negative",
+      "expected": {
+        "disposition": "reject",
+        "reason": "malformed",
+        "anchors": []
+      },
+      "facts": "SOI and incomplete APP0 segment."
+    },
+    {
+      "id": "jpeg-oversized-header",
+      "format": "jpeg",
+      "truth": "negative",
+      "expected": {
+        "disposition": "reject",
+        "reason": "dimension-limit",
+        "anchors": []
+      },
+      "facts": "SOI plus SOF0 claims 65535 by 65535; header only, no scan.",
+      "claimed_width": 65535,
+      "claimed_height": 65535
+    },
+    {
+      "id": "webp-truncated-riff",
+      "format": "webp",
+      "truth": "negative",
+      "expected": {
+        "disposition": "reject",
+        "reason": "malformed",
+        "anchors": []
+      },
+      "facts": "RIFF declares 100 bytes but only WEBP signature is present."
+    },
+    {
+      "id": "webp-oversized-header",
+      "format": "webp",
+      "truth": "negative",
+      "expected": {
+        "disposition": "reject",
+        "reason": "dimension-limit",
+        "anchors": []
+      },
+      "facts": "Complete RIFF/VP8X header claims 16384 by 16384, no bitstream.",
+      "claimed_width": 16384,
+      "claimed_height": 16384
+    },
+    {
+      "id": "png-two-frame-apng",
+      "format": "png",
+      "truth": "negative",
+      "expected": {
+        "disposition": "reject",
+        "reason": "animation",
+        "anchors": []
+      },
+      "facts": "Two complete 64 by 64 frames, opaque red then blue, 100 ms each, infinite loop.",
+      "width": 64,
+      "height": 64,
+      "frame_count": 2
+    },
+    {
+      "id": "webp-two-frame-animation",
+      "format": "webp",
+      "truth": "negative",
+      "expected": {
+        "disposition": "reject",
+        "reason": "animation",
+        "anchors": []
+      },
+      "facts": "ANIM plus two ANMF chunks, opaque red then blue, 100 ms each, infinite loop.",
+      "width": 64,
+      "height": 64,
+      "frame_count": 2
+    },
+    {
+      "id": "svg-malformed",
+      "format": "svg",
+      "truth": "negative",
+      "expected": {
+        "disposition": "reject",
+        "reason": "malformed",
+        "anchors": []
+      },
+      "facts": "Unclosed rect and SVG.",
+      "svg_text": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"64\" height=\"64\"><rect"
+    },
+    {
+      "id": "svg-http-image",
+      "format": "svg",
+      "truth": "negative",
+      "expected": {
+        "disposition": "reject",
+        "reason": "external-reference",
+        "anchors": []
+      },
+      "facts": "Literal authored hostile SVG; never load or resolve it.",
+      "svg_text": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"64\" height=\"64\" viewBox=\"0 0 64 64\"><image href=\"https://theme-fixture.invalid/probe.png\" width=\"64\" height=\"64\"/></svg>"
+    },
+    {
+      "id": "svg-file-image",
+      "format": "svg",
+      "truth": "negative",
+      "expected": {
+        "disposition": "reject",
+        "reason": "external-reference",
+        "anchors": []
+      },
+      "facts": "Literal authored hostile SVG; never load or resolve it.",
+      "svg_text": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"64\" height=\"64\" viewBox=\"0 0 64 64\"><image href=\"file:///theme-fixture-do-not-read.png\" width=\"64\" height=\"64\"/></svg>"
+    },
+    {
+      "id": "svg-external-use",
+      "format": "svg",
+      "truth": "negative",
+      "expected": {
+        "disposition": "reject",
+        "reason": "external-reference",
+        "anchors": []
+      },
+      "facts": "Literal authored hostile SVG; never load or resolve it.",
+      "svg_text": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"64\" height=\"64\" viewBox=\"0 0 64 64\"><use href=\"https://theme-fixture.invalid/symbol.svg#mark\"/></svg>"
+    },
+    {
+      "id": "svg-css-import",
+      "format": "svg",
+      "truth": "negative",
+      "expected": {
+        "disposition": "reject",
+        "reason": "external-reference",
+        "anchors": []
+      },
+      "facts": "Literal authored hostile SVG; never load or resolve it.",
+      "svg_text": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"64\" height=\"64\" viewBox=\"0 0 64 64\"><style>@import url(\"https://theme-fixture.invalid/probe.css\");</style><rect width=\"64\" height=\"64\"/></svg>"
+    },
+    {
+      "id": "svg-css-url",
+      "format": "svg",
+      "truth": "negative",
+      "expected": {
+        "disposition": "reject",
+        "reason": "external-reference",
+        "anchors": []
+      },
+      "facts": "Literal authored hostile SVG; never load or resolve it.",
+      "svg_text": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"64\" height=\"64\" viewBox=\"0 0 64 64\"><rect width=\"64\" height=\"64\" style=\"fill:url(https://theme-fixture.invalid/fill.svg#p)\"/></svg>"
+    },
+    {
+      "id": "svg-data-image",
+      "format": "svg",
+      "truth": "negative",
+      "expected": {
+        "disposition": "reject",
+        "reason": "embedded-reference",
+        "anchors": []
+      },
+      "facts": "Literal authored hostile SVG; never load or resolve it.",
+      "svg_text": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"64\" height=\"64\" viewBox=\"0 0 64 64\"><image href=\"data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22/%3E\" width=\"64\" height=\"64\"/></svg>"
+    },
+    {
+      "id": "svg-animation",
+      "format": "svg",
+      "truth": "negative",
+      "expected": {
+        "disposition": "reject",
+        "reason": "animation",
+        "anchors": []
+      },
+      "facts": "Literal authored hostile SVG; never load or resolve it.",
+      "svg_text": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"64\" height=\"64\" viewBox=\"0 0 64 64\"><rect width=\"64\" height=\"64\" fill=\"#e02030\"><animate attributeName=\"fill\" values=\"#e02030;#2060e0\" dur=\"1s\" repeatCount=\"indefinite\"/></rect></svg>"
+    },
+    {
+      "id": "svg-external-entity",
+      "format": "svg",
+      "truth": "negative",
+      "expected": {
+        "disposition": "reject",
+        "reason": "doctype-entity",
+        "anchors": []
+      },
+      "facts": "External entity must be rejected before any entity resolution.",
+      "svg_text": "<?xml version=\"1.0\"?><!DOCTYPE svg [<!ENTITY probe SYSTEM \"file:///theme-fixture-do-not-read.txt\">]><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"64\" height=\"64\" viewBox=\"0 0 64 64\"><text x=\"0\" y=\"32\">&probe;</text></svg>"
+    },
+    {
+      "id": "repo-northvale-box-svg",
+      "format": "svg",
+      "truth": "source-colour-only",
+      "source_path": "design system sample/assets/logos/Northvale_Box.svg",
+      "width": 80,
+      "height": 80,
+      "expected": {
+        "disposition": "accept",
+        "anchors": null,
+        "source_literal_colours": [
+          "#1a3a5c",
+          "#ffffff"
+        ],
+        "manual_note": "Navy rect and white text in source. Glyph shape, font substitution and pixel coverage are not colour truth."
+      }
+    },
+    {
+      "id": "repo-northvale-reversed-svg",
+      "format": "svg",
+      "truth": "source-colour-only",
+      "source_path": "design system sample/assets/logos/Northvale_Reversed.svg",
+      "width": 80,
+      "height": 80,
+      "expected": {
+        "disposition": "accept",
+        "anchors": null,
+        "source_literal_colours": [
+          "#ffffff"
+        ],
+        "manual_note": "White outline and text on transparent canvas in source. Font-dependent coverage is not established."
+      }
+    },
+    {
+      "id": "repo-light-thumbnail-webp",
+      "format": "webp",
+      "truth": "determinism-only",
+      "width": 1440,
+      "height": 960,
+      "source_path": "design system themes/previews/thumbnails/light.webp",
+      "expected": {
+        "disposition": "accept",
+        "anchors": null,
+        "manual_note": "Existing rendered preview with many colours. No independently established foreground/background segmentation or colour ground truth. Repeatability only."
+      }
+    }
+  ]
+}

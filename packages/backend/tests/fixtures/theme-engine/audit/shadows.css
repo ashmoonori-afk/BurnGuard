@@ -1,0 +1,21 @@
+.h01 { box-shadow: 0 0 2px #446688; } /* h-p01 */
+.h02 { box-shadow: 0 2px 4px #202020; } /* h-p02 */
+[data-mode="dark"] .h03 { box-shadow: 0 2px 4px #eeeeee; } /* h-p03 */
+.h04 { box-shadow: 0 0 3px #446688; } /* h-p04 */
+.h05 { box-shadow: 0 0 1em #446688; } /* h-p05 */
+.h06 { box-shadow: inset 0 0 2px #446688; } /* h-p06 */
+.h07 { & .child { box-shadow: 0 0 2px #446688; } } /* h-p07 */
+.hdup { box-shadow: 0 0 2px #446688; } /* h-p08 */
+.hdup { box-shadow: 0 2px 4px #202020; } /* h-p09 */
+.h10 { --local-shadow: 0 0 2px #446688; box-shadow: var(--local-shadow); } /* h-p10 */
+.h11 { box-shadow: var(--missing, 0 0 2px #446688); } /* h-p11 */
+.hn01 { box-shadow: var(--shadow-soft); } /* h-n01 */
+.hn02 { box-shadow: var(--shadow-alias); } /* h-n02 */
+.hn03 { box-shadow: none; } /* h-n03 */
+.hn04 { box-shadow: inherit; } /* h-n04 */
+.hn05 { box-shadow: initial; } /* h-n05 */
+.hn06 { box-shadow: unset; } /* h-n06 */
+.hn07 { box-shadow: revert; } /* h-n07 */
+.hn08 { box-shadow: var(--missing, var(--shadow-flat)); } /* h-n08 */
+.hn09 { --local-shadow: var(--shadow-soft); box-shadow: var(--local-shadow); } /* h-n09 */
+.hn10 { box-shadow: var(--shadow-soft), var(--shadow-flat); } /* h-n10 */
