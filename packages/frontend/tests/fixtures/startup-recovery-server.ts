@@ -8,6 +8,7 @@ import * as backends from "../../../backend/src/services/backends";
 import * as checkpoints from "../../../backend/src/services/checkpoints";
 import * as lucideReference from "../../../backend/src/harness/lucide-reference";
 import * as promptBuilder from "../../../backend/src/harness/prompt-builder";
+import * as turnDesignReview from "../../../backend/src/services/turn-design-review";
 import { getSqlite } from "../../../backend/src/db/sqlite-client";
 import { getProjectDetail } from "../../../backend/src/db/project-read-repository";
 import { insertNormalizedEvent } from "../../../backend/src/db/events";
@@ -53,6 +54,7 @@ const observeRequest = (phase: "enter" | "response", category: string, status: n
 const writePreTurnSnapshot = checkpoints.writePreTurnSnapshot;
 const provisionLucideIconReference = lucideReference.provisionLucideIconReference;
 const buildPrompt = promptBuilder.buildPrompt;
+const reviewTurnDesign = turnDesignReview.reviewTurnDesign;
 mock.module("../../../backend/src/services/checkpoints", () => ({
   ...checkpoints,
   async writePreTurnSnapshot(...args: Parameters<typeof writePreTurnSnapshot>) {
@@ -81,8 +83,20 @@ mock.module("../../../backend/src/harness/prompt-builder", () => ({
   },
 }));
 
-// Only the external provider boundary is replaced. Routes, turn callbacks, validation,
-// publication, recovery, durable replay and request authority are the production implementations.
+// Recovery tests the real commit/restart boundary, not an unrelated browser measurement.
+// Keep the production review orchestration and report unavailable measurements honestly.
+mock.module("../../../backend/src/services/turn-design-review", () => ({
+  ...turnDesignReview,
+  reviewTurnDesign: (input: Parameters<typeof reviewTurnDesign>[0]) => reviewTurnDesign({
+    ...input,
+    audit: async audit => unmeasuredAuthorityAudit({
+      id: audit.projectId, current_revision: audit.revision, current_digest: audit.digest,
+    }),
+  }),
+}));
+
+// External providers and browser measurement are isolated. Routes, review orchestration,
+// validation, publication, recovery, replay and request authority remain real.
 mock.module("../../../backend/src/services/backends", () => ({
   ...backends,
   detectBackends: async () => {
