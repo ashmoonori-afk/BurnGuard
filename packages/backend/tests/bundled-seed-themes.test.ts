@@ -425,7 +425,7 @@ describe("bundled canonical production generation", () => {
         .toEqual(parseHexColor(oracle.hex));
       expect(generated.theme.default_mode).toBe(original.palette.display.appearance);
       expect(generated.theme.sources).toEqual({
-        brand_anchor_id: "anchor-primary-blue", surface_scale_id: "scale-gray-50",
+        brand: { kind: "anchor", id: "anchor-primary-blue" }, surface: { kind: "scale", id: "scale-gray-50" },
         status: {
           success: parseHexColor(requiredValue(source, "success")),
           warning: parseHexColor(requiredValue(source, "warning-yellow")),

@@ -132,8 +132,17 @@ export const THEME_CONTRAST_PAIRS = [
   { foreground: "ring", background: "card", usage: "ui" },
 ] as const satisfies readonly ThemeContrastPair[];
 
+export type ThemeBrandSource =
+  | { readonly kind: "anchor"; readonly id: string }
+  | { readonly kind: "color"; readonly color: RgbColor };
+export type ThemeSurfaceColors = {
+  readonly background: ThemeColor; readonly card: ThemeColor; readonly muted: ThemeColor; readonly border: ThemeColor;
+};
+export type ThemeSurfaceSource =
+  | { readonly kind: "scale"; readonly id: string }
+  | { readonly kind: "colors"; readonly light: ThemeSurfaceColors; readonly dark: ThemeSurfaceColors };
 export type ThemeSources = {
-  readonly brand_anchor_id: string; readonly surface_scale_id: string;
+  readonly brand: ThemeBrandSource; readonly surface: ThemeSurfaceSource;
   readonly status: {
     readonly success: RgbColor; readonly warning: RgbColor; readonly destructive: RgbColor; readonly info: RgbColor;
   };
@@ -325,12 +334,49 @@ function validateTokens(tokens: ThemeTokens): void {
       (pair.usage === "body" ? 4.5 : 3)) return invalid(`contrast.${pair.foreground}.${pair.background}`);
   }
 }
+function brandSource(input: unknown, palette: PaletteState): ThemeBrandSource {
+  if (!isRecord(input)) return invalid("brand_source");
+  if (input.kind === "anchor") {
+    const value = shape(input, ["kind", "id"]);
+    if (typeof value.id !== "string" || !palette.anchors.some(anchor => anchor.id === value.id)) return invalid("brand_anchor_id");
+    return { kind: "anchor", id: value.id };
+  }
+  if (input.kind === "color") {
+    const value = shape(input, ["kind", "color"]);
+    return { kind: "color", color: parseRgb(value.color) };
+  }
+  return invalid("brand_source");
+}
+function surfaceColors(input: unknown): ThemeSurfaceColors {
+  const value = shape(input, ["background", "card", "muted", "border"]);
+  const color = (input: unknown): ThemeColor => {
+    const parsed = entry(input, "color");
+    return parsed.type === "color" ? parsed : invalid("surface_color");
+  };
+  return { background: color(value.background), card: color(value.card), muted: color(value.muted), border: color(value.border) };
+}
+function surfaceSource(input: unknown, palette: PaletteState): ThemeSurfaceSource {
+  if (!isRecord(input)) return invalid("surface_source");
+  if (input.kind === "scale") {
+    const value = shape(input, ["kind", "id"]);
+    if (typeof value.id !== "string" || !palette.scales.some(scale => scale.id === value.id)) return invalid("surface_scale_id");
+    return { kind: "scale", id: value.id };
+  }
+  if (input.kind === "colors") {
+    const value = shape(input, ["kind", "light", "dark"]);
+    return { kind: "colors", light: surfaceColors(value.light), dark: surfaceColors(value.dark) };
+  }
+  return invalid("surface_source");
+}
+function sourceBrandRgb(palette: PaletteState, source: ThemeBrandSource): RgbColor {
+  if (source.kind === "color") return source.color;
+  const anchor = palette.anchors.find(candidate => candidate.id === source.id);
+  return anchor === undefined ? invalid("brand_anchor_id") : anchor.color;
+}
 function sources(input: unknown, palette: PaletteState): ThemeSources {
-  const v = shape(input, ["brand_anchor_id", "surface_scale_id", "status"]);
-  if (typeof v.brand_anchor_id !== "string" || !palette.anchors.some(a => a.id === v.brand_anchor_id)) return invalid("brand_anchor_id");
-  if (typeof v.surface_scale_id !== "string" || !palette.scales.some(s => s.id === v.surface_scale_id)) return invalid("surface_scale_id");
+  const v = shape(input, ["brand", "surface", "status"]);
   const status = shape(v.status, ["success", "warning", "destructive", "info"]);
-  return { brand_anchor_id: v.brand_anchor_id, surface_scale_id: v.surface_scale_id,
+  return { brand: brandSource(v.brand, palette), surface: surfaceSource(v.surface, palette),
     status: { success: parseRgb(status.success), warning: parseRgb(status.warning),
       destructive: parseRgb(status.destructive), info: parseRgb(status.info) } };
 }
@@ -434,19 +480,22 @@ export function synthesizeTheme(input: ThemeSynthesisInput): SemanticTheme {
   serializePalette(palette);
   const seeds = sources(v.sources, palette);
   const settings = shape(v.settings, SEMANTIC_THEME_MODES);
-  const brand = palette.anchors.find(anchor => anchor.id === seeds.brand_anchor_id);
-  if (!brand) return invalid("brand_anchor_id");
-  const brandColor = rgbToOklch(brand.color);
+  const brandColor = rgbToOklch(sourceBrandRgb(palette, seeds.brand));
   const mode = (appearance: SemanticThemeMode): ThemeTokens => {
     const light = appearance === "light";
     const surface = (position: number, l: number) => {
-      const sample = samplePalette(palette, position).find(item => item.id === seeds.surface_scale_id);
+      if (seeds.surface.kind !== "scale") return invalid("surface_source");
+      const id = seeds.surface.id;
+      const sample = samplePalette(palette, position).find(item => item.id === id);
       if (!sample) return invalid("surface_scale_id");
       return quantize({ ...sample.color, l, c: Math.min(sample.color.c, 0.025) });
     };
-    const background = surface(light ? 0.02 : 0.98, light ? 0.98 : 0.14);
-    const card = surface(light ? 0.01 : 0.94, light ? 1 : 0.19);
-    const muted = surface(light ? 0.08 : 0.88, light ? 0.94 : 0.24);
+    const { background, card, muted, border } = seeds.surface.kind === "colors" ? seeds.surface[appearance] : {
+      background: surface(light ? 0.02 : 0.98, light ? 0.98 : 0.14),
+      card: surface(light ? 0.01 : 0.94, light ? 1 : 0.19),
+      muted: surface(light ? 0.08 : 0.88, light ? 0.94 : 0.24),
+      border: surface(light ? 0.15 : 0.8, light ? 0.86 : 0.34),
+    };
     const surfaces = [background, card, muted];
     const ink = readable({ l: light ? 0.2 : 0.94, c: 0, h: 0 }, surfaces, 4.5);
     const supporting = readable({ l: light ? 0.5 : 0.7, c: 0, h: 0 }, surfaces, 4.5);
@@ -466,13 +515,39 @@ export function synthesizeTheme(input: ThemeSynthesisInput): SemanticTheme {
       warning: warning.fill, "warning-foreground": warning.foreground, "warning-text": warning.text,
       destructive: destructive.fill, "destructive-foreground": destructive.foreground, "destructive-text": destructive.text,
       info: info.fill, "info-foreground": info.foreground, "info-text": info.text,
-      border: surface(light ? 0.15 : 0.8, light ? 0.86 : 0.34),
+      border,
       input: readable({ l: light ? 0.65 : 0.55, c: 0, h: 0 }, [background, card], 3), ring: primary,
       ...settingsFields(shape(settings[appearance], SETTINGS_NAMES)) };
   };
   return parseSemanticTheme({ schema_version: 1, system_id: identity(v.system_id),
     default_mode: choice(v.default_mode, SEMANTIC_THEME_MODES), palette, brand_anchors: palette.anchors,
     sources: seeds, modes: { light: mode("light"), dark: mode("dark") }, contrast_pairs: THEME_CONTRAST_PAIRS });
+}
+
+/** Authorized edits detach removed sources to their prior values, never to a guessed replacement. */
+export function updateThemePalette(input: SemanticTheme, next: PaletteState): SemanticTheme {
+  const previous = parseSemanticTheme(input), palette = parsePaletteState(next);
+  const oldBrand = previous.sources.brand, oldSurface = previous.sources.surface;
+  const brand: ThemeBrandSource = oldBrand.kind === "anchor" && !palette.anchors.some(anchor => anchor.id === oldBrand.id)
+    ? { kind: "color", color: sourceBrandRgb(previous.palette, oldBrand) } : oldBrand;
+  const swatches = (mode: SemanticThemeMode): ThemeSurfaceColors => ({
+    background: colorAt(previous.modes[mode], "background"),
+    card: colorAt(previous.modes[mode], "card"),
+    muted: colorAt(previous.modes[mode], "muted"),
+    border: colorAt(previous.modes[mode], "border"),
+  });
+  const surface: ThemeSurfaceSource = oldSurface.kind === "scale" && !palette.scales.some(scale => scale.id === oldSurface.id)
+    ? { kind: "colors", light: swatches("light"), dark: swatches("dark") } : oldSurface;
+  const generated = synthesizeTheme({
+    system_id: previous.system_id, default_mode: previous.default_mode, palette,
+    sources: { ...previous.sources, brand, surface }, settings: getThemeSettings(previous),
+  });
+  const mode = (name: SemanticThemeMode) => Object.fromEntries(TOKEN_NAMES.map(key => {
+    if (!isTokenName(key)) return invalid("token_name");
+    const original = previous.modes[name][key];
+    return [key, original.type === "alias" ? original : generated.modes[name][key]] as const;
+  }));
+  return parseSemanticTheme({ ...generated, modes: { light: mode("light"), dark: mode("dark") } });
 }
 
 /** These are complete-colour artifact slots, never Tailwind channel bindings.

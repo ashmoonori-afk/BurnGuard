@@ -8,7 +8,7 @@ import { createDefaultPalette, type PaletteState } from "../src/palette";
 import {
   THEME_CONTRAST_PAIRS, THEME_LIGHTNESS_STEPS, THEME_LIMITS, THEME_TOKEN_REGISTRY, SEMANTIC_THEME_MODES,
   createDefaultThemeSettings, emitAppThemeCss, emitArtifactThemeCss, getThemeSettings,
-  CANONICAL_THEME_EMITTER, parseCanonicalTransferProof, parseSemanticTheme, serializeSemanticTheme, synthesizeTheme,
+  CANONICAL_THEME_EMITTER, parseCanonicalTransferProof, parseSemanticTheme, serializeSemanticTheme, synthesizeTheme, updateThemePalette,
   type CanonicalTransferProof, type SemanticTheme, type SemanticThemeMode, type ThemeEasing, type ThemeSynthesisInput,
 } from "../src/theme";
 
@@ -44,11 +44,46 @@ test.each([
   expect(() => parseCanonicalTransferProof(input)).toThrow(UpgradeContractError);
 });
 
+test("Given removed semantic palette sources When an authorized edit regenerates Then prior values detach explicitly without selecting replacements", () => {
+  const original = synthesizeTheme(inputFor());
+  const before = serializeSemanticTheme(original);
+  const anchor = original.palette.anchors.find(value => value.id === "brand-anchor");
+  if (anchor === undefined) throw new Error("Missing brand fixture");
+  const palette = { ...original.palette, anchors: [], scales: original.palette.scales.map(scale => ({ ...scale, id: `new-${scale.id}` })) };
+  expect(() => parseSemanticTheme({ ...original, palette, brand_anchors: [] })).toThrow(UpgradeContractError);
+  const changed = updateThemePalette(original, palette);
+  expect(changed.palette).toEqual(palette);
+  expect(changed.sources.brand).toEqual({ kind: "color", color: anchor.color });
+  expect(changed.sources.surface.kind).toBe("colors");
+  for (const mode of SEMANTIC_THEME_MODES) for (const key of ["background", "card", "muted", "border", "primary", "accent"] as const) {
+    expect(changed.modes[mode][key]).toEqual(original.modes[mode][key]);
+  }
+  const reintroduced = updateThemePalette(changed, { ...palette,
+    anchors: [{ ...anchor, color: parseHexColor("#00ff00") }], scales: original.palette.scales });
+  expect(reintroduced.sources).toEqual(changed.sources);
+  expect(reintroduced.modes.light.primary).toEqual(changed.modes.light.primary);
+  expect(serializeSemanticTheme(original)).toBe(before);
+});
+
+test("Given retained source references and aliases When the palette changes Then settings and aliases survive while the selected brand updates", () => {
+  const original = synthesizeTheme(inputFor());
+  const aliased = parseSemanticTheme({ ...original, modes: {
+    ...original.modes, light: { ...original.modes.light, "space-2": { type: "alias", target: "space-1" } },
+  } });
+  const changed = updateThemePalette(aliased, { ...aliased.palette, anchors: aliased.palette.anchors.map(anchor =>
+    anchor.id === "brand-anchor" ? { ...anchor, color: parseHexColor("#126ab0") } : anchor) });
+  expect(changed.sources).toEqual(aliased.sources);
+  expect(changed.modes.light["space-2"]).toEqual(aliased.modes.light["space-2"]);
+  expect(getThemeSettings(changed)).toEqual(getThemeSettings(aliased));
+  expect(changed.modes.light.primary).not.toEqual(aliased.modes.light.primary);
+  expect(parseSemanticTheme(serializeSemanticTheme(changed))).toEqual(changed);
+});
+
 function inputFor(color: RgbColor = parseHexColor("#b64128"), system_id = "test-brand"): ThemeSynthesisInput {
   const palette: PaletteState = { ...createDefaultPalette(),
     anchors: [{ id: "brand-anchor", name: "Original brand", color }] };
   return { system_id, default_mode: "light", palette,
-    sources: { brand_anchor_id: "brand-anchor", surface_scale_id: "neutral",
+    sources: { brand: { kind: "anchor", id: "brand-anchor" }, surface: { kind: "scale", id: "neutral" },
       status: { success: parseHexColor("#19734a"), warning: parseHexColor("#a46b00"),
         destructive: parseHexColor("#b42318"), info: parseHexColor("#315f91") } },
     settings: { light: createDefaultThemeSettings(), dark: createDefaultThemeSettings() } };
@@ -188,8 +223,8 @@ test("Given malformed boundaries When parsed Then root modes registry and obliga
     { ...theme, contrast_pairs: [] }, { ...theme, contrast_pairs: [...theme.contrast_pairs].reverse() },
     { ...theme, contrast_pairs: theme.contrast_pairs.map((pair, i) => i ? pair : { ...pair, usage: "ui" }) },
     { ...theme, brand_anchors: [] }, { ...theme, palette: { ...theme.palette, extra: true } },
-    { ...theme, sources: { ...theme.sources, brand_anchor_id: "missing" } },
-    { ...theme, sources: { ...theme.sources, surface_scale_id: "missing" } },
+    { ...theme, sources: { ...theme.sources, brand: { kind: "anchor", id: "missing" } } },
+    { ...theme, sources: { ...theme.sources, surface: { kind: "scale", id: "missing" } } },
     { ...theme, sources: { ...theme.sources, extra: true } },
     { ...theme, sources: { ...theme.sources, status: { ...theme.sources.status, extra: true } } },
     lightPatch(theme, { extra: { type: "length", value: 1, unit: "px" } })];
@@ -382,9 +417,9 @@ test("Given moved and renamed draggable stops When synthesized Then semantic map
   const changed = synthesizeTheme({ ...input, palette });
   expect(changed.modes).toEqual(first.modes);
   expect(changed.brand_anchors).toEqual(first.brand_anchors);
-  const custom = { ...input, palette: { ...input.palette, scales: [
+  const custom: ThemeSynthesisInput = { ...input, palette: { ...input.palette, scales: [
     { id: "warm-surface", name: "Warm surface", kind: "hue", hue: 80 } as const,
-  ] }, sources: { ...input.sources, surface_scale_id: "warm-surface" } };
+  ] }, sources: { ...input.sources, surface: { kind: "scale", id: "warm-surface" } } };
   const warm = synthesizeTheme(custom);
   expect(warm.modes.light.background).not.toEqual(first.modes.light.background);
   assertEmittedContrast(warm);
@@ -428,7 +463,7 @@ test("Given malformed synthesis inputs When constructed Then missing production 
   const extra = { ...input, extra: true };
   expect(() => synthesizeTheme(extra)).toThrow(UpgradeContractError);
   expect(() => synthesizeTheme({ ...input, palette: { ...input.palette, anchors: [] } })).toThrow(UpgradeContractError);
-  expect(() => synthesizeTheme({ ...input, sources: { ...input.sources, surface_scale_id: "missing" } })).toThrow(UpgradeContractError);
+  expect(() => synthesizeTheme({ ...input, sources: { ...input.sources, surface: { kind: "scale", id: "missing" } } })).toThrow(UpgradeContractError);
   const incomplete = { ...input.settings.light };
   Reflect.deleteProperty(incomplete, "space-1");
   expect(() => synthesizeTheme({ ...input, settings: { light: incomplete, dark: input.settings.dark } })).toThrow(UpgradeContractError);

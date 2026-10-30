@@ -179,7 +179,7 @@ export function generateThemeCanonical(slug: string, paletteInput: unknown, sour
     };
     const theme = synthesizeTheme({
       system_id: `builtin-theme-${slug}`, default_mode: mode, palette,
-      sources: { brand_anchor_id: "anchor-primary-blue", surface_scale_id: "scale-gray-50",
+      sources: { brand: { kind: "anchor", id: "anchor-primary-blue" }, surface: { kind: "scale", id: "scale-gray-50" },
         status: { success: color("--success"), warning: color("--warning-yellow"),
           destructive: color("--error"), info: color("--info") } },
       settings: { light: settings, dark: settings },
