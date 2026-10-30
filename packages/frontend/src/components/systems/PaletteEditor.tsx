@@ -1798,7 +1798,7 @@ export default function PaletteEditor(props: PaletteEditorProps): React.ReactEle
             className={cn(
               "inline-flex items-center gap-1.5 rounded-control border px-2.5 py-1 text-xs font-medium",
               unavailable
-                ? "border-destructive/30 bg-destructive/10 text-destructive"
+                ? "border-destructive/30 bg-destructive/10 text-foreground"
                 : hasChanges
                   ? "border-border bg-muted text-foreground"
                   : "border-border bg-background text-muted-foreground"
@@ -1972,7 +1972,7 @@ export default function PaletteEditor(props: PaletteEditorProps): React.ReactEle
           className={cn(
             "flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2 text-xs sm:px-4",
             validationError || status?.tone === "error"
-              ? "border-destructive/30 bg-destructive/10 text-destructive"
+              ? "border-destructive/30 bg-destructive/10 text-foreground"
               : "border-border bg-muted text-foreground"
           )}
         >
@@ -3795,7 +3795,7 @@ export default function PaletteEditor(props: PaletteEditorProps): React.ReactEle
             {importError ? (
               <div
                 role="alert"
-                className="rounded-control border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+                className="rounded-control border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-foreground"
               >
                 {importError}
               </div>
