@@ -8,6 +8,7 @@ import type { NormalizedEvent, TurnErrorCode, TurnRejectionReason, UserEvent } f
 import { requiredArray, requiredBoolean, stringArray } from "@bg/shared/contract-parser";
 import { parseLearningContract } from "@bg/shared/learning-contract";
 import { drizzle } from "drizzle-orm/bun-sqlite";
+import type { PaletteTransferProof } from "@bg/shared/palette";
 import { createArtifactOperation, transitionArtifactOperation } from "../src/db/artifact-operation-repository";
 import { CatalogRepositoryError, commitCatalogOperation, getContentReceipt, getCurrentSystemContent, getPendingSystemOperation, prepareCatalogOperation } from "../src/db/catalog-repository";
 import { commitDesignSystemReceipt, getDesignSystemPipeline, prepareDesignSystemReceipt, updateDesignSystemMetadata } from "../src/db/design-system-repository";
@@ -17,6 +18,8 @@ import { createExportAttempt, createExportRetry, getExportAttempt } from "../src
 import { createLearningCheckpoint, getLearningCheckpoint, updateLearningProgress } from "../src/db/learning-repository";
 import { runMigrationsFrom } from "../src/db/migrate";
 import { PipelineRepositoryError, reconcilePipelineRows } from "../src/db/pipeline-repository";
+import { PaletteTransferRepositoryError, readPaletteTransfer } from "../src/db/palette-transfer-repository";
+import { digestEntries } from "../src/services/canonical-tree-manifest";
 import { LogoDeliverableError } from "../src/services/logo-deliverables";
 import { sanitizeTurnEvent } from "../src/services/turn-error-sanitizer";
 
@@ -46,7 +49,128 @@ function repositoryError(error: unknown): PipelineRepositoryError {
   return error;
 }
 
+function importedPaletteReceipt() {
+  const proof: PaletteTransferProof = {
+    schema_version: 1, emitter_version: "burnguard-palette-2",
+    state: { size_bytes: 2, sha256: createHash("sha256").update("{}").digest("hex") },
+    css: { size_bytes: 1, sha256: createHash("sha256").update("\n").digest("hex") },
+  };
+  const files = [
+    { path: "palette/scales.css", size: proof.css.size_bytes, sha256: proof.css.sha256 },
+    { path: "palette/state.json", size: proof.state.size_bytes, sha256: proof.state.sha256 },
+  ];
+  return {
+    id: "imported", designSystemId: "ds", contentRevision: 1, schemaVersion: 1,
+    digest: "extraction-digest", provenance: { state: "observed" }, createdAt: 2,
+    manifest: { schema_version: 1, digest_algorithm: "sha256", tree_digest: digestEntries(files), files, publication_state: "validated" },
+    paletteTransfer: proof,
+  };
+}
+
 describe("design system repository", () => {
+  test("Given a trusted imported proof When receipt preparation and commit succeed Then the same v1 owner retains its extraction identity and proof", () => {
+    // Given
+    const input = importedPaletteReceipt();
+
+    // When
+    prepareDesignSystemReceipt(db, input);
+    const committed = commitDesignSystemReceipt(db, { id: input.id, digest: input.digest, updatedAt: 3 });
+
+    // Then
+    expect(committed).toMatchObject({ id: input.id, contentRevision: 1, schemaVersion: 1, digest: input.digest, provenance: input.provenance });
+    expect(committed.digest).not.toBe(input.manifest.tree_digest);
+    expect(readPaletteTransfer(sqlite, input.id)).toEqual(input.paletteTransfer);
+    expect(sqlite.query("SELECT id,status FROM design_system_receipts WHERE design_system_id='ds'").all())
+      .toEqual([{ id: input.id, status: "committed" }]);
+  });
+
+  test("Given a proof insertion fault When an imported receipt prepares Then the receipt and proof roll back together", () => {
+    // Given
+    sqlite.exec(`CREATE TRIGGER reject_palette_transfer BEFORE INSERT ON design_system_palette_transfers
+      BEGIN SELECT RAISE(ABORT, 'injected transfer insertion failure'); END`);
+    const before = sqlite.serialize();
+
+    // When / Then
+    expect(() => prepareDesignSystemReceipt(db, importedPaletteReceipt()))
+      .toThrow(new PaletteTransferRepositoryError("palette_transfer_conflict", "imported"));
+    expect(sqlite.serialize()).toEqual(before);
+    expect(sqlite.query("SELECT id FROM design_system_receipts WHERE id='imported'").get()).toBeNull();
+    expect(readPaletteTransfer(sqlite, "imported")).toBeNull();
+  });
+
+  test.each(["prepared", "recovering", "committed"] as const)("Given the same %s imported proof When prepare retries with reordered keys Then all stored bytes remain unchanged", status => {
+    // Given
+    const input = importedPaletteReceipt();
+    const receipt = prepareDesignSystemReceipt(db, input);
+    sqlite.prepare("UPDATE design_system_receipts SET status=? WHERE id=?").run(status, input.id);
+    const before = sqlite.serialize();
+    const proof = input.paletteTransfer;
+
+    // When
+    const retried = prepareDesignSystemReceipt(db, { ...input, paletteTransfer: {
+      css: { sha256: proof.css.sha256, size_bytes: proof.css.size_bytes },
+      state: { sha256: proof.state.sha256, size_bytes: proof.state.size_bytes },
+      emitter_version: proof.emitter_version, schema_version: proof.schema_version,
+    } });
+
+    // Then
+    expect(retried).toEqual(receipt);
+    expect(sqlite.serialize()).toEqual(before);
+  });
+
+  test.each(["emitter", "state-size", "state-hash", "css-size", "css-hash", "missing"] as const)(
+    "Given an attached proof When retry changes %s Then it conflicts without repairing storage", field => {
+      // Given
+      const input = importedPaletteReceipt();
+      prepareDesignSystemReceipt(db, input);
+      const proof = input.paletteTransfer;
+      const alternatives: Readonly<Record<typeof field, PaletteTransferProof | undefined>> = {
+        emitter: { ...proof, emitter_version: "burnguard-palette-1" },
+        "state-size": { ...proof, state: { ...proof.state, size_bytes: proof.state.size_bytes + 1 } },
+        "state-hash": { ...proof, state: { ...proof.state, sha256: "a".repeat(64) } },
+        "css-size": { ...proof, css: { ...proof.css, size_bytes: proof.css.size_bytes + 1 } },
+        "css-hash": { ...proof, css: { ...proof.css, sha256: "b".repeat(64) } },
+        missing: undefined,
+      };
+      const { paletteTransfer: _proof, ...withoutProof } = input;
+      const alternative = alternatives[field];
+      const retry = alternative === undefined ? withoutProof : { ...withoutProof, paletteTransfer: alternative };
+      const before = sqlite.serialize();
+
+      // When / Then
+      expect(() => prepareDesignSystemReceipt(db, retry)).toThrow(new PipelineRepositoryError("content_receipt_mismatch", "ds"));
+      expect(sqlite.serialize()).toEqual(before);
+    },
+  );
+
+  test.each(["prepared", "recovering", "committed"] as const)("Given an unproved %s receipt When retry supplies a proof Then it cannot attach authority retroactively", status => {
+    // Given
+    const input = importedPaletteReceipt();
+    const { paletteTransfer: _proof, ...withoutProof } = input;
+    prepareDesignSystemReceipt(db, withoutProof);
+    sqlite.prepare("UPDATE design_system_receipts SET status=? WHERE id=?").run(status, input.id);
+    const before = sqlite.serialize();
+
+    // When / Then
+    expect(() => prepareDesignSystemReceipt(db, input)).toThrow(new PipelineRepositoryError("content_receipt_mismatch", "ds"));
+    expect(sqlite.serialize()).toEqual(before);
+    expect(readPaletteTransfer(sqlite, input.id)).toBeNull();
+  });
+
+  test.each(["prepared", "recovering"] as const)("Given a %s receipt with divergent attached proof When commit runs Then validation leaves its status and bytes untouched", status => {
+    // Given
+    const input = importedPaletteReceipt();
+    prepareDesignSystemReceipt(db, input);
+    sqlite.prepare("UPDATE design_system_receipts SET status=? WHERE id=?").run(status, input.id);
+    sqlite.prepare("UPDATE design_system_palette_transfers SET state_sha256=? WHERE receipt_id=?").run("a".repeat(64), input.id);
+    const before = sqlite.serialize();
+
+    // When / Then
+    expect(() => commitDesignSystemReceipt(db, { id: input.id, digest: input.digest, updatedAt: 3 }))
+      .toThrow(new PaletteTransferRepositoryError("palette_transfer_corrupt", input.id));
+    expect(sqlite.serialize()).toEqual(before);
+  });
+
   test("Given Unicode-equivalent tags and a content receipt When metadata updates Then tags are NFC stable and content identity is unchanged", () => {
     // Given
     prepareDesignSystemReceipt(db, { id: "r1", designSystemId: "ds", contentRevision: 1, schemaVersion: 1, digest: "digest", manifest: { files: [] }, provenance: { state: "unknown" }, createdAt: 2 });

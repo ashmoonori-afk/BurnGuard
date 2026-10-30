@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { createDefaultPalette, emitPaletteCss, serializePalette, type PaletteTransferProof } from "@bg/shared/palette";
+import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -23,6 +25,12 @@ import { analyzeLocalTree } from "../src/services/extraction-local-tree";
 import { listFilesRecursive } from "../src/services/extraction-path";
 import { readUploadManifest } from "../src/services/extraction-upload";
 import { classifyExtractionRecovery } from "../src/services/extraction-recovery-state";
+import { reconcileExtractionState } from "../src/services/extraction-recovery";
+import { getDb, getSqlite } from "../src/db/client";
+import { getCurrentSystemContent } from "../src/db/catalog-repository";
+import { prepareDesignSystemReceipt } from "../src/db/design-system-repository";
+import { readPaletteTransfer } from "../src/db/palette-transfer-repository";
+import { systemsDir } from "../src/lib/paths";
 import { canCreateSymlink } from "./helpers/platform";
 
 const roots: string[] = [];
@@ -118,6 +126,77 @@ describe("bounded extraction acquisition", () => {
 });
 
 describe("seeded extraction restart reconciliation", () => {
+  test.each([
+    ["staging", "valid"], ["published", "valid"],
+    ["staging", "invalid-css"], ["published", "invalid-css"],
+    ["staging", "changed-bytes"], ["published", "changed-bytes"],
+  ] as const)("Given %s imported palette storage with %s bytes When recovery repeats Then only validated pairs commit and divergent storage remains held", async (location, outcome) => {
+    // Given
+    const id = `palette-recovery-${randomUUID()}`;
+    const reservation = await reserveExtractionBundle(systemsDir, id);
+    const orphan = await reserveExtractionBundle(systemsDir, `orphan-${randomUUID()}`);
+    const sqlite = getSqlite();
+    const receiptId = `imported-${id}`;
+    try {
+      await writeValidBundle(reservation);
+      const state = createDefaultPalette();
+      const json = `${serializePalette(state)}\n`;
+      const css = `${emitPaletteCss(state)}${outcome === "invalid-css" ? "/* divergent */\n" : ""}`;
+      await mkdir(path.join(reservation.stagingDir, "palette"));
+      await Promise.all([
+        writeFile(path.join(reservation.stagingDir, "palette", "state.json"), json),
+        writeFile(path.join(reservation.stagingDir, "palette", "scales.css"), css),
+      ]);
+      const validation = await validateExtractionBundle(reservation);
+      const proof: PaletteTransferProof = {
+        schema_version: 1, emitter_version: "burnguard-palette-2",
+        state: { size_bytes: Buffer.byteLength(json), sha256: createHash("sha256").update(json).digest("hex") },
+        css: { size_bytes: Buffer.byteLength(css), sha256: createHash("sha256").update(css).digest("hex") },
+      };
+      const provenance = buildExtractionProvenance([], 1);
+      sqlite.prepare("INSERT INTO design_systems (id,name,status,source_type,dir_path,created_at,updated_at) VALUES (?,?,'draft','website',?,1,1)")
+        .run(id, id, reservation.destinationDir);
+      prepareDesignSystemReceipt(getDb(), {
+        id: receiptId, designSystemId: id, contentRevision: 1, schemaVersion: 1,
+        digest: validation.content_digest, manifest: validation.manifest, provenance, createdAt: 1, paletteTransfer: proof,
+      });
+      sqlite.prepare("UPDATE design_system_receipts SET status='recovering' WHERE id=?").run(receiptId);
+      if (location === "published") await publishExtractionBundle(reservation, undefined, validation.manifest);
+      const storage = location === "published" ? reservation.destinationDir : reservation.stagingDir;
+      const actualCss = outcome === "changed-bytes" ? `${css}/* external */\n` : css;
+      if (outcome === "changed-bytes") await writeFile(path.join(storage, "palette", "scales.css"), actualCss);
+      const sidecar = await readFile(path.join(storage, "extraction-provenance.json"), "utf8");
+
+      // When
+      await reconcileExtractionState(3);
+      await reconcileExtractionState(4);
+
+      // Then
+      expect(sqlite.query("SELECT status,content_revision,schema_version,digest,manifest_json,provenance_json FROM design_system_receipts WHERE id=?").get(receiptId)).toEqual({
+        status: outcome === "valid" ? "committed" : "failed", content_revision: 1, schema_version: 1,
+        digest: validation.content_digest, manifest_json: JSON.stringify(validation.manifest), provenance_json: JSON.stringify(provenance),
+      });
+      expect(readPaletteTransfer(sqlite, receiptId)).toEqual(proof);
+      expect(getCurrentSystemContent(sqlite, id)?.id ?? null).toBe(outcome === "valid" ? receiptId : null);
+      const retained = outcome === "valid" ? reservation.destinationDir : storage;
+      expect(await readFile(path.join(retained, "palette", "state.json"), "utf8")).toBe(json);
+      expect(await readFile(path.join(retained, "palette", "scales.css"), "utf8")).toBe(actualCss);
+      expect(await readFile(path.join(retained, "extraction-provenance.json"), "utf8")).toBe(sidecar);
+      expect(await readdir(systemsDir)).not.toContain(path.basename(orphan.stagingDir));
+      expect(await readdir(path.join(systemsDir, ".extraction-reservations"))).not.toContain(orphan.id);
+      if (outcome !== "valid") {
+        expect(await readFile(path.join(retained, ".burnguard-publication"), "utf8")).toBe(reservation.publicationToken);
+        expect(await readdir(path.join(systemsDir, ".extraction-reservations"))).toContain(id);
+        if (location === "staging") expect(await readdir(systemsDir)).not.toContain(id);
+      }
+    } finally {
+      sqlite.prepare("DELETE FROM design_systems WHERE id=?").run(id);
+      await rollbackExtractionPublication(reservation);
+      await rollbackExtractionPublication(orphan);
+      await rm(reservation.destinationDir, { recursive: true, force: true });
+    }
+  });
+
   test.each(["publish", "hold"] as const)(
     "Given a missing splash live tree with a v2 %s transaction When actual bootstrap recovers Then seeders preserve its authority",
     async outcome => {

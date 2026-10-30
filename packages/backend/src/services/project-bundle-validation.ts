@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { ProjectBundleManifest } from "@bg/shared";
+import type { ProjectBundleDesignSystem, ProjectBundleFile, ProjectBundleManifest } from "@bg/shared";
 import { isAgentControlPath } from "../security/agent-control-files";
 import { PathBoundaryError, assertSafeName } from "../security/path-boundary";
 import { ProjectBundleError } from "./project-bundle-error";
@@ -45,8 +45,27 @@ export function validateProjectBundleMetadata(manifest: ProjectBundleManifest): 
       if (relative !== null && !files.has(`design-system/${relative}`)) invalid();
     }
   }
+  validateProjectBundlePaletteFiles(manifest.design_system, manifest.files);
   const pin = manifest.design_system.pin;
   if (pin && (pin.revision < 1 || createHash("sha256").update(JSON.stringify([pin.context, pin.tokens])).digest("hex") !== pin.digest)) invalid();
+}
+
+export function validateProjectBundlePaletteFiles(system: ProjectBundleDesignSystem, files: readonly ProjectBundleFile[]): void {
+  const reserved = files.filter(file => file.path.startsWith("design-system/") &&
+    file.path.slice("design-system/".length).split("/")[0]?.normalize("NFC").toLowerCase() === "palette");
+  const proof = system.kind === "custom" ? system.palette_transfer : undefined;
+  if (proof === undefined) {
+    if (reserved.length !== 0) invalid();
+    return;
+  }
+  if (reserved.length !== 2) invalid();
+  for (const [name, member] of [["state.json", proof.state], ["scales.css", proof.css]] as const) {
+    const file = reserved.find(candidate => candidate.path === `design-system/palette/${name}`);
+    if (file?.kind !== "design_system") invalid();
+    if (file.size_bytes !== member.size_bytes || file.sha256 !== member.sha256) {
+      throw new ProjectBundleError("project_bundle_digest");
+    }
+  }
 }
 
 function invalid(): never {

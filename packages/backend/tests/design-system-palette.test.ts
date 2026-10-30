@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { randomUUID } from "node:crypto";
-import { link, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
+import { cp, link, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -377,6 +377,42 @@ describe("design system palette persistence", () => {
     expect(saved.content_revision).toBe(1);
     expect(getCurrentSystemContent(f.db, "child")?.parentReceiptId).toBe(childReceipt?.id);
     expect(getCatalogRow(f.db, "test-system")).toBeNull();
+  });
+  test.each(["duplicate", "derive"] as const)("Given shipped history before any palette Save When %s survives source purge Then the child retains raw bytes and editable ownership", async operation => {
+    // Given: a real shipped pair on an ordinary v1 content receipt, with no palette history or local proof.
+    const f = await setup();
+    const id = "builtin-theme-light", live = path.join(f.systemsRoot, id);
+    await mkdir(path.join(live, "fonts"), { recursive: true });
+    await cp(path.join(import.meta.dir, "../../../design system themes/light/palette"), path.join(live, "palette"), { recursive: true });
+    for (const name of ["SKILL.md", "colors_and_type.css", "README.md", "fonts/fonts.css"]) await writeFile(path.join(live, name), "shipped original\r\n");
+    const provenance = buildExtractionProvenance([], 1), raw = JSON.stringify(provenance);
+    await writeFile(path.join(live, "extraction-provenance.json"), raw);
+    const manifest = (await inspectContentTree(live)).manifest;
+    f.db.query("INSERT INTO design_systems(id,name,status,dir_path,created_at,updated_at) VALUES (?,?,'draft',?,1,1)").run(id, "Shipped", live);
+    f.db.query(`INSERT INTO design_system_receipts(id,design_system_id,status,content_revision,schema_version,digest,manifest_json,provenance_json,created_at,updated_at)
+      VALUES ('shipped-parent',?,'committed',1,1,?,?,?,1,1)`).run(id, provenance.content_digest, JSON.stringify(manifest), raw);
+    expect(readPaletteTransfer(f.db, "shipped-parent")).toBeNull();
+    const original = await readDesignSystemPalette(id, f.env);
+    const json = await readFile(path.join(live, "palette/state.json"), "utf8");
+    // When
+    const statements = spyOn(Database.prototype, "prepare");
+    try {
+      await copyCatalogSystem(f.db, f.systemsRoot, id, { id: "shipped-child", name: "Child", operation, reason: null, metadata: {} });
+      await trashCatalogSystem(f.db, f.systemsRoot, id);
+      await purgeCatalogSystem(f.db, f.systemsRoot, id);
+      // Then
+      const child = await readDesignSystemPalette("shipped-child", f.env);
+      expect(child.css).toBe(original.css);
+      expect(child.state).toEqual(original.state);
+      expect(await readFile(path.join(f.systemsRoot, "shipped-child/palette/state.json"), "utf8")).toBe(json);
+      if (child.state === null) throw new Error("Missing transferred shipped state");
+      const changed = { ...child.state, display: { ...child.state.display, appearance: "dark" as const } };
+      expect((await saveDesignSystemPalette("shipped-child", { expected_digest: child.expected_digest, state: changed }, f.env)).state).toEqual(changed);
+      expect(getCatalogRow(f.db, id)).toBeNull();
+    } finally {
+      for (const result of statements.mock.results) if (result.type === "return") result.value.finalize();
+      statements.mockRestore();
+    }
   });
 });
 

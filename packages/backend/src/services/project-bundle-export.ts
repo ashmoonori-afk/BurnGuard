@@ -29,6 +29,9 @@ import {
 import { ProjectBundleError } from "./project-bundle-error";
 import { withCatalogSnapshot, type CatalogAccessEvents } from "./catalog-snapshot";
 import { SystemContentError } from "./system-content-format";
+import { type SystemContentLease } from "./system-content-access";
+import { authenticatePaletteTransfer, DesignSystemPaletteError, paletteContentEnvironment } from "./design-system-palette";
+import { validateProjectBundlePaletteFiles } from "./project-bundle-validation";
 
 type AttachmentRow = {
   readonly turn_id: string | null;
@@ -63,7 +66,7 @@ export async function exportProjectBundle(projectId: string, faults: ProjectBund
   const budget = createBundleBudget();
   const projectEntries = await collectProjectBundleEntries(projectRoot, budget);
   await faults.afterProjectRead?.();
-  const snapshot = async () => {
+  const snapshot = async (lease?: SystemContentLease) => {
   const system = project.design_system_id ? await getDesignSystemDetail(project.design_system_id) : null;
   let systemEntries: readonly BundleEntry[] = [];
   let systemRoot: string | null = null;
@@ -75,6 +78,8 @@ export async function exportProjectBundle(projectId: string, faults: ProjectBund
     if (system.source_type === "sample") {
       designSystem = { kind: "builtin", id: system.id, pin: portablePin(projectId) };
     } else {
+      if (lease === undefined) throw new ProjectBundleError("project_bundle_unavailable");
+      const paletteTransfer = await authenticatePaletteTransfer(paletteContentEnvironment(), system.id, lease);
       systemRoot = resolveManagedPath(systemsDir, system.dir_path);
       systemEntries = await collectDesignSystemBundleEntries(systemRoot, budget);
       designSystem = {
@@ -89,7 +94,13 @@ export async function exportProjectBundle(projectId: string, faults: ProjectBund
         tokens_css_path: relativeSystemPath(systemRoot, system.tokens_css_path),
         readme_md_path: relativeSystemPath(systemRoot, system.readme_md_path),
         pin: portablePin(projectId),
+        ...(paletteTransfer === null ? {} : { palette_transfer: paletteTransfer }),
       };
+      try { validateProjectBundlePaletteFiles(designSystem, systemEntries.map(entry => entry.file)); }
+      catch (error) {
+        if (error instanceof ProjectBundleError) throw new ProjectBundleError("project_bundle_unavailable");
+        throw error;
+      }
     }
   }
   await faults.afterSystemRead?.();
@@ -119,6 +130,13 @@ export async function exportProjectBundle(projectId: string, faults: ProjectBund
   const confirmedProjectEntries = await collectProjectBundleEntries(projectRoot);
   const confirmedSystemEntries = systemRoot ? await collectDesignSystemBundleEntries(systemRoot) : [];
   const confirmedSystem = project.design_system_id ? await getDesignSystemDetail(project.design_system_id) : null;
+  if (designSystem.kind === "custom") {
+    if (lease === undefined) throw new ProjectBundleError("project_bundle_unavailable");
+    const confirmedTransfer = await authenticatePaletteTransfer(paletteContentEnvironment(), designSystem.original_id, lease);
+    if (JSON.stringify(confirmedTransfer) !== JSON.stringify(designSystem.palette_transfer ?? null)) {
+      throw new ProjectBundleError("project_bundle_unavailable");
+    }
+  }
   const latestProject = await getProjectDetail(projectId);
   const liveAfter = await inspectCanonicalTree(projectRoot);
   if (!sameEntries(projectEntries, confirmedProjectEntries) ||
@@ -147,7 +165,7 @@ export async function exportProjectBundle(projectId: string, faults: ProjectBund
   return await (project.design_system_id === null ? snapshot()
     : withCatalogSnapshot(getSqlite(), systemsDir, project.design_system_id, snapshot, faults));
   } catch (error) {
-    if (error instanceof SystemContentError) throw new ProjectBundleError("project_bundle_unavailable");
+    if (error instanceof SystemContentError || error instanceof DesignSystemPaletteError) throw new ProjectBundleError("project_bundle_unavailable");
     throw error;
   } finally { release(); }
 }

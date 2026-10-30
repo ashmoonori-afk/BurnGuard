@@ -12,6 +12,8 @@ import { inspectCanonicalTree } from "../../src/services/canonical-tree-manifest
 import { readDesignSystemTokens, upsertDesignSystemColorToken } from "../../src/services/design-system-extract";
 import { projectBundleImportReceiptsDir, projectBundlePayloadStage, projectBundleSystemStage } from "../../src/services/project-bundle-import-receipt";
 import { DesignSystemPinError, inspectProjectDesignSystemPin, readProjectDesignSystemPin } from "../../src/services/project-design-system-pin";
+import { readPaletteTransfer } from "../../src/db/palette-transfer-repository";
+import { readDesignSystemPalette } from "../../src/services/design-system-palette";
 
 const [phase, boundary, archive, output] = process.argv.slice(2);
 if (archive === undefined || output === undefined ||
@@ -106,10 +108,14 @@ if (phase === "edit") {
     pin: readProjectDesignSystemPin(projectId),
   };
   await bootstrapLocalAppData();
+  const head = getCurrentSystemContent(getSqlite(), systemId);
+  const paletteTransfer = head === null ? null : readPaletteTransfer(getSqlite(), head.id);
+  const palette = paletteTransfer === null ? null : await readDesignSystemPalette(systemId);
   await writeFile(output, JSON.stringify({
     before, first,
     system: await getDesignSystemDetail(systemId), project: await getProjectDetail(projectId),
     head: getCurrentSystemContent(getSqlite(), systemId),
+    palette, palette_transfer: paletteTransfer,
     pending: getPendingSystemOperation(getSqlite(), systemId),
     pin: readProjectDesignSystemPin(projectId),
     system_manifest: retained ? await inspectCanonicalTree(live) : null,

@@ -7,6 +7,8 @@ import type { Database } from "bun:sqlite";
 import { getCatalogRow, type CatalogReceiptRow } from "./catalog-repository";
 import { parseContentJournal, parseContentProvenance, SystemContentError, type ContentBase, type ContentHead } from "../services/system-content-format";
 import { parseCanonicalTreeManifest } from "../services/canonical-tree-manifest";
+import { parsePaletteTransferProof, type PaletteTransferProof } from "@bg/shared/palette";
+import { insertPaletteTransfer, readPaletteTransfer, validatePaletteTransferReceipt } from "./palette-transfer-repository";
 
 type MetadataUpdate = {
   readonly id: string;
@@ -25,6 +27,7 @@ type ReceiptInput = {
   readonly manifest: Readonly<Record<string, unknown>>;
   readonly provenance: Readonly<Record<string, unknown>>;
   readonly createdAt: number;
+  readonly paletteTransfer?: PaletteTransferProof;
 };
 type Receipt = {
   readonly id: string;
@@ -63,6 +66,11 @@ export function prepareDesignSystemReceipt(db: PipelineDatabase, input: ReceiptI
       if (current.operation !== "content" || current.id !== input.id || current.digest !== input.digest || current.schemaVersion !== input.schemaVersion) {
         throw new PipelineRepositoryError("content_receipt_mismatch", input.designSystemId);
       }
+      const storedProof = readPaletteTransfer(db.$client, current.id);
+      const suppliedProof = input.paletteTransfer === undefined ? null : parsePaletteTransferProof(input.paletteTransfer);
+      if (JSON.stringify(storedProof) !== JSON.stringify(suppliedProof)) {
+        throw new PipelineRepositoryError("content_receipt_mismatch", input.designSystemId);
+      }
       return parseReceipt(current);
     }
     tx.insert(designSystemReceiptsTable).values({
@@ -77,22 +85,27 @@ export function prepareDesignSystemReceipt(db: PipelineDatabase, input: ReceiptI
       createdAt: input.createdAt,
       updatedAt: input.createdAt,
     }).run();
+    if (input.paletteTransfer !== undefined) insertPaletteTransfer(db.$client, input.id, input.paletteTransfer);
     return { id: input.id, contentRevision: input.contentRevision, schemaVersion: input.schemaVersion, digest: input.digest, manifest: input.manifest, provenance: input.provenance };
   });
 }
 
 export function commitDesignSystemReceipt(db: PipelineDatabase, input: { readonly id: string; readonly digest: string; readonly updatedAt: number }): Receipt {
-  db.update(designSystemReceiptsTable).set({ status: "committed", updatedAt: input.updatedAt }).where(and(
-    eq(designSystemReceiptsTable.id, input.id),
-    eq(designSystemReceiptsTable.operation, "content"),
-    sql`${designSystemReceiptsTable.status} IN ('prepared','recovering')`,
-    eq(designSystemReceiptsTable.digest, input.digest),
-  )).run();
-  const changed = db.get<readonly [number]>(sql`SELECT changes()`);
-  if (changed?.[0] !== 1) throw new PipelineRepositoryError("content_receipt_mismatch", input.id);
-  const row = db.select().from(designSystemReceiptsTable).where(eq(designSystemReceiptsTable.id, input.id)).limit(1).all()[0];
-  if (row === undefined) throw new PipelineRepositoryError("not_found", input.id);
-  return parseReceipt(row);
+  return db.transaction((tx) => {
+    const row = db.$client.query<CatalogReceiptRow, [string, string]>(`${SYSTEM_CONTENT_SELECT}
+      WHERE id=? AND digest=? AND operation='content' AND status IN ('prepared','recovering')`).get(input.id, input.digest);
+    if (row === null) throw new PipelineRepositoryError("content_receipt_mismatch", input.id);
+    validatePaletteTransferReceipt(db.$client, row);
+    tx.update(designSystemReceiptsTable).set({ status: "committed", updatedAt: input.updatedAt }).where(and(
+      eq(designSystemReceiptsTable.id, input.id),
+      eq(designSystemReceiptsTable.operation, "content"),
+      sql`${designSystemReceiptsTable.status} IN ('prepared','recovering')`,
+      eq(designSystemReceiptsTable.digest, input.digest),
+    )).run();
+    const changed = tx.get<readonly [number]>(sql`SELECT changes()`);
+    if (changed?.[0] !== 1) throw new PipelineRepositoryError("content_receipt_mismatch", input.id);
+    return parseReceipt(row);
+  });
 }
 
 export function getDesignSystemReceiptById(db: PipelineDatabase, id: string): Receipt | null {

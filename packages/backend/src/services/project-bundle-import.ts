@@ -9,6 +9,7 @@ import {
   type ProjectBundleImportResponse,
   type ProjectBundleImportWarning,
 } from "@bg/shared";
+import type { PaletteTransferProof } from "@bg/shared/palette";
 import { getSqlite } from "../db/sqlite-client";
 import { createDesignSystemRecord, createProjectRecord, getDesignSystemDetail } from "../db/seed";
 import { projectsDir, resolveRepoRoot, systemsDir } from "../lib/paths";
@@ -29,6 +30,10 @@ import { assertSystemContentLease, withSystemContentAccess, type SystemContentLe
 import { pathStat, safeContentChild } from "./system-content-tree";
 import { SystemContentError } from "./system-content-format";
 import { acquireArtifactProjectLock } from "./artifact-project-lock";
+import { DesignSystemPaletteError, validatePaletteTransferAtRoot } from "./design-system-palette";
+import { getPendingSystemOperation } from "../db/catalog-repository";
+import { PaletteTransferRepositoryError, validatePaletteTransferReceipt } from "../db/palette-transfer-repository";
+import { CatalogFileError, validateCatalogReceiptTree } from "./catalog-files";
 
 type ImportOwnership = { readonly operationId: string; readonly projectId: string; readonly systemId: string | null };
 type ProjectBundleImportEvents = {
@@ -46,6 +51,9 @@ export async function importProjectBundleFile(file: File, name?: string, events:
   try {
     await mkdir(payloadStage, { recursive: false });
     ({ manifest, entries } = await readProjectBundleZip(file, payloadStage, validateProjectBundleMetadata));
+    if (manifest.design_system.kind === "custom" && manifest.design_system.palette_transfer !== undefined) {
+      await validateImportedPalette(resolveWithin(payloadStage, "design-system"), manifest.design_system.palette_transfer);
+    }
   } catch (error) {
     await rm(payloadStage, { recursive: true, force: true });
     await clearProjectBundleImportReceipt(operationId);
@@ -74,6 +82,21 @@ async function importStagedBundle(
     ? (() => { const id = `bundle-${ulid().toLowerCase()}`; return { id, stage: projectBundleSystemStage(id) }; })()
     : null;
   const owner = { operationId, projectId, systemId: plannedSystem?.id ?? null };
+  const validatePaletteReceipt = async (receiptId: string): Promise<void> => {
+    try {
+      if (customSystemId === null || customSystemDir === null) throw new ProjectBundleError("project_bundle_unavailable");
+      const receipt = getPendingSystemOperation(getSqlite(), customSystemId);
+      if (receipt === null || receipt.id !== receiptId) throw new ProjectBundleError("project_bundle_unavailable");
+      await validateCatalogReceiptTree(customSystemDir, receipt);
+      const proof = validatePaletteTransferReceipt(getSqlite(), receipt);
+      const declared = manifest.design_system.kind === "custom" ? manifest.design_system.palette_transfer ?? null : null;
+      if (JSON.stringify(proof) !== JSON.stringify(declared)) throw new ProjectBundleError("project_bundle_digest");
+      if (proof !== null) await validateImportedPalette(customSystemDir, proof);
+    } catch (error) {
+      if (error instanceof PaletteTransferRepositoryError || error instanceof CatalogFileError) throw new ProjectBundleError("project_bundle_digest");
+      throw error;
+    }
+  };
   await writeProjectBundleImportReceipt({
     schema_version: 1,
     operation_id: operationId,
@@ -160,6 +183,7 @@ async function importStagedBundle(
     await indexProjectFiles(project.id);
     const warnings = await importWarnings(manifest.fonts.families, system.missing_builtin, events.getLocalFonts ?? getLocalFonts);
     await events.atBoundary?.("before-commit", owner);
+    if (system.receipt !== null) await validatePaletteReceipt(system.receipt.id);
     await writeProjectBundleImportReceipt({ schema_version: 1, operation_id: operationId, project_id: projectId, system_id: plannedSystem?.id ?? null, phase: "committed" });
     outerCommitted = true;
     await events.atBoundary?.("outer-committed", owner);
@@ -167,6 +191,7 @@ async function importStagedBundle(
     if (customSystemDir !== null) await removeBundleImportOwnerMarker(customSystemDir);
     await events.atBoundary?.("owner-removed", owner);
     if (system.receipt !== null) {
+      await validatePaletteReceipt(system.receipt.id);
       commitDesignSystemReceipt(getDb(), { ...system.receipt, updatedAt: Date.now() });
     }
     await rm(payloadStage, { recursive: true, force: true });
@@ -267,6 +292,7 @@ async function restoreDesignSystem(
       if (error instanceof ExtractionSidecarError) throw new ProjectBundleError("invalid_project_bundle");
       throw error;
     }
+    if (system.palette_transfer !== undefined) await validateImportedPalette(stage, system.palette_transfer);
     await writeBundleImportOwnerMarker(stage, operationId);
     if (await pathStat(destination) !== null) throw new ProjectBundleError("project_bundle_unavailable");
     await rename(stage, destination);
@@ -286,7 +312,7 @@ async function restoreDesignSystem(
       thumbnailPath: null,
     });
     rowCreated = true;
-    const receipt = await recordImportedContentReceipt(id, destination);
+    const receipt = await recordImportedContentReceipt(id, destination, system.palette_transfer);
     return { selected_id: id, created_id: id, created_dir: destination, missing_builtin: null, receipt };
   } catch (error) {
     const cleanupFailed = await cleanupImportedBundle({
@@ -300,7 +326,7 @@ async function restoreDesignSystem(
   }
 }
 
-async function recordImportedContentReceipt(systemId: string, root: string): Promise<{ readonly id: string; readonly digest: string }> {
+async function recordImportedContentReceipt(systemId: string, root: string, paletteTransfer?: PaletteTransferProof): Promise<{ readonly id: string; readonly digest: string }> {
   const sidecar = await readValidatedExtractionSidecar(root);
   const manifest = await inspectCanonicalTree(root);
   const provenance: unknown = JSON.parse(await readFile(path.join(root, "extraction-provenance.json"), "utf8"));
@@ -316,8 +342,18 @@ async function recordImportedContentReceipt(systemId: string, root: string): Pro
     manifest,
     provenance: provenance as Readonly<Record<string, unknown>>,
     createdAt: now,
+    ...(paletteTransfer === undefined ? {} : { paletteTransfer }),
   });
   return { id: receiptId, digest: sidecar.content_digest };
+}
+
+async function validateImportedPalette(root: string, proof: PaletteTransferProof): Promise<void> {
+  try { await validatePaletteTransferAtRoot(root, proof); }
+  catch (error) {
+    if (error instanceof DesignSystemPaletteError) throw new ProjectBundleError("invalid_project_bundle");
+    if (error instanceof SystemContentError) throw new ProjectBundleError("project_bundle_digest");
+    throw error;
+  }
 }
 
 type WriteEntriesInput = {

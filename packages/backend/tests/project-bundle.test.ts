@@ -30,6 +30,8 @@ import { authoringContentEnvironment } from "../src/services/design-system-autho
 import { withCatalogSnapshot } from "../src/services/catalog-snapshot";
 import { isArtifactProjectBusy } from "../src/services/artifact-project-lock";
 import { ProjectBundleError } from "../src/services/project-bundle-error";
+import { readPaletteTransfer } from "../src/db/palette-transfer-repository";
+import legacyEmitter from "./fixtures/palette-emitter-v1.json";
 
 // Bun's `rm` fails with EFAULT on a Windows directory link; remove the link itself (never the target) per platform.
 const removeDirectoryLink = (link: string): Promise<void> => (process.platform === "win32" ? rmdir(link) : unlink(link));
@@ -76,6 +78,190 @@ async function bundleFixture() {
   if (system === null) throw new Error("Missing bundle fixture row");
   return { project, system };
 }
+
+async function savedPaletteBundle() {
+  const fixture = await bundleFixture();
+  const initial = await readDesignSystemPalette(fixture.system.id);
+  const state = { ...createDefaultPalette(), curve: { ...createDefaultPalette().curve, amount: 0.413 } };
+  await saveDesignSystemPalette(fixture.system.id, { expected_digest: initial.expected_digest, state });
+  const archive = await exportProjectBundle(fixture.project.id);
+  return { ...fixture, state, archive };
+}
+
+test("Given an authenticated saved palette When exported and imported after its source is deleted Then the new owner reopens and saves independently", async () => {
+  // Given
+  const { project: source, system, state, archive } = await savedPaletteBundle();
+  expect(archive.manifest.design_system).toMatchObject({ kind: "custom", palette_transfer: { schema_version: 1 } });
+  const originalCss = await readFile(path.join(system.dir_path, "colors_and_type.css"), "utf8");
+  getSqlite().prepare("DELETE FROM projects WHERE id=?").run(source.id);
+  await rm(source.dir_path, { recursive: true, force: true });
+  getSqlite().prepare("DELETE FROM design_systems WHERE id=?").run(system.id);
+  await rm(system.dir_path, { recursive: true, force: true });
+  // When
+  const restored = await importProjectBundleFile(new File([archive.bytes], archive.filename), "Portable palette");
+  createdProjectIds.push(restored.id);
+  const detail = await getProjectDetail(restored.id);
+  if (!detail?.design_system_id) throw new Error("Missing palette import system");
+  createdSystemIds.push(detail.design_system_id);
+  const imported = await getDesignSystemDetail(detail.design_system_id);
+  if (imported === null) throw new Error("Missing palette import row");
+  const head = getCurrentSystemContent(getSqlite(), imported.id);
+  // Then
+  expect(head).toMatchObject({ schemaVersion: 1, contentRevision: 1, status: "committed" });
+  if (head === null) throw new Error("Missing transfer receipt");
+  expect(readPaletteTransfer(getSqlite(), head.id)).toEqual(
+    archive.manifest.design_system.kind === "custom" ? archive.manifest.design_system.palette_transfer ?? null : null,
+  );
+  const reopened = await readDesignSystemPalette(imported.id);
+  expect(reopened.state).toEqual(state);
+  expect(reopened.css).toBe(emitPaletteCss(state));
+  const changed = { ...state, display: { ...state.display, appearance: "dark" as const } };
+  const saved = await saveDesignSystemPalette(imported.id, { expected_digest: reopened.expected_digest, state: changed });
+  expect(saved.state).toEqual(changed);
+  expect((await readDesignSystemPalette(imported.id)).css).toBe(emitPaletteCss(changed));
+  expect(await readFile(path.join(imported.dir_path, "colors_and_type.css"), "utf8")).toBe(originalCss);
+  expect(await getDesignSystemDetail(system.id)).toBeNull();
+});
+
+test.each(["missing", "null", "unknown", "hash", "partial", "alias", "extra", "emitter"] as const)(
+  "Given a palette bundle with %s transfer evidence When imported Then no new project or system is created",
+  async fault => {
+    const { archive } = await savedPaletteBundle();
+    const zip = await JSZip.loadAsync(archive.bytes);
+    const manifest = structuredClone(archive.manifest);
+    if (manifest.design_system.kind !== "custom" || manifest.design_system.palette_transfer === undefined) throw new Error("Missing proof fixture");
+    const proof = manifest.design_system.palette_transfer;
+    let descriptor: unknown = manifest.design_system;
+    let files = manifest.files;
+    if (fault === "missing") {
+      const { palette_transfer: _proof, ...unproved } = manifest.design_system;
+      descriptor = unproved;
+    } else if (fault === "null") descriptor = { ...manifest.design_system, palette_transfer: null };
+    else if (fault === "unknown") descriptor = { ...manifest.design_system, palette_transfer: { ...proof, receipt_id: "untrusted-owner" } };
+    else if (fault === "hash") descriptor = { ...manifest.design_system, palette_transfer: { ...proof, css: { ...proof.css, sha256: "0".repeat(64) } } };
+    else if (fault === "partial") {
+      zip.remove("design-system/palette/scales.css");
+      files = files.filter(file => file.path !== "design-system/palette/scales.css");
+    } else if (fault === "alias") {
+      const bytes = await zip.file("design-system/palette/state.json")?.async("uint8array");
+      if (bytes === undefined) throw new Error("Missing state fixture");
+      zip.remove("design-system/palette/state.json");
+      zip.file("design-system/Palette/state.json", bytes);
+      files = files.map(file => file.path === "design-system/palette/state.json" ? { ...file, path: "design-system/Palette/state.json" } : file);
+    } else if (fault === "extra") {
+      zip.file("design-system/palette/extra.txt", "extra");
+      files = [...files, { path: "design-system/palette/extra.txt", kind: "design_system", size_bytes: 5, sha256: createHash("sha256").update("extra").digest("hex") }];
+    } else descriptor = { ...manifest.design_system, palette_transfer: { ...proof, emitter_version: "unrecognised-emitter" } };
+    zip.file(PROJECT_BUNDLE_MANIFEST_PATH, JSON.stringify({ ...manifest, files, design_system: descriptor }));
+    const file = new File([new Uint8Array(await zip.generateAsync({ type: "uint8array" }))], "invalid-palette.burnguard-project");
+    const db = getSqlite();
+    const count = () => [
+      db.query<{ count: number }, []>("SELECT count(*) count FROM projects").get()?.count,
+      db.query<{ count: number }, []>("SELECT count(*) count FROM design_systems").get()?.count,
+      db.query<{ count: number }, []>("SELECT count(*) count FROM design_system_palette_transfers").get()?.count,
+    ];
+    const before = count();
+    await expect(importProjectBundleFile(file)).rejects.toMatchObject({ code: fault === "hash" ? "project_bundle_digest" : "invalid_project_bundle" });
+    expect(count()).toEqual(before);
+    expect(await readdir(projectBundleImportReceiptsDir())).toEqual([]);
+  },
+);
+
+test("Given an unowned deterministic palette lookalike When exporting Then exact bytes alone do not grant transfer authority", async () => {
+  const { project, system } = await bundleFixture();
+  const state = createDefaultPalette();
+  await mkdir(path.join(system.dir_path, "palette"));
+  await writeFile(path.join(system.dir_path, "palette", "state.json"), serializePalette(state));
+  await writeFile(path.join(system.dir_path, "palette", "scales.css"), emitPaletteCss(state));
+  await expect(exportProjectBundle(project.id)).rejects.toMatchObject({ code: "project_bundle_unavailable" });
+  expect(getSqlite().query<{ count: number }, [string]>(`SELECT count(*) count FROM design_system_palette_transfers p
+    JOIN design_system_receipts r ON r.id=p.receipt_id WHERE r.design_system_id=?`).get(system.id)?.count).toBe(0);
+});
+
+test.each(legacyEmitter.cases)(
+  "Given an explicitly imported unsigned legacy $name declaration When reopened Then raw pair bytes survive until explicit Save",
+  async pair => {
+    const { archive } = await savedPaletteBundle();
+    const zip = await JSZip.loadAsync(archive.bytes);
+    const json = pair.json;
+    const file = (name: string, bytes: string) => ({
+      path: `design-system/palette/${name}`, kind: "design_system" as const,
+      size_bytes: Buffer.byteLength(bytes), sha256: createHash("sha256").update(bytes).digest("hex"),
+    });
+    const stateFile = file("state.json", json), cssFile = file("scales.css", pair.css);
+    if (archive.manifest.design_system.kind !== "custom") throw new Error("Missing custom descriptor");
+    const declaration = { schema_version: 1, emitter_version: "burnguard-palette-1",
+      state: { size_bytes: stateFile.size_bytes, sha256: stateFile.sha256 },
+      css: { size_bytes: cssFile.size_bytes, sha256: cssFile.sha256 } };
+    zip.file(stateFile.path, json);
+    zip.file(cssFile.path, pair.css);
+    zip.file(PROJECT_BUNDLE_MANIFEST_PATH, JSON.stringify({
+      ...archive.manifest,
+      files: [...archive.manifest.files.filter(file => !file.path.startsWith("design-system/palette/")), stateFile, cssFile],
+      design_system: { ...archive.manifest.design_system, palette_transfer: declaration },
+    }));
+    const imported = await importProjectBundleFile(new File([new Uint8Array(await zip.generateAsync({ type: "uint8array" }))], "legacy.burnguard-project"));
+    createdProjectIds.push(imported.id);
+    const project = await getProjectDetail(imported.id);
+    if (!project?.design_system_id) throw new Error("Missing imported legacy system");
+    const id = project.design_system_id;
+    createdSystemIds.push(id);
+    const reopened = await readDesignSystemPalette(id);
+    expect(reopened.css).toBe(pair.css);
+    expect(await readFile(path.join(systemsDir, id, "palette/state.json"), "utf8")).toBe(json);
+    expect(await readFile(path.join(systemsDir, id, "palette/scales.css"), "utf8")).toBe(pair.css);
+    if (reopened.state === null) throw new Error("Missing legacy state");
+    const saved = await saveDesignSystemPalette(id, { expected_digest: reopened.expected_digest, state: reopened.state });
+    expect(saved.css).toBe(emitPaletteCss(reopened.state));
+    expect(saved.css).not.toBe(pair.css);
+  },
+);
+
+test("Given an imported palette proof before outer commit When import rolls back Then its receipt and proof disappear together", async () => {
+  const { archive } = await savedPaletteBundle();
+  let target: { readonly systemId: string; readonly receiptId: string; readonly projectId: string } | undefined;
+  await expect(importProjectBundleFile(new File([archive.bytes], archive.filename), "Proof rollback", {
+    atBoundary: async (boundary, owner) => {
+      if (boundary !== "before-commit" || owner.systemId === null) return;
+      const receipt = getPendingSystemOperation(getSqlite(), owner.systemId);
+      if (receipt === null) throw new Error("Missing prepared transfer");
+      target = { systemId: owner.systemId, receiptId: receipt.id, projectId: owner.projectId };
+      expect(receipt).toMatchObject({ schemaVersion: 1, contentRevision: 1, status: "prepared" });
+      expect(readPaletteTransfer(getSqlite(), receipt.id)).not.toBeNull();
+      throw new ProjectBundleError("project_bundle_digest");
+    },
+  })).rejects.toMatchObject({ code: "project_bundle_digest" });
+  if (target === undefined) throw new Error("Missing rollback target");
+  expect(await getProjectDetail(target.projectId)).toBeNull();
+  expect(await getDesignSystemDetail(target.systemId)).toBeNull();
+  expect(readPaletteTransfer(getSqlite(), target.receiptId)).toBeNull();
+  expect(await exists(path.join(systemsDir, target.systemId))).toBe(false);
+});
+
+test.each(["pair", "proof-hash", "proof-missing"] as const)(
+  "Given prepared palette ownership When %s diverges before outer commit Then the incomplete import rolls back",
+  async fault => {
+    const { archive } = await savedPaletteBundle();
+    let systemId: string | undefined;
+    await expect(importProjectBundleFile(new File([archive.bytes], archive.filename), "Changed transfer", {
+      atBoundary: async (boundary, owner) => {
+        if (boundary !== "before-commit" || owner.systemId === null) return;
+        systemId = owner.systemId;
+        const receipt = getPendingSystemOperation(getSqlite(), owner.systemId);
+        if (receipt === null) throw new Error("Missing prepared owner");
+        if (fault === "pair") {
+          const state = path.join(systemsDir, owner.systemId, "palette/state.json");
+          await writeFile(state, `${await readFile(state, "utf8")} `);
+        } else if (fault === "proof-hash") {
+          getSqlite().query("UPDATE design_system_palette_transfers SET state_sha256=? WHERE receipt_id=?").run("0".repeat(64), receipt.id);
+        } else getSqlite().query("DELETE FROM design_system_palette_transfers WHERE receipt_id=?").run(receipt.id);
+      },
+    })).rejects.toMatchObject({ code: "project_bundle_digest" });
+    if (systemId === undefined) throw new Error("Missing rejected import");
+    expect(await getDesignSystemDetail(systemId)).toBeNull();
+    expect(await exists(path.join(systemsDir, systemId))).toBe(false);
+  },
+);
 
 beforeAll(async () => {
   await runMigrations();
@@ -372,10 +558,12 @@ test("Given a durable outer commit When finalization fails Then the imported own
     .rejects.toMatchObject({ code: "system_content_unavailable" });
 });
 
-test.each(["system-reserved", "system-restored", "outer-committed", "owner-removed"] as const)(
-  "Given a real import stopped at %s When its process exits Then outer-first startup recovers only its owned project and v1 system",
-  async boundary => {
-    const exported = await exportProjectBundle(sourceProjectId);
+test.each((["plain", "palette"] as const).flatMap(mode =>
+  (["system-reserved", "system-restored", "outer-committed", "owner-removed"] as const).map(boundary => ({ mode, boundary }))))(
+  "Given a real $mode import stopped at $boundary When its process exits Then outer-first startup recovers only its owned project and v1 system",
+  async ({ mode, boundary }) => {
+    const palette = mode === "palette" ? await savedPaletteBundle() : null;
+    const exported = palette?.archive ?? await exportProjectBundle(sourceProjectId);
     const originalSource = await inspectCanonicalTree(sourceSystemDir);
     const home = await mkdtemp(path.join(tmpdir(), "bg-bundle-consumer-"));
     const archive = path.join(home, "input.burnguard-project");
@@ -431,6 +619,7 @@ test.each(["system-reserved", "system-restored", "outer-committed", "owner-remov
           first: { system: null, project: null, head: null, pin: null },
           system: null, project: null, head: null, pin: null,
           system_present: false, project_present: false, system_owner: false, project_owner: false,
+          palette: null, palette_transfer: null,
         });
       } else {
         expect(result).toMatchObject({
@@ -443,6 +632,8 @@ test.each(["system-reserved", "system-restored", "outer-committed", "owner-remov
           pin: before.pin, sidecar: before.sidecar, system_present: true, project_present: true,
           // Existing committed-outer recovery preserves live owner evidence if exit preceded its removal.
           system_owner: boundary === "outer-committed", project_owner: boundary === "outer-committed",
+          palette: palette === null ? null : { state: palette.state, css: emitPaletteCss(palette.state) },
+          palette_transfer: exported.manifest.design_system.kind === "custom" ? exported.manifest.design_system.palette_transfer ?? null : null,
         });
       }
       expect(await inspectCanonicalTree(sourceSystemDir)).toEqual(originalSource);
