@@ -1,6 +1,8 @@
 import type { Database } from "bun:sqlite";
 import type { PaletteTransferProof } from "@bg/shared/palette";
+import type { CanonicalTransferProof } from "@bg/shared/theme";
 import { insertPaletteTransfer, validatePaletteTransferReceipt } from "./palette-transfer-repository";
+import { insertCanonicalTransfer, validateCanonicalTransferReceipt } from "./canonical-transfer-repository";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import type { CatalogKind, CatalogLicense, CatalogProvenance, DesignSystemSourceType, ProjectType } from "@bg/shared";
@@ -37,6 +39,7 @@ type OperationInput = {
   readonly reason: string | null; readonly metadata: Readonly<Record<string, string>>;
   readonly sourcePath: string; readonly destinationPath: string; readonly now: number;
   readonly paletteTransfer?: PaletteTransferProof;
+  readonly canonicalTransfer?: CanonicalTransferProof;
 };
 
 export class CatalogRepositoryError extends Error {
@@ -137,6 +140,7 @@ export function createCatalogChild(db: Database, parent: CatalogRow, childId: st
         );
       insertOperation(db, receiptId, input);
       if (input.paletteTransfer !== undefined) insertPaletteTransfer(db, receiptId, input.paletteTransfer);
+      if (input.canonicalTransfer !== undefined) insertCanonicalTransfer(db, receiptId, input.canonicalTransfer);
     })();
   } catch (error) {
     if (error instanceof Error && "code" in error && error.code === "SQLITE_CONSTRAINT") throw new CatalogRepositoryError("id_conflict", childId);
@@ -160,6 +164,7 @@ export function commitCatalogOperation(db: Database, receiptId: string, lifecycl
     const receipt = db.query<CatalogReceiptRow, [string]>(`${RECEIPT_SELECT} WHERE id=? AND operation!='content' AND status IN ('prepared','recovering')`).get(receiptId);
     if (receipt === null) throw new CatalogRepositoryError("operation_conflict", receiptId);
     validatePaletteTransferReceipt(db, receipt);
+    validateCanonicalTransferReceipt(db, receipt);
     const changed = db.prepare("UPDATE design_system_receipts SET status='committed',updated_at=? WHERE id=? AND operation!='content' AND status IN ('prepared','recovering')").run(now, receiptId).changes;
     if (changed !== 1) throw new CatalogRepositoryError("operation_conflict", receiptId);
     db.prepare("UPDATE design_systems SET lifecycle=?,trashed_at=?,updated_at=? WHERE id=?").run(lifecycle, lifecycle === "trashed" ? now : null, now, receipt.designSystemId);
