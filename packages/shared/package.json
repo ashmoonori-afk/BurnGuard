@@ -10,6 +10,7 @@
     "./app": "./src/app.ts",
     "./color": "./src/color.ts",
     "./palette": "./src/palette.ts",
+    "./theme": "./src/theme.ts",
     "./api": "./src/api.ts",
     "./artifact": "./src/artifact.ts",
     "./harness": "./src/harness.ts",

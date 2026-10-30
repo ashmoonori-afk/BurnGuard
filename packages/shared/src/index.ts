@@ -7,6 +7,7 @@ export * from "./chat";
 export * from "./comment";
 export * from "./color";
 export * from "./palette";
+export * from "./theme";
 export * from "./connections";
 export * from "./contract-parser";
 export * from "./design-system";
