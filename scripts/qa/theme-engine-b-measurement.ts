@@ -24,6 +24,7 @@ export const B_SOURCE_FILES = [
   "packages/shared/src/contract-parser.ts",
   "packages/backend/src/data/bundled-design-systems.ts",
   "packages/backend/src/services/bundled-theme-refresh.ts",
+  "packages/backend/src/services/bundled-theme-identity.ts",
   "scripts/build-theme-canonical.ts", "scripts/build-theme-palettes.ts",
   "packages/frontend/tailwind.config.ts", "scripts/qa/theme-engine-fixtures.ts",
   "scripts/qa/theme-engine-measure.ts", "scripts/qa/theme-engine-a-measurement.ts",

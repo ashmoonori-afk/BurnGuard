@@ -8,6 +8,13 @@
       "@bg/shared": ["../../packages/shared/src/index.ts"]
     }
   },
-  "include": ["*.ts"],
+  "include": [
+    "*.ts",
+    "../build-theme-canonical.ts",
+    "../build-theme-palettes.ts",
+    "../../packages/backend/src/data/bundled-design-systems.ts",
+    "../../packages/backend/src/data/bundled-theme-history.json",
+    "../../packages/backend/src/services/bundled-theme-identity.ts"
+  ],
   "references": [{ "path": "../../packages/shared" }]
 }

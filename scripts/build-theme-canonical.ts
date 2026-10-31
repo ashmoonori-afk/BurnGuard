@@ -17,7 +17,7 @@ import {
 import { bundledDesignSystems } from "../packages/backend/src/data/bundled-design-systems";
 import {
   themeAdditiveDigest, themeFileHash, type BundledThemeHistory,
-} from "../packages/backend/src/services/bundled-theme-refresh";
+} from "../packages/backend/src/services/bundled-theme-identity";
 import { emitBundledPalettePatch, type PaletteFileChange } from "./build-theme-palettes";
 
 const REPOSITORY = path.resolve(import.meta.dir, "..");

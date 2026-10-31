@@ -15,7 +15,7 @@ import {
 import { bundledDesignSystems } from "../packages/backend/src/data/bundled-design-systems";
 import {
   bundledThemeHistory, themeAdditiveDigest, themeFileHash, type BundledThemeHistory,
-} from "../packages/backend/src/services/bundled-theme-refresh";
+} from "../packages/backend/src/services/bundled-theme-identity";
 
 const REPOSITORY = path.resolve(import.meta.dir, "..");
 const HISTORY_PATH = "packages/backend/src/data/bundled-theme-history.json";

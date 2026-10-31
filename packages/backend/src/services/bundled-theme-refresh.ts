@@ -1,7 +1,6 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { lstat, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import history from "../data/bundled-theme-history.json";
 import { getSqlite } from "../db/sqlite-client";
 import { getCatalogRow, getCurrentSystemContent } from "../db/catalog-repository";
 import { defaultManagedTreeIo } from "./artifact-tree-storage";
@@ -14,24 +13,12 @@ import {
 import { inspectContentTree, readPreservedFile, safeContentChild } from "./system-content-tree";
 import { DEFAULT_CANONICAL_TREE_LIMITS } from "./canonical-tree-manifest";
 import { readCanonicalCandidate } from "./canonical-theme-files";
-
-/**
- * Shipped legacy tree digests and retired runtime file hashes retain their existing history format.
- * Optional additive histories recognize each reserved subtree independently of the legacy tree.
- * `scripts/build-bundled-theme-history.ts` regenerates legacy history from git.
- */
-export type BundledThemeHistory = {
-  readonly themes: Readonly<Record<string, readonly string[]>>;
-  readonly retired: Readonly<Record<string, readonly string[]>>;
-  readonly additive?: Readonly<Record<string, Partial<Readonly<Record<AdditiveThemeDirectory, readonly string[]>>>>>;
-};
-
-export const bundledThemeHistory: BundledThemeHistory = history;
-
-const FONT_DIRECTORY = "fonts";
-const RETIRED_DIRECTORY = "liquid-glass";
-const ADDITIVE_DIRECTORIES = ["palette", "canonical"] as const;
-export type AdditiveThemeDirectory = (typeof ADDITIVE_DIRECTORIES)[number];
+import {
+  ADDITIVE_DIRECTORIES, RETIRED_DIRECTORY, bundledThemeHistory, themeAdditiveDigest, themeFileHash,
+  themeTreeDigest, type AdditiveThemeDirectory, type BundledThemeHistory,
+} from "./bundled-theme-identity";
+export { bundledThemeHistory, themeAdditiveDigest, themeFileHash, themeTreeDigest,
+  type AdditiveThemeDirectory, type BundledThemeHistory } from "./bundled-theme-identity";
 
 export type InstalledThemeState = "current" | "outdated" | "edited";
 
@@ -63,30 +50,6 @@ export async function readThemeFiles(root: string): Promise<Map<string, string> 
   return (await visit(root)) ? files : null;
 }
 
-export function themeFileHash(bytes: Uint8Array): string {
-  // Windows checkouts may carry CRLF; the shipped content is the same either way.
-  const text = Buffer.from(bytes).toString("latin1").replaceAll("\r\n", "\n");
-  return createHash("sha256").update(Buffer.from(text, "latin1")).digest("hex");
-}
-
-export function themeTreeDigest(files: ReadonlyMap<string, string>): string {
-  return fileTreeDigest(new Map([...files].filter(([relative]) =>
-    !isFontFile(relative) && !isRetiredFile(relative) && !ADDITIVE_DIRECTORIES.some(directory => inDirectory(relative, directory)))));
-}
-
-/** Independent identity for an app-owned addition, never part of legacy recognition. */
-export function themeAdditiveDigest(files: ReadonlyMap<string, string>, directory: AdditiveThemeDirectory): string {
-  return fileTreeDigest(new Map([...files].filter(([relative]) => inDirectory(relative, directory))));
-}
-
-function fileTreeDigest(files: ReadonlyMap<string, string>): string {
-  const lines = [...files]
-    .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
-    .map(([relative, hash]) => `${relative}\t${hash}\n`);
-  return createHash("sha256").update(lines.join("")).digest("hex");
-}
-
-const isFontFile = (relative: string) => relative.split("/")[0] === FONT_DIRECTORY;
 const isRetiredFile = (relative: string) => relative.split("/")[0] === RETIRED_DIRECTORY;
 const inDirectory = (relative: string, directory: string) => relative.startsWith(`${directory}/`);
 
