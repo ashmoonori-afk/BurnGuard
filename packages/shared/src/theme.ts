@@ -161,6 +161,14 @@ export type SemanticTheme = {
 export type ThemeSynthesisInput = Pick<SemanticTheme, "system_id" | "default_mode" | "palette" | "sources"> & {
   readonly settings: { readonly light: ThemeSettings; readonly dark: ThemeSettings };
 };
+export type DesignSystemCanonicalResponse = {
+  readonly expected_digest: string;
+  readonly content_revision: number;
+  readonly receipt_id: string | null;
+} & (
+  | { readonly theme: SemanticTheme; readonly css: string }
+  | { readonly theme: null; readonly css: null }
+);
 
 function invalid(path: string): never { throw new UpgradeContractError("invalid_field", `theme.${path}`); }
 function shape(value: unknown, keys: readonly string[]): Readonly<Record<string, unknown>> {

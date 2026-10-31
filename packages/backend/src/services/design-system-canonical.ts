@@ -1,16 +1,32 @@
+import type { DesignSystemCanonicalResponse } from "@bg/shared/theme";
 import { getCurrentSystemContent, type CatalogReceiptRow } from "../db/catalog-repository";
 import { CanonicalTransferRepositoryError, validateCanonicalTransferReceipt } from "../db/canonical-transfer-repository";
 import { PathBoundaryError } from "../security/path-boundary";
 import { bundledThemeHistory, themeAdditiveDigest, themeFileHash } from "./bundled-theme-refresh";
 import { CanonicalTreeManifestError, parseCanonicalTreeManifest } from "./canonical-tree-manifest";
 import { parseContentJournal, parseContentProvenance, SystemContentError } from "./system-content-format";
-import { assertSystemContentLease, type SystemContentLease } from "./system-content-access";
-import type { ContentEnvironment, ContentObservation } from "./system-content-publication";
+import { assertSystemContentLease, withSystemContentAccess, type SystemContentLease } from "./system-content-access";
+import { contentObservationDigest, observeSystemContent, type ContentEnvironment, type ContentObservation } from "./system-content-publication";
 import { safeContentChild } from "./system-content-tree";
 import { readCanonicalCandidate, matchCanonicalTransfer, type CanonicalSnapshot } from "./canonical-theme-files";
 
 function corrupt(): never { throw new SystemContentError("system_content_corrupt"); }
 function unavailable(): never { throw new SystemContentError("system_content_unavailable"); }
+
+export async function readDesignSystemCanonical(id: string, env: ContentEnvironment): Promise<DesignSystemCanonicalResponse | null> {
+  return withSystemContentAccess(env.db, env.systemsRoot, [id], async lease => {
+    const base = await observeSystemContent(env, id, lease);
+    if (base.row === null) return null;
+    const snapshot = await readOwnedCanonical(env, base, lease);
+    const metadata = {
+      expected_digest: contentObservationDigest(base),
+      content_revision: base.head?.revision ?? 0,
+      receipt_id: base.head?.receipt_id ?? null,
+    };
+    return snapshot === null ? { ...metadata, theme: null, css: null }
+      : { ...metadata, theme: snapshot.theme, css: snapshot.css };
+  });
+}
 
 function hasReceiptOwnership(env: ContentEnvironment, base: ContentObservation, snapshot: CanonicalSnapshot): boolean {
   let receipt: CatalogReceiptRow | null = getCurrentSystemContent(env.db, base.systemId);

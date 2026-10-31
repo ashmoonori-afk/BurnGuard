@@ -160,6 +160,7 @@ export function classifyApiRoute(pathname: string, method: string): ApiRouteDoma
   if (pathname.startsWith("/api/learning")) return "learning";
   if (pathname.startsWith("/api/design-systems")) {
     if (/^\/api\/design-systems\/[^/]+\/files\//.test(pathname)) return "catalog";
+    if (/^\/api\/design-systems\/[^/]+\/canonical\/?$/.test(pathname)) return "system";
     return /\/(?:extract|upload|tokens|colors|fonts|pinterest|rules|design-md|import-md|palette)(?:\/|$)/.test(pathname) ? "system" : "catalog";
   }
   if (

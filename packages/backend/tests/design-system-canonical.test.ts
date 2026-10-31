@@ -1,7 +1,7 @@
 import { afterEach, expect, spyOn, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { existsSync } from "node:fs";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { parseHexColor } from "@bg/shared/color";
@@ -10,16 +10,22 @@ import { createDefaultThemeSettings, synthesizeTheme, type CanonicalTransferProo
 import { getCatalogRow, getCurrentSystemContent, getPendingSystemOperation } from "../src/db/catalog-repository";
 import { readCanonicalTransfer, validateCanonicalTransferReceipt } from "../src/db/canonical-transfer-repository";
 import { canonicalFiles, readCanonicalCandidate, validateCanonicalContent, writeCanonicalCandidate } from "../src/services/canonical-theme-files";
-import { readOwnedCanonical } from "../src/services/design-system-canonical";
+import { readDesignSystemCanonical, readOwnedCanonical } from "../src/services/design-system-canonical";
 import { paletteContentEnvironment, readDesignSystemPalette, saveDesignSystemPalette } from "../src/services/design-system-palette";
 import { withSystemContentAccess } from "../src/services/system-content-access";
 import { contentObservationDigest, observeSystemContent, publishSystemContent, type ContentEnvironment } from "../src/services/system-content-publication";
 import { expectedDigest, fixture, rulesAdapter, validateRules } from "./fixtures/system-content-fixture";
 import { catalogPaths } from "../src/services/catalog-files";
 import { copyCatalogSystem, purgeCatalogSystem, reconcileCatalogState, trashCatalogSystem } from "../src/services/catalog-lifecycle";
+import { getSqlite } from "../src/db/sqlite-client";
+import { systemsDir } from "../src/lib/paths";
+import { classifyApiRoute, createApp } from "../src/server";
+import { BURNGUARD_CAPABILITY_HEADER } from "../src/security/request-authority";
+import { inspectContentTree } from "../src/services/system-content-tree";
 
 const homes: string[] = [];
 const databases: Database[] = [];
+const routeIds: string[] = [];
 const pendingCases = new Set<{ readonly promise: Promise<unknown>; readonly phase: () => string }>();
 function trackedCase<T>(run: (mark: (phase: string) => void) => Promise<T>): Promise<T> {
   let phase = "setup";
@@ -35,6 +41,10 @@ afterEach(async () => {
   await Promise.allSettled([...pendingCases].map(value => value.promise));
   for (const db of databases.splice(0)) db.close(true);
   for (const home of homes.splice(0)) await rm(home, { recursive: true, force: true });
+  for (const id of routeIds.splice(0)) {
+    getSqlite().query("DELETE FROM design_systems WHERE id=?").run(id);
+    await rm(path.join(systemsDir, id), { recursive: true, force: true });
+  }
 });
 function themeFor(palette: PaletteState): SemanticTheme {
   return synthesizeTheme({
@@ -57,11 +67,11 @@ async function setup() {
   await saveDesignSystemPalette("test-system", { expected_digest: initial.expected_digest, state: palette }, env);
   return { ...value, env, palette };
 }
-async function publish(env: ContentEnvironment, theme: SemanticTheme, proof: CanonicalTransferProof | null = canonicalFiles(theme).proof) {
-  return withSystemContentAccess(env.db, env.systemsRoot, ["test-system"], async lease => {
-    const base = await observeSystemContent(env, "test-system", lease);
+async function publish(env: ContentEnvironment, theme: SemanticTheme, proof: CanonicalTransferProof | null = canonicalFiles(theme).proof, id = "test-system") {
+  return withSystemContentAccess(env.db, env.systemsRoot, [id], async lease => {
+    const base = await observeSystemContent(env, id, lease);
     return publishSystemContent(env, {
-      systemId: "test-system", mode: "replace", expectedDigest: contentObservationDigest(base), lease,
+      systemId: id, mode: "replace", expectedDigest: contentObservationDigest(base), lease,
       adapter: {
         provenance: { format: "system-content-v1", writer: "canonical", source_extraction: null },
         writeSet: () => ["canonical/SKILL.md", "canonical/theme.css", "canonical/theme.json"],
@@ -341,3 +351,102 @@ test.each([false, true])(
     }
   }),
 );
+
+const routeCapability = "canonical-route-test-capability";
+function canonicalRequest(id: string, overrides: Record<string, string> = {}, method = "GET") {
+  return new Request(`http://127.0.0.1:14070/api/design-systems/${id}/canonical`, {
+    method,
+    headers: { host: "127.0.0.1:14070", origin: "http://127.0.0.1:14070",
+      [BURNGUARD_CAPABILITY_HEADER]: routeCapability, ...overrides },
+  });
+}
+function canonicalApp() {
+  return createApp({ capability: routeCapability, bootstrapSecret: "canonical-route-test-bootstrap", appAuthority: "127.0.0.1:14070" });
+}
+async function canonicalRouteFixture() {
+  const id = `canonical-route-${crypto.randomUUID()}`;
+  routeIds.push(id);
+  const live = path.join(systemsDir, id);
+  await mkdir(live, { recursive: true });
+  await writeFile(path.join(live, "README.md"), "legacy bytes\r\n");
+  getSqlite().query("INSERT INTO design_systems(id,name,status,dir_path,created_at,updated_at) VALUES (?,?,'draft',?,1,1)")
+    .run(id, "Canonical route fixture", live);
+  return { id, live, env: paletteContentEnvironment() };
+}
+async function ownedCanonicalRouteFixture() {
+  const f = await canonicalRouteFixture();
+  const palette = { ...createDefaultPalette(), anchors: [{ id: "brand", name: "Brand", color: parseHexColor("#b64128") }] };
+  const current = await readDesignSystemPalette(f.id);
+  await saveDesignSystemPalette(f.id, { expected_digest: current.expected_digest, state: palette });
+  const theme = themeFor(palette);
+  await publish(f.env, theme, canonicalFiles(theme).proof, f.id);
+  return { ...f, theme };
+}
+
+test("Given canonical route and raw file URLs When dispatched Then only the typed resource selects the system domain", () => {
+  expect(classifyApiRoute("/api/design-systems/example/canonical", "GET")).toBe("system");
+  expect(classifyApiRoute("/api/design-systems/example/files/canonical/theme.json", "GET")).toBe("catalog");
+  expect(classifyApiRoute("/api/design-systems/canonical", "GET")).toBe("catalog");
+});
+
+test("Given an owned canonical route When authorized GET reads it Then both modes and exact CSS arrive without another receipt or byte change", async () => {
+  const f = await ownedCanonicalRouteFixture();
+  const before = await inspectContentTree(f.live);
+  const receipt = getCurrentSystemContent(getSqlite(), f.id);
+  const response = await canonicalApp().request(canonicalRequest(f.id));
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ data: await readDesignSystemCanonical(f.id, f.env) });
+  expect(await readDesignSystemCanonical(f.id, f.env)).toMatchObject({
+    theme: f.theme, css: canonicalFiles(f.theme).css, receipt_id: receipt?.id, content_revision: receipt?.contentRevision,
+  });
+  expect(await inspectContentTree(f.live)).toEqual(before);
+  expect(getCurrentSystemContent(getSqlite(), f.id)).toEqual(receipt);
+});
+
+test("Given a legacy canonical route and a missing ID When GET reads them Then absence of canonical data differs from a missing system", async () => {
+  const f = await canonicalRouteFixture();
+  const response = await canonicalApp().request(canonicalRequest(f.id));
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({ data: { theme: null, css: null, receipt_id: null, content_revision: 0 } });
+  expect((await canonicalApp().request(canonicalRequest("missing-canonical-system"))).status).toBe(404);
+});
+
+test.each(["proof", "bytes", "archived", "pending"] as const)(
+  "Given a canonical route with invalid %s When GET reads it Then no unowned theme or private diagnostic escapes",
+  async fault => {
+    const f = await ownedCanonicalRouteFixture();
+    const receipt = getCurrentSystemContent(getSqlite(), f.id);
+    if (receipt === null) throw new Error("Missing canonical route receipt");
+    if (fault === "proof") getSqlite().query("DELETE FROM design_system_canonical_transfers WHERE receipt_id=?").run(receipt.id);
+    else if (fault === "bytes") await writeFile(path.join(f.live, "canonical", "theme.css"), "changed bytes");
+    else if (fault === "archived") getSqlite().query("UPDATE design_systems SET lifecycle='archived' WHERE id=?").run(f.id);
+    else getSqlite().query("UPDATE design_system_receipts SET status='prepared' WHERE id=?").run(receipt.id);
+    const response = await canonicalApp().request(canonicalRequest(f.id));
+    expect(response.status).toBe(409);
+    const body: unknown = await response.json();
+    expect(body).toHaveProperty("error.code");
+    expect(body).not.toHaveProperty("data");
+    expect(JSON.stringify(body)).not.toContain(f.live);
+    expect(JSON.stringify(body)).not.toContain(routeCapability);
+  },
+);
+
+test.each([
+  { header: "host", value: "evil.test", status: 421, method: "GET" },
+  { header: "origin", value: "http://evil.test", status: 403, method: "OPTIONS" },
+  { header: BURNGUARD_CAPABILITY_HEADER, value: "wrong", status: 403, method: "GET" },
+] as const)(
+  "Given hostile $header on the canonical route When $method enters the real app Then launch authority rejects it",
+  async ({ header, value, status, method }) => {
+    expect((await canonicalApp().request(canonicalRequest("missing", { [header]: value }, method))).status).toBe(status);
+  },
+);
+
+test("Given no capability or an unsafe ID on the canonical route When GET enters Then it returns only a stable refusal", async () => {
+  const missing = canonicalRequest("missing");
+  missing.headers.delete(BURNGUARD_CAPABILITY_HEADER);
+  expect((await canonicalApp().request(missing)).status).toBe(403);
+  const response = await canonicalApp().request(canonicalRequest("C%3Aprivate"));
+  expect(response.status).toBe(400);
+  expect(await response.json()).toMatchObject({ error: { code: "invalid_body" } });
+});
