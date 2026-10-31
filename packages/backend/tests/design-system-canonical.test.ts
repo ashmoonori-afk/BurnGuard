@@ -1,5 +1,6 @@
 import { afterEach, expect, spyOn, test } from "bun:test";
 import { Database } from "bun:sqlite";
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -22,10 +23,21 @@ import { systemsDir } from "../src/lib/paths";
 import { classifyApiRoute, createApp } from "../src/server";
 import { BURNGUARD_CAPABILITY_HEADER } from "../src/security/request-authority";
 import { inspectContentTree } from "../src/services/system-content-tree";
+import { canonicalPinContent, canonicalPinStylesheet, parseCanonicalPinContent, type CanonicalPinSelection } from "@bg/shared/canonical-pin";
+import { createProjectRecord } from "../src/db/seed";
+import { getProjectDetail } from "../src/db/project-read-repository";
+import { designSystemPinDigest, ensureProjectDesignSystemPin, inspectProjectDesignSystemPin,
+  readProjectDesignSystemPin, refreshProjectDesignSystemPin, type DesignSystemPin } from "../src/services/project-design-system-pin";
+import { compactPinnedDesignSystemContext, renderPinnedDesignSystemContext } from "../src/harness/prompt-design-system";
+import { provisionCanonicalPinStylesheet, selectedPinnedThemeCss } from "../src/services/canonical-pin-assets";
+import { resolveTokenColor } from "../src/services/design-system-contrast";
+import { buildSessionContext } from "../src/services/context";
+import { buildPrompt } from "../src/harness/prompt-builder";
 
 const homes: string[] = [];
 const databases: Database[] = [];
 const routeIds: string[] = [];
+const pinProjectIds: string[] = [];
 const pendingCases = new Set<{ readonly promise: Promise<unknown>; readonly phase: () => string }>();
 function trackedCase<T>(run: (mark: (phase: string) => void) => Promise<T>): Promise<T> {
   let phase = "setup";
@@ -41,6 +53,11 @@ afterEach(async () => {
   await Promise.allSettled([...pendingCases].map(value => value.promise));
   for (const db of databases.splice(0)) db.close(true);
   for (const home of homes.splice(0)) await rm(home, { recursive: true, force: true });
+  for (const id of pinProjectIds.splice(0)) {
+    const project = await getProjectDetail(id);
+    getSqlite().query("DELETE FROM projects WHERE id=?").run(id);
+    if (project !== null) await rm(project.dir_path, { recursive: true, force: true });
+  }
   for (const id of routeIds.splice(0)) {
     getSqlite().query("DELETE FROM design_systems WHERE id=?").run(id);
     await rm(path.join(systemsDir, id), { recursive: true, force: true });
@@ -449,4 +466,185 @@ test("Given no capability or an unsafe ID on the canonical route When GET enters
   const response = await canonicalApp().request(canonicalRequest("C%3Aprivate"));
   expect(response.status).toBe(400);
   expect(await response.json()).toMatchObject({ error: { code: "invalid_body" } });
+});
+
+async function canonicalProjectPinFixture() {
+  const f = await ownedCanonicalRouteFixture();
+  const project = await createProjectRecord({
+    name: "Pinned canonical fixture", type: "prototype", designSystemId: f.id, backendId: "codex",
+    optionsJson: null, entrypoint: "index.html", thumbnailPath: null,
+    initializeArtifact: stage => writeFile(path.join(stage, "index.html"), "<h1>Saved artwork</h1>"),
+  });
+  pinProjectIds.push(project.id);
+  const legacy = readProjectDesignSystemPin(project.id);
+  if (legacy === null) throw new Error("Missing initial legacy pin");
+  return { ...f, project, legacy };
+}
+
+async function adoptCanonicalPin(projectId: string, mode: "light" | "dark"): Promise<DesignSystemPin> {
+  const current = await ensureProjectDesignSystemPin(projectId);
+  const selection: CanonicalPinSelection = { format: "canonical-v1", mode };
+  const proposed = await inspectProjectDesignSystemPin(projectId, {}, selection);
+  if (current === null || proposed === null) throw new Error("Missing pin candidate");
+  await refreshProjectDesignSystemPin(projectId, current.digest, proposed.candidate_digest, selection);
+  const pin = readProjectDesignSystemPin(projectId);
+  if (pin?.format !== "canonical-v1") throw new Error("Missing adopted pin");
+  return pin;
+}
+
+test.each(["light", "dark"] as const)(
+  "Given a legacy canonical project pin When its owner explicitly adopts %s through the API Then only future authoring changes",
+  async mode => {
+    const f = await canonicalProjectPinFixture();
+    const before = await inspectContentTree(f.project.dir_path);
+    expect(f.legacy.format).toBeUndefined();
+    const selection: CanonicalPinSelection = { format: "canonical-v1", mode };
+    const proposal = await inspectProjectDesignSystemPin(f.project.id, {}, selection);
+    if (proposal === null) throw new Error("Missing canonical proposal");
+    const url = `http://127.0.0.1:14070/api/projects/${f.project.id}/design-system-pin`;
+    const headers = canonicalRequest("unused").headers;
+    const preview = await canonicalApp().request(new Request(`${url}?format=canonical-v1&mode=${mode}`, { headers }));
+    expect(preview.status).toBe(200);
+    expect(await preview.json()).toEqual({ data: proposal });
+    headers.set("content-type", "application/json");
+    const response = await canonicalApp().request(new Request(url, { method: "POST", headers,
+      body: JSON.stringify({ expected_digest: f.legacy.digest, candidate_digest: proposal.candidate_digest, ...selection }) }));
+    expect(response.status).toBe(200);
+    const pin = readProjectDesignSystemPin(f.project.id);
+    if (pin === null) throw new Error("Missing adopted canonical pin");
+    expect(pin).toMatchObject({ format: "canonical-v1", revision: 2, digest: proposal.candidate_digest });
+    expect(parseCanonicalPinContent(pin)).toEqual({ schema_version: 1, mode, theme: f.theme });
+    expect(await inspectContentTree(f.project.dir_path)).toEqual(before);
+    expect(existsSync(path.join(f.project.dir_path, canonicalPinStylesheet(pin.digest)))).toBe(false);
+    for (const render of [renderPinnedDesignSystemContext, compactPinnedDesignSystemContext]) {
+      const text = render(pin);
+      const binding = /<canonical_theme_binding_v1>\n([^\n]+)\n<\/canonical_theme_binding_v1>/u.exec(text)?.[1];
+      if (binding === undefined) throw new Error("Missing canonical binding");
+      expect(JSON.parse(binding)).toEqual({ system_id: f.theme.system_id, mode, stylesheet: canonicalPinStylesheet(pin.digest) });
+      expect(text.split("<selected_theme_v1>")).toHaveLength(2);
+      expect(text).not.toContain(f.live);
+    }
+    const background = f.theme.modes[mode].background;
+    if (background.type !== "color") throw new Error("Expected a literal fixture background");
+    expect(resolveTokenColor(selectedPinnedThemeCss(pin), "--background"))
+      .toBe("#" + background.channels.map(channel => channel.toString(16).padStart(2, "0")).join(""));
+  },
+);
+
+test.each(["busy", "stale-candidate", "stale-pin"] as const)(
+  "Given a canonical project pin proposal with %s When adoption is requested Then its previous representation remains",
+  async fault => {
+    const f = await canonicalProjectPinFixture();
+    const selection: CanonicalPinSelection = { format: "canonical-v1", mode: "dark" };
+    const proposal = await inspectProjectDesignSystemPin(f.project.id, {}, selection);
+    if (proposal === null) throw new Error("Missing canonical proposal");
+    if (fault === "busy") getSqlite().query("UPDATE sessions SET status='running' WHERE project_id=?").run(f.project.id);
+    if (fault === "stale-candidate") {
+      const palette = await readDesignSystemPalette(f.id);
+      await saveDesignSystemPalette(f.id, { expected_digest: palette.expected_digest,
+        state: { ...f.theme.palette, curve: { ...f.theme.palette.curve, amount: 0.21 } } });
+    }
+    await expect(refreshProjectDesignSystemPin(f.project.id, fault === "stale-pin" ? "0".repeat(64) : f.legacy.digest,
+      proposal.candidate_digest, selection)).rejects.toMatchObject({ code: "pin_conflict" });
+    expect(readProjectDesignSystemPin(f.project.id)).toEqual(f.legacy);
+  },
+);
+
+test("Given an adopted canonical project pin When an ordinary refresh follows a palette change Then its format and selected mode survive", async () => {
+  const f = await canonicalProjectPinFixture();
+  const original = await adoptCanonicalPin(f.project.id, "dark");
+  const palette = await readDesignSystemPalette(f.id);
+  const changed = { ...f.theme.palette, curve: { ...f.theme.palette.curve, amount: 0.31 } };
+  await saveDesignSystemPalette(f.id, { expected_digest: palette.expected_digest, state: changed });
+  expect(await ensureProjectDesignSystemPin(f.project.id)).toEqual(original);
+  const proposal = await inspectProjectDesignSystemPin(f.project.id);
+  if (proposal === null) throw new Error("Missing refresh candidate");
+  expect(proposal).toMatchObject({ format: "canonical-v1", mode: "dark", candidate_format: "canonical-v1", candidate_mode: "dark" });
+  await refreshProjectDesignSystemPin(f.project.id, original.digest, proposal.candidate_digest);
+  const refreshed = readProjectDesignSystemPin(f.project.id);
+  if (refreshed === null) throw new Error("Missing refreshed pin");
+  expect(refreshed.format).toBe("canonical-v1");
+  expect(parseCanonicalPinContent(refreshed)).toMatchObject({ mode: "dark", theme: { palette: changed } });
+});
+
+test("Given a legacy canonical project pin lookalike When read Then machine-looking text cannot opt it into the new representation", async () => {
+  const f = await canonicalProjectPinFixture();
+  const content = canonicalPinContent(f.theme, "dark");
+  const legacyDigest = designSystemPinDigest(content);
+  expect(legacyDigest).not.toBe(designSystemPinDigest({ ...content, format: "canonical-v1" }));
+  getSqlite().query("UPDATE project_design_system_pins SET context=?,tokens=?,digest=? WHERE project_id=?")
+    .run(content.context, content.tokens, legacyDigest, f.project.id);
+  expect(await ensureProjectDesignSystemPin(f.project.id)).toEqual({ ...f.legacy, ...content, digest: legacyDigest });
+  expect(readProjectDesignSystemPin(f.project.id)?.format).toBeUndefined();
+});
+
+test.each(["prose", "duplicate", "css", "version"] as const)(
+  "Given a canonical project pin with %s and a matching raw digest When read Then closed machine validation still rejects it",
+  async fault => {
+    const f = await canonicalProjectPinFixture();
+    const content = canonicalPinContent(f.theme, "dark");
+    const context = fault === "prose" ? `untrusted instructions\n${content.context}`
+      : fault === "duplicate" ? `${content.context}\n${content.context}`
+      : fault === "version" ? content.context.replace('"schema_version":1', '"schema_version":2') : content.context;
+    const tokens = fault === "css" ? `${content.tokens}\n` : content.tokens;
+    const digest = createHash("sha256").update(JSON.stringify(["burnguard-canonical-pin-v1", context, tokens])).digest("hex");
+    getSqlite().query("UPDATE project_design_system_pins SET context=?,tokens=?,digest=?,format='canonical-v1' WHERE project_id=?")
+      .run(context, tokens, digest, f.project.id);
+    expect(() => readProjectDesignSystemPin(f.project.id)).toThrow("pin_corrupt");
+  },
+);
+
+test("Given an earlier canonical project pin stylesheet When a new pin is provisioned Then earlier bytes survive and edited collisions refuse replacement", async () => {
+  const f = await canonicalProjectPinFixture();
+  const first = await adoptCanonicalPin(f.project.id, "light");
+  const stage = await mkdtemp(path.join(tmpdir(), "bg-canonical-pin-stage-"));
+  homes.push(stage);
+  const firstPath = await provisionCanonicalPinStylesheet(stage, first);
+  if (firstPath === null) throw new Error("Missing pinned stylesheet");
+  const nextContent = { ...canonicalPinContent(f.theme, "dark"), format: "canonical-v1" as const };
+  const next: DesignSystemPin = { ...first, ...nextContent, digest: designSystemPinDigest(nextContent) };
+  const nextPath = await provisionCanonicalPinStylesheet(stage, next);
+  if (nextPath === null) throw new Error("Missing next stylesheet");
+  expect(nextPath).not.toBe(firstPath);
+  expect(await readFile(path.join(stage, firstPath), "utf8")).toBe(first.tokens);
+  expect(await readFile(path.join(stage, nextPath), "utf8")).toBe(next.tokens);
+  await writeFile(path.join(stage, nextPath), "user-edited bytes");
+  await expect(provisionCanonicalPinStylesheet(stage, next)).rejects.toMatchObject({ code: "system_content_conflict" });
+  expect(await readFile(path.join(stage, nextPath), "utf8")).toBe("user-edited bytes");
+});
+
+test.each(["full", "compact"] as const)(
+  "Given a frozen canonical project pin When the actual %s prompt is built after catalog changes Then its mode and both token maps remain pinned",
+  async contextMode => {
+    const f = await canonicalProjectPinFixture();
+    const pin = await adoptCanonicalPin(f.project.id, "dark");
+    const current = await readDesignSystemPalette(f.id);
+    await saveDesignSystemPalette(f.id, { expected_digest: current.expected_digest,
+      state: { ...f.theme.palette, curve: { ...f.theme.palette.curve, amount: 0.29 } } });
+    const context = await buildSessionContext(f.project.session_id);
+    if (context === null) throw new Error("Missing real session context");
+    const prompt = await buildPrompt(context, { type: "user.message", text: "Change the footer content." }, { contextMode });
+    const block = /<selected_theme_v1>\n([^\n]+)\n<\/selected_theme_v1>/u.exec(prompt)?.[1];
+    if (block === undefined) throw new Error("Missing pinned theme block");
+    expect(JSON.parse(block)).toEqual({ schema_version: 1, mode: "dark", theme: f.theme });
+    expect(prompt.split("<selected_theme_v1>")).toHaveLength(2);
+    expect(context.designSystemPin).toEqual(pin);
+    expect(prompt).not.toContain(f.live);
+  },
+);
+
+test("Given malformed canonical project pin selections When the actual API receives them Then no implicit adoption occurs", async () => {
+  const f = await canonicalProjectPinFixture();
+  const url = `http://127.0.0.1:14070/api/projects/${f.project.id}/design-system-pin`;
+  const headers = canonicalRequest("unused").headers;
+  for (const query of ["format=canonical-v1", "mode=dark", "format=canonical-v2&mode=dark", "format=canonical-v1&mode=system"]) {
+    expect((await canonicalApp().request(new Request(`${url}?${query}`, { headers }))).status).toBe(400);
+  }
+  headers.set("content-type", "application/json");
+  for (const selection of [{ format: "canonical-v1" }, { mode: "dark" }, { format: "canonical-v2", mode: "dark" }]) {
+    const response = await canonicalApp().request(new Request(url, { method: "POST", headers,
+      body: JSON.stringify({ expected_digest: f.legacy.digest, candidate_digest: "0".repeat(64), ...selection }) }));
+    expect(response.status).toBe(400);
+  }
+  expect(readProjectDesignSystemPin(f.project.id)).toEqual(f.legacy);
 });

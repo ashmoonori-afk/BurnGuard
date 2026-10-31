@@ -22,7 +22,7 @@ import { readProjectBundleZip } from "./project-bundle-archive";
 import { ProjectBundleError } from "./project-bundle-error";
 import { validateProjectBundleMetadata } from "./project-bundle-validation";
 import { parseProjectOptions } from "./project-options";
-import { ensureProjectDesignSystemPin } from "./project-design-system-pin";
+import { ensureProjectDesignSystemPin, installImportedCanonicalPin } from "./project-design-system-pin";
 import { clearProjectBundleImportReceipt, projectBundlePayloadStage, projectBundleSystemStage, removeBundleImportOwnerMarker, writeBundleImportOwnerMarker, writeProjectBundleImportReceipt } from "./project-bundle-import-receipt";
 import { commitDesignSystemReceipt, prepareDesignSystemReceipt } from "../db/design-system-repository";
 import { getDb } from "../db/client";
@@ -195,8 +195,15 @@ async function importStagedBundle(
         );
       }
     })();
-    // Archive pin text is untrusted prompt input; the pin is rebuilt by the app renderer from the restored system.
-    if (selectedSystemId !== null) await ensureProjectDesignSystemPin(project.id, plannedSystem === null ? undefined : lease);
+    // Legacy archive prose stays untrusted. Canonical pins contain only validated machine data.
+    const archivedPin = manifest.design_system.pin;
+    if (archivedPin?.format === "canonical-v1") {
+      const pinnedSystemId = selectedSystemId ?? system.missing_builtin;
+      if (pinnedSystemId === null) throw new ProjectBundleError("invalid_project_bundle");
+      installImportedCanonicalPin(project.id, pinnedSystemId, archivedPin);
+    } else if (selectedSystemId !== null) {
+      await ensureProjectDesignSystemPin(project.id, plannedSystem === null ? undefined : lease);
+    }
     await indexProjectFiles(project.id);
     const warnings = await importWarnings(manifest.fonts.families, system.missing_builtin, events.getLocalFonts ?? getLocalFonts);
     await events.atBoundary?.("before-commit", owner);

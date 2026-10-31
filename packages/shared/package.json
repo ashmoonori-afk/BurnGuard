@@ -11,6 +11,7 @@
     "./color": "./src/color.ts",
     "./palette": "./src/palette.ts",
     "./theme": "./src/theme.ts",
+    "./canonical-pin": "./src/canonical-pin.ts",
     "./api": "./src/api.ts",
     "./artifact": "./src/artifact.ts",
     "./harness": "./src/harness.ts",

@@ -588,10 +588,10 @@ function cssValue(value: ThemeLiteral): string {
     default: return invalid(value satisfies never);
   }
 }
-function emitCss(input: SemanticTheme, app: boolean): string {
+function emitCss(input: SemanticTheme, app: boolean, modes: readonly SemanticThemeMode[] = SEMANTIC_THEME_MODES): string {
   const theme = parseSemanticTheme(input);
   const selectors: string[] = [];
-  const blocks = SEMANTIC_THEME_MODES.map(mode => {
+  const blocks = modes.map(mode => {
     // system_id is validated ASCII before interpolation; neither selector accepts CSS text.
     const selector = app
       ? `:root[data-bg-app-system="${theme.system_id}"][data-theme="${mode}"]`
@@ -614,6 +614,10 @@ function emitCss(input: SemanticTheme, app: boolean): string {
 }
 /** No attributes means no new styling; both attributes must live on the same scope root. */
 export function emitArtifactThemeCss(input: SemanticTheme): string { return emitCss(input, false); }
+/** Numerical review consumes the selected pinned mode, never the first block of a dual-mode sheet. */
+export function emitArtifactThemeModeCss(input: SemanticTheme, mode: SemanticThemeMode): string {
+  return emitCss(input, false, [mode]);
+}
 /** Existing data-theme is unchanged. Colour slots contain integer channels for rgb(var(--token) / alpha).
  * Raw palette/tint utilities and font loading remain the application's separate contracts.
  */

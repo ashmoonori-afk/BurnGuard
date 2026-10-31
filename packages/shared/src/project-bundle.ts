@@ -3,6 +3,7 @@ import { isRecord, UpgradeContractError, type UnknownRecord } from "./contract-p
 import type { DesignSystemSourceType } from "./design-system";
 import { parsePaletteTransferProof, type PaletteTransferProof } from "./palette";
 import { parseCanonicalTransferProof, type CanonicalTransferProof } from "./theme";
+import { parseCanonicalPinContent } from "./canonical-pin";
 
 export const PROJECT_BUNDLE_FORMAT_VERSION = 1 as const;
 export const PROJECT_BUNDLE_MANIFEST_PATH = "burnguard-project.json";
@@ -43,12 +44,15 @@ export interface ProjectBundleCheckpoint {
   readonly created_at: number;
 }
 
-export interface ProjectBundleDesignSystemPin {
+export type ProjectBundleDesignSystemPin = {
   readonly revision: number;
   readonly digest: string;
   readonly context: string;
   readonly tokens: string;
-}
+} & (
+  | { readonly format?: never; readonly schema_version?: never }
+  | { readonly format: "canonical-v1"; readonly schema_version: 2 }
+);
 
 interface ProjectBundleDesignSystemBase {
   readonly pin: ProjectBundleDesignSystemPin | null;
@@ -198,15 +202,25 @@ function parseCheckpoint(input: unknown): ProjectBundleCheckpoint {
 
 function parsePin(input: unknown): ProjectBundleDesignSystemPin | null {
   if (input === null) return null;
-  const value = record(input, ["revision", "digest", "context", "tokens"]);
-  return { revision: integer(value["revision"]), digest: digest(value["digest"]), context: text(value["context"], 100_000), tokens: string(value["tokens"], 262_144) };
+  const canonical = isRecord(input) && Object.hasOwn(input, "format");
+  const value = record(input, canonical ? ["revision", "digest", "context", "tokens", "format", "schema_version"]
+    : ["revision", "digest", "context", "tokens"]);
+  const pin = { revision: integer(value["revision"]), digest: digest(value["digest"]),
+    context: text(value["context"], 100_000), tokens: string(value["tokens"], 262_144) };
+  if (!canonical) return pin;
+  if (value["format"] !== "canonical-v1" || value["schema_version"] !== 2) return invalid();
+  try { parseCanonicalPinContent(pin); }
+  catch (error) { if (error instanceof UpgradeContractError) return invalid(); throw error; }
+  return { ...pin, format: "canonical-v1", schema_version: 2 };
 }
 
 function parseDesignSystem(input: unknown): ProjectBundleDesignSystem {
   if (!isRecord(input) || typeof input["kind"] !== "string") invalid();
   if (input["kind"] === "none") {
     const value = record(input, ["kind", "pin"]);
-    return { kind: "none", pin: parsePin(value["pin"]) };
+    const pin = parsePin(value["pin"]);
+    if (pin?.format === "canonical-v1") return invalid();
+    return { kind: "none", pin };
   }
   if (input["kind"] === "builtin") {
     const value = record(input, ["kind", "id", "pin"]);

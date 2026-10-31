@@ -269,5 +269,7 @@ function relativeSystemPath(root: string, absolute: string | null): string | nul
 
 function portablePin(projectId: string): ProjectBundleDesignSystem["pin"] {
   const pin = readProjectDesignSystemPin(projectId);
-  return pin ? { revision: pin.revision, digest: pin.digest, context: pin.context, tokens: pin.tokens } : null;
+  if (pin === null) return null;
+  const content = { revision: pin.revision, digest: pin.digest, context: pin.context, tokens: pin.tokens };
+  return pin.format === "canonical-v1" ? { ...content, format: "canonical-v1", schema_version: 2 } : content;
 }

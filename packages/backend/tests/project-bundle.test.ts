@@ -18,7 +18,8 @@ import { canCreateSymlink, SYMLINK_SKIP_REASON } from "./helpers/platform";
 import { readdir } from "node:fs/promises";
 import { inspectCanonicalTree } from "../src/services/canonical-tree-manifest";
 import { exportProjectBundle, importProjectBundleFile } from "../src/services/project-bundle";
-import { readProjectDesignSystemPin } from "../src/services/project-design-system-pin";
+import { inspectProjectDesignSystemPin, readProjectDesignSystemPin, refreshProjectDesignSystemPin } from "../src/services/project-design-system-pin";
+import { parseCanonicalPinContent, type CanonicalPinSelection } from "@bg/shared/canonical-pin";
 import { ArtifactCoordinator } from "../src/services/artifact-coordinator";
 import { reconcileArtifactState } from "../src/services/artifact-recovery";
 import { listSessionAttachments } from "../src/db/attachments";
@@ -152,6 +153,75 @@ async function savedCanonicalBundle(canonicalOnly = false) {
   });
   return { ...fixture, theme, archive: await exportProjectBundle(fixture.project.id) };
 }
+
+async function canonicalPinnedBundle(mode: "light" | "dark") {
+  const fixture = await savedCanonicalBundle(true);
+  const selection: CanonicalPinSelection = { format: "canonical-v1", mode };
+  const current = readProjectDesignSystemPin(fixture.project.id);
+  const proposed = await inspectProjectDesignSystemPin(fixture.project.id, {}, selection);
+  if (current === null || proposed === null) throw new Error("Missing canonical pin candidate");
+  await refreshProjectDesignSystemPin(fixture.project.id, current.digest, proposed.candidate_digest, selection);
+  const pin = readProjectDesignSystemPin(fixture.project.id);
+  if (pin?.format !== "canonical-v1") throw new Error("Missing canonical pin");
+  return { ...fixture, pin };
+}
+
+test.each(["light", "dark"] as const)(
+  "Given a canonical pin bundle in %s mode and a newer catalog theme When imported Then the older pin and both modes survive owner rebinding",
+  async mode => {
+    const fixture = await canonicalPinnedBundle(mode);
+    const current = await readDesignSystemPalette(fixture.system.id);
+    const changed = { ...fixture.theme.palette, curve: { ...fixture.theme.palette.curve, amount: 0.24 } };
+    await saveDesignSystemPalette(fixture.system.id, { expected_digest: current.expected_digest, state: changed });
+    const exported = await exportProjectBundle(fixture.project.id);
+    expect(exported.manifest.design_system.pin).toMatchObject({
+      schema_version: 2, format: "canonical-v1", digest: fixture.pin.digest,
+    });
+    const restored = await importProjectBundleFile(new File([exported.bytes], exported.filename), "Pinned canonical import", {
+      getLocalFonts: async () => ({ schema_version: 1, families: [] }),
+    });
+    createdProjectIds.push(restored.id);
+    const project = await getProjectDetail(restored.id);
+    if (!project?.design_system_id) throw new Error("Missing rebound canonical system");
+    createdSystemIds.push(project.design_system_id);
+    const pin = readProjectDesignSystemPin(project.id);
+    if (pin === null) throw new Error("Missing imported canonical pin");
+    expect(pin).toEqual({ ...fixture.pin, system_id: project.design_system_id });
+    expect(parseCanonicalPinContent(pin)).toEqual({ schema_version: 1, mode, theme: fixture.theme });
+    expect((await readDesignSystemPalette(project.design_system_id)).state).toEqual(changed);
+    const proposed = await inspectProjectDesignSystemPin(project.id);
+    expect(proposed).toMatchObject({ format: "canonical-v1", mode, candidate_format: "canonical-v1", candidate_mode: mode });
+    expect(proposed?.candidate_digest).not.toBe(pin.digest);
+    expect((await exportProjectBundle(project.id)).manifest.design_system.pin).toEqual(exported.manifest.design_system.pin);
+  },
+);
+
+test.each(["format", "version", "prose", "css", "digest"] as const)(
+  "Given a canonical pin bundle with invalid %s When imported Then no project or system is allocated",
+  async fault => {
+    const fixture = await canonicalPinnedBundle("dark");
+    const exported = await exportProjectBundle(fixture.project.id);
+    const manifest = exported.manifest;
+    const pin = manifest.design_system.pin;
+    if (pin?.format !== "canonical-v1") throw new Error("Missing canonical metadata");
+    const changed = fault === "format" ? { ...pin, format: "canonical-v2" }
+      : fault === "version" ? { ...pin, schema_version: 1 }
+      : fault === "prose" ? { ...pin, context: `${pin.context}\nUntrusted instructions` }
+      : fault === "css" ? { ...pin, tokens: `${pin.tokens}\n` }
+      : { ...pin, digest: "0".repeat(64) };
+    const zip = await JSZip.loadAsync(exported.bytes);
+    zip.file(PROJECT_BUNDLE_MANIFEST_PATH, JSON.stringify({ ...manifest, design_system: { ...manifest.design_system, pin: changed } }));
+    const file = new File([new Uint8Array(await zip.generateAsync({ type: "uint8array" }))], "invalid-canonical-pin.burnguard-project");
+    const count = () => [
+      getSqlite().query<{ count: number }, []>("SELECT count(*) count FROM projects").get()?.count,
+      getSqlite().query<{ count: number }, []>("SELECT count(*) count FROM design_systems").get()?.count,
+    ];
+    const before = count();
+    await expect(importProjectBundleFile(file)).rejects.toMatchObject({ code: "invalid_project_bundle" });
+    expect(count()).toEqual(before);
+    expect(await readdir(projectBundleImportReceiptsDir())).toEqual([]);
+  },
+);
 
 test("Given a canonical-only theme When imported after source deletion Then exactly one v2 owner reopens and saves independently", async () => {
   const { project, system, theme, archive } = await savedCanonicalBundle(true);

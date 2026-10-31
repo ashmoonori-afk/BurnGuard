@@ -8,6 +8,7 @@ export * from "./comment";
 export * from "./color";
 export * from "./palette";
 export * from "./theme";
+export * from "./canonical-pin";
 export * from "./connections";
 export * from "./contract-parser";
 export * from "./design-system";

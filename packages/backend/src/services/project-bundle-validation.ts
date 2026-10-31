@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { DesignSystemPinError, designSystemPinDigest } from "./project-design-system-pin";
 import type { ProjectBundleDesignSystem, ProjectBundleFile, ProjectBundleManifest } from "@bg/shared";
 import { isAgentControlPath } from "../security/agent-control-files";
 import { PathBoundaryError, assertSafeName } from "../security/path-boundary";
@@ -48,7 +48,10 @@ export function validateProjectBundleMetadata(manifest: ProjectBundleManifest): 
   validateProjectBundlePaletteFiles(manifest.design_system, manifest.files);
   validateProjectBundleCanonicalFiles(manifest.design_system, manifest.files);
   const pin = manifest.design_system.pin;
-  if (pin && (pin.revision < 1 || createHash("sha256").update(JSON.stringify([pin.context, pin.tokens])).digest("hex") !== pin.digest)) invalid();
+  if (pin) {
+    try { if (pin.revision < 1 || designSystemPinDigest(pin) !== pin.digest) invalid(); }
+    catch (error) { if (error instanceof DesignSystemPinError) invalid(); throw error; }
+  }
 }
 
 export function validateProjectBundlePaletteFiles(system: ProjectBundleDesignSystem, files: readonly ProjectBundleFile[]): void {
