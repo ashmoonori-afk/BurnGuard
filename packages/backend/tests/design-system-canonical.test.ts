@@ -8,19 +8,31 @@ import { parseHexColor } from "@bg/shared/color";
 import { createDefaultPalette, serializePalette, type PaletteState } from "@bg/shared/palette";
 import { createDefaultThemeSettings, synthesizeTheme, type CanonicalTransferProof, type SemanticTheme } from "@bg/shared/theme";
 import { getCatalogRow, getCurrentSystemContent, getPendingSystemOperation } from "../src/db/catalog-repository";
-import { readCanonicalTransfer } from "../src/db/canonical-transfer-repository";
+import { readCanonicalTransfer, validateCanonicalTransferReceipt } from "../src/db/canonical-transfer-repository";
 import { canonicalFiles, readCanonicalCandidate, validateCanonicalContent, writeCanonicalCandidate } from "../src/services/canonical-theme-files";
 import { readOwnedCanonical } from "../src/services/design-system-canonical";
 import { paletteContentEnvironment, readDesignSystemPalette, saveDesignSystemPalette } from "../src/services/design-system-palette";
 import { withSystemContentAccess } from "../src/services/system-content-access";
 import { contentObservationDigest, observeSystemContent, publishSystemContent, type ContentEnvironment } from "../src/services/system-content-publication";
-import { fixture } from "./fixtures/system-content-fixture";
+import { expectedDigest, fixture, rulesAdapter, validateRules } from "./fixtures/system-content-fixture";
 import { catalogPaths } from "../src/services/catalog-files";
 import { copyCatalogSystem, purgeCatalogSystem, reconcileCatalogState, trashCatalogSystem } from "../src/services/catalog-lifecycle";
 
 const homes: string[] = [];
 const databases: Database[] = [];
+const pendingCases = new Set<{ readonly promise: Promise<unknown>; readonly phase: () => string }>();
+function trackedCase<T>(run: (mark: (phase: string) => void) => Promise<T>): Promise<T> {
+  let phase = "setup";
+  const promise = run(value => { phase = value; });
+  const pending = { promise, phase: () => phase };
+  pendingCases.add(pending);
+  void promise.then(() => pendingCases.delete(pending), () => pendingCases.delete(pending));
+  return promise;
+}
 afterEach(async () => {
+  // A runner deadline does not cancel filesystem/SQLite work. Drain owned work before strict close.
+  if (pendingCases.size > 0) console.error("CANONICAL_CASE_PENDING", JSON.stringify([...pendingCases].map(value => value.phase())));
+  await Promise.allSettled([...pendingCases].map(value => value.promise));
   for (const db of databases.splice(0)) db.close(true);
   for (const home of homes.splice(0)) await rm(home, { recursive: true, force: true });
 });
@@ -74,6 +86,34 @@ async function lifecycle<T>(run: () => Promise<T>): Promise<T> {
   }
 }
 
+test("Given a full SQLite query cache When canonical receipt reads finish Then strict close does not depend on garbage collection", async () => {
+  const prepared = await lifecycle(async () => {
+    const f = await setup();
+    const result = await publish(f.env, themeFor(f.palette));
+    if (result.receipt === null) throw new Error("Missing canonical receipt");
+    return { f, receipt: result.receipt };
+  });
+  prepared.f.db.close(true);
+  const reader = new Database(prepared.f.dbPath);
+  databases.push(reader);
+  const cacheLimit: unknown = Reflect.get(Database, "MAX_QUERY_CACHE_SIZE");
+  if (typeof cacheLimit !== "number" || !Number.isSafeInteger(cacheLimit) || cacheLimit < 1 || cacheLimit > 1000) {
+    throw new Error("Unsupported SQLite query cache limit");
+  }
+  for (let index = 0; index < cacheLimit; index += 1) {
+    reader.query(`SELECT ${index}`).get();
+  }
+  // Retain real statement wrappers so GC timing cannot hide an unowned native statement.
+  const statements = spyOn(reader, "prepare");
+  try {
+    expect(validateCanonicalTransferReceipt(reader, prepared.receipt)).not.toBeNull();
+    expect(() => reader.close(true)).not.toThrow();
+  } finally {
+    for (const result of statements.mock.results) if (result.type === "return") result.value.finalize();
+    statements.mockRestore();
+  }
+});
+
 test("Given an owned canonical triple When the palette changes Then one receipt publishes matching state and both modes without changing legacy bytes", async () => {
   const f = await setup();
   const original = themeFor(f.palette);
@@ -109,6 +149,20 @@ test("Given an owned theme When selected palette sources are removed Then saving
   expect(after?.theme.sources.surface.kind).toBe("colors");
   expect(after?.theme.palette).toEqual(changed);
   expect(after?.css).toBe(before?.css);
+});
+
+test("Given an owned canonical theme When an unrelated rules revision commits Then digest-linked local ancestry preserves its exact ownership", async () => {
+  const f = await setup();
+  await publish(f.env, themeFor(f.palette));
+  const before = await owned(f.env);
+  const environment = { ...f.env, validators: { ...f.env.validators, rules: validateRules } };
+
+  const result = await publishSystemContent(environment, { systemId: "test-system", mode: "replace",
+    expectedDigest: await expectedDigest(environment), adapter: rulesAdapter() });
+
+  if (result.receipt === null) throw new Error("Missing rules receipt");
+  expect(readCanonicalTransfer(f.db, result.receipt.id)).toBeNull();
+  expect(await owned(f.env)).toEqual(before);
 });
 
 test("Given a failure after candidate publication When palette Save rolls back Then the pair and canonical triple both return to the prior owner", async () => {
@@ -175,22 +229,27 @@ test.each(["theme.json", "theme.css", "SKILL.md"])(
 
 test.each(["duplicate", "derive"] as const)(
   "Given a canonical %s When the original is purged Then exact bytes and receipt-local ownership survive",
-  async operation => {
+  operation => trackedCase(async mark => {
     const f = await setup();
+    mark("canonical-publication");
     await publish(f.env, themeFor(f.palette));
     const original = await owned(f.env);
     const sourceHead = getCurrentSystemContent(f.db, "test-system");
     if (sourceHead === null || original === null) throw new Error("Missing source owner");
     const paths = await catalogPaths(f.systemsRoot, "test-system", f.live);
     await lifecycle(async () => {
+      mark("copy");
       await copyCatalogSystem(f.db, f.systemsRoot, "test-system", {
         id: "canonical-child", name: "Child", operation, reason: null, metadata: {},
       });
+      mark("trash");
       await trashCatalogSystem(f.db, f.systemsRoot, "test-system");
     });
 
+    mark("purge");
     await lifecycle(() => purgeCatalogSystem(f.db, f.systemsRoot, "test-system"));
 
+    mark("read-independent-owner");
     expect(getCatalogRow(f.db, "test-system")).toBeNull();
     expect(existsSync(paths.trash)).toBe(false);
     expect(readCanonicalTransfer(f.db, sourceHead.id)).toBeNull();
@@ -199,39 +258,48 @@ test.each(["duplicate", "derive"] as const)(
     if (child === null) throw new Error("Missing independent child owner");
     expect(child.contentRevision).toBeLessThan(0);
     expect(readCanonicalTransfer(f.db, child.id)).toEqual(original.proof);
-  },
+  }),
 );
 
-test("Given a canonical child whose source was purged When its palette is saved Then the new local revision retains the portable namespace", async () => {
+test("Given a canonical child whose source was purged When its palette is saved Then the new local revision retains the portable namespace", () => trackedCase(async mark => {
   const f = await setup();
+  mark("canonical-publication");
   await publish(f.env, themeFor(f.palette));
   await lifecycle(async () => {
+    mark("copy");
     await copyCatalogSystem(f.db, f.systemsRoot, "test-system", {
       id: "canonical-child", name: "Child", operation: "derive", reason: null, metadata: {},
     });
+    mark("trash");
     await trashCatalogSystem(f.db, f.systemsRoot, "test-system");
+    mark("purge");
     await purgeCatalogSystem(f.db, f.systemsRoot, "test-system");
   });
+  mark("read-child-palette");
   const before = await readDesignSystemPalette("canonical-child", f.env);
   const changed = { ...f.palette, anchors: f.palette.anchors.map(anchor => ({ ...anchor, color: parseHexColor("#126ab0") })) };
 
+  mark("save-child-palette");
   await saveDesignSystemPalette("canonical-child", { expected_digest: before.expected_digest, state: changed }, f.env);
 
+  mark("read-independent-owner");
   const after = await owned(f.env, "canonical-child");
   expect(after?.theme.palette).toEqual(changed);
   expect(after?.theme.system_id).toBe("portable-identity");
   expect(getCurrentSystemContent(f.db, "canonical-child")?.contentRevision).toBe(1);
   expect(getCatalogRow(f.db, "test-system")).toBeNull();
-});
+}));
 
 test.each([false, true])(
   "Given a published copy with corrupt proof=%s and no source When recovery runs Then only a valid local owner can commit",
-  async corruptProof => {
+  corruptProof => trackedCase(async mark => {
     const f = await setup();
+    mark("canonical-publication");
     await publish(f.env, themeFor(f.palette));
     const priorFault = process.env.BG_CATALOG_FAULT;
     try {
       process.env.BG_CATALOG_FAULT = "db-after-fs:derive:canonical-child";
+      mark("copy-interruption");
       await expect(lifecycle(() => copyCatalogSystem(f.db, f.systemsRoot, "test-system", {
         id: "canonical-child", name: "Child", operation: "derive", reason: null, metadata: {},
       }))).rejects.toMatchObject({ code: "catalog_operation_failed" });
@@ -244,7 +312,9 @@ test.each([false, true])(
     const childRoot = path.join(f.systemsRoot, "canonical-child");
     const bytes = await readCanonicalCandidate(childRoot);
     await lifecycle(async () => {
+      mark("trash");
       await trashCatalogSystem(f.db, f.systemsRoot, "test-system");
+      mark("purge");
       await purgeCatalogSystem(f.db, f.systemsRoot, "test-system");
     });
     if (corruptProof) {
@@ -253,8 +323,10 @@ test.each([false, true])(
       finally { mutation.finalize(); }
     }
 
+    mark("recover");
     const result = await lifecycle(() => reconcileCatalogState(f.db, f.systemsRoot));
 
+    mark("verify-recovery");
     expect(await readCanonicalCandidate(childRoot)).toEqual(bytes);
     expect(getCatalogRow(f.db, "test-system")).toBeNull();
     if (corruptProof) {
@@ -267,5 +339,5 @@ test.each([false, true])(
       expect(getCurrentSystemContent(f.db, "canonical-child")?.id).toBe(pending.id);
       expect(await owned(f.env, "canonical-child")).toEqual(bytes);
     }
-  },
+  }),
 );

@@ -15,11 +15,13 @@ function parseProof(input: unknown, id: string): CanonicalTransferProof {
   catch (error) { if (error instanceof UpgradeContractError) return corrupt(id); throw error; }
 }
 function receiptById(db: Database, id: string): CatalogReceiptRow | null {
-  return db.query<CatalogReceiptRow, [string]>(`SELECT id,design_system_id designSystemId,status,
+  const statement = db.prepare<CatalogReceiptRow, [string]>(`SELECT id,design_system_id designSystemId,status,
     content_revision contentRevision,schema_version schemaVersion,digest,manifest_json manifestJson,
     provenance_json provenanceJson,operation,parent_system_id parentSystemId,parent_receipt_id parentReceiptId,
     parent_digest parentDigest,reason,metadata_json metadataJson,source_path sourcePath,destination_path destinationPath
-    FROM design_system_receipts WHERE id=?`).get(id);
+    FROM design_system_receipts WHERE id=?`);
+  try { return statement.get(id); }
+  finally { statement.finalize(); }
 }
 function bindManifest(receipt: CatalogReceiptRow, proof: CanonicalTransferProof): void {
   const copy = receipt.operation === "duplicate" || receipt.operation === "derive";
@@ -57,31 +59,35 @@ export function insertCanonicalTransfer(db: Database, id: string, input: Canonic
   const proof = parseProof(input, id), receipt = receiptById(db, id);
   if (receipt === null || receipt.status !== "prepared") throw new CanonicalTransferRepositoryError("canonical_transfer_conflict", id);
   bindManifest(receipt, proof);
+  const statement = db.prepare(`INSERT INTO design_system_canonical_transfers
+    (receipt_id,proof_version,emitter_version,json_size_bytes,json_sha256,css_size_bytes,css_sha256,skill_size_bytes,skill_sha256)
+    VALUES (?,?,?,?,?,?,?,?,?)`);
   try {
-    db.query(`INSERT INTO design_system_canonical_transfers
-      (receipt_id,proof_version,emitter_version,json_size_bytes,json_sha256,css_size_bytes,css_sha256,skill_size_bytes,skill_sha256)
-      VALUES (?,?,?,?,?,?,?,?,?)`).run(id, proof.schema_version, proof.emitter_version,
+    statement.run(id, proof.schema_version, proof.emitter_version,
       proof.json.size_bytes, proof.json.sha256, proof.css.size_bytes, proof.css.sha256, proof.skill.size_bytes, proof.skill.sha256);
   } catch (error) {
     if (error instanceof Error && "code" in error && String(error.code).startsWith("SQLITE_CONSTRAINT")) {
       throw new CanonicalTransferRepositoryError("canonical_transfer_conflict", id);
     }
     throw error;
-  }
+  } finally { statement.finalize(); }
 }
 /** Stored declarations do not activate pending or failed owners. */
 export function readCanonicalTransfer(db: Database, id: string): CanonicalTransferProof | null {
-  const row = db.query<{
+  const statement = db.prepare<{
     readonly proof_version: unknown; readonly emitter_version: unknown;
     readonly json_size_bytes: unknown; readonly json_sha256: unknown;
     readonly css_size_bytes: unknown; readonly css_sha256: unknown;
     readonly skill_size_bytes: unknown; readonly skill_sha256: unknown;
   }, [string]>(`SELECT proof_version,emitter_version,json_size_bytes,json_sha256,css_size_bytes,css_sha256,skill_size_bytes,skill_sha256
-    FROM design_system_canonical_transfers WHERE receipt_id=?`).get(id);
-  return row === null ? null : parseProof({ schema_version: row.proof_version, emitter_version: row.emitter_version,
-    json: { size_bytes: row.json_size_bytes, sha256: row.json_sha256 },
-    css: { size_bytes: row.css_size_bytes, sha256: row.css_sha256 },
-    skill: { size_bytes: row.skill_size_bytes, sha256: row.skill_sha256 } }, id);
+    FROM design_system_canonical_transfers WHERE receipt_id=?`);
+  try {
+    const row = statement.get(id);
+    return row === null ? null : parseProof({ schema_version: row.proof_version, emitter_version: row.emitter_version,
+      json: { size_bytes: row.json_size_bytes, sha256: row.json_sha256 },
+      css: { size_bytes: row.css_size_bytes, sha256: row.css_sha256 },
+      skill: { size_bytes: row.skill_size_bytes, sha256: row.skill_sha256 } }, id);
+  } finally { statement.finalize(); }
 }
 /** Full receipt/manifest binding; live authority still requires committed ancestry. */
 export function validateCanonicalTransferReceipt(db: Database, receipt: CatalogReceiptRow): CanonicalTransferProof | null {
