@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { copyFile, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { compareBound, measureCalibration, measureConversion, measureScales, MeasurementError,
@@ -8,6 +8,11 @@ import { compareBound, measureCalibration, measureConversion, measureScales, Mea
 import { parseMeasureArgs, verifyMeasurementCorpus } from "./theme-engine-measure";
 import { CORPUS_ROOT } from "./theme-engine-fixtures";
 import type { OracleCase, OracleReceipt } from "./theme-engine-oracle";
+import { bundledCanonicalPaths, generateThemeCanonical } from "../build-theme-canonical";
+import { emitAppThemeCss, THEME_CONTRAST_PAIRS, THEME_TOKEN_REGISTRY,
+  type SemanticTheme } from "../../packages/shared/src/theme";
+import { emittedContrast, measureInstalledCanonical, measureTailwindBindings,
+  measureThemeCss } from "./theme-engine-b-measurement";
 
 test("Given a positive sub-tolerance excess When compared Then strict safety still fails", () => {
   // Given: Number(lower) rounds to the very same binary value as production.
@@ -147,7 +152,7 @@ test("Given nonopaque Chromium output When measured Then receipt validation fail
   expect(() => measureConversion(cases, changed)).toThrow(MeasurementError);
 });
 
-test.each(["b", "c", "d"])("Given unsupported section %s When arguments are parsed Then it is rejected", section => {
+test.each(["c", "d"])("Given unsupported section %s When arguments are parsed Then it is rejected", section => {
   expect(() => parseMeasureArgs(["--section", section])).toThrow("UNSUPPORTED_SECTION");
 });
 test.each([
@@ -160,6 +165,13 @@ test.each([
 });
 test("Given the plain section A command When parsed Then the frozen corpus default is reproducible", () => {
   expect(parseMeasureArgs(["--section", "a"]).corpus).toBe(CORPUS_ROOT);
+});
+test("Given the C001 section B command When parsed Then existing options and evidence confinement survive", () => {
+  const options = parseMeasureArgs(["--section", "b", "--corpus", "packages/backend/tests/fixtures/theme-engine",
+    "--output", ".omo/evidence/bg-themes-1028/b/metrics.json", "--python", "unused-python"]);
+  expect(options).toMatchObject({ section: "b", corpus: CORPUS_ROOT,
+    output: ".omo/evidence/bg-themes-1028/b/metrics.json", python: ["unused-python"] });
+  expect(() => parseMeasureArgs(["--section", "b", "--output", "metrics.json"])).toThrow("OUTPUT_PATH");
 });
 
 test("Given the original frozen corpus When verified Then its original byte digest is accepted", async () => {
@@ -181,19 +193,116 @@ test("Given altered or partial manifest evidence When verified Then measurement 
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
-test("Given missing corpus evidence When the real CLI runs Then it exits nonzero with sanitized unmeasured schema", async () => {
+test.each(["a", "b"])("Given missing corpus evidence for section %s When the real CLI runs Then it exits nonzero with sanitized unmeasured schema", async section => {
   const root = await mkdtemp(path.join(os.tmpdir(), "bg-measure-cli-"));
   try {
     const child = Bun.spawn([process.execPath, path.join(import.meta.dir, "theme-engine-measure.ts"),
-      "--section", "a", "--corpus", root, "--output", "-"],
+      "--section", section, "--corpus", root, "--output", "-"],
     { stdout: "pipe", stderr: "pipe", timeout: 10_000, killSignal: "SIGKILL" });
     const [stdout, stderr, exit] = await Promise.all([
       new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited,
     ]);
     expect(exit).toBe(1);
     expect(stderr).toBe("");
-    expect(JSON.parse(stdout)).toEqual({ schema_version: 1, section: "a", scope: "A_NUMERICAL_ONLY",
+    expect(JSON.parse(stdout)).toEqual({ schema_version: 1, section,
+      scope: section === "a" ? "A_NUMERICAL_ONLY" : "B_CANONICAL_ROLES_AND_INSTALLED_READBACK",
       status: "FAIL", code: "MEASUREMENT_FAILED", metrics: null, measurement: "UNMEASURED" });
     expect(stdout.includes(root)).toBe(false);
   } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+async function semanticSample() {
+  const repository = path.resolve(import.meta.dir, "../..");
+  const files = bundledCanonicalPaths(repository, "light");
+  return generateThemeCanonical("light", await readFile(files.palette, "utf8"), await readFile(files.source, "utf8"));
+}
+
+test("Given integer black and white When independently measured Then contrast is 21 without production validation", () => {
+  expect(emittedContrast([0, 0, 0], [255, 255, 255])).toBe(21);
+  expect(emittedContrast([128, 128, 128], [128, 128, 128])).toBe(1);
+  expect(() => emittedContrast([0.5, 0, 0], [255, 255, 255])).toThrow("B_CHANNEL_FORMAT");
+});
+
+test("Given production semantic output When independently read Then both modes cover every typed role and declared pair", async () => {
+  const sample = await semanticSample();
+  const modes = measureThemeCss(sample.theme, sample.css, emitAppThemeCss(sample.theme));
+  expect(modes.map(mode => mode.mode)).toEqual(["light", "dark"]);
+  for (const mode of modes) {
+    expect(mode).toMatchObject({ status: "PASS", coverage: 1,
+      typed_roles: Object.keys(THEME_TOKEN_REGISTRY).length,
+      declared_pairs: THEME_CONTRAST_PAIRS.length, passed_pairs: THEME_CONTRAST_PAIRS.length });
+    expect(mode.pairs.every(pair => pair.artifact_ratio === pair.app_ratio)).toBe(true);
+    expect(mode.pairs.filter(pair => pair.usage === "body").every(pair => pair.minimum === 4.5)).toBe(true);
+    expect(mode.pairs.filter(pair => pair.usage !== "body").every(pair => pair.minimum === 3)).toBe(true);
+  }
+});
+
+test("Given consistent but low contrast emitted colours When measured Then readback equality cannot hide failed pairs", async () => {
+  const sample = await semanticSample();
+  const white = { type: "color", space: "srgb", channels: [255, 255, 255] } as const;
+  const theme: SemanticTheme = { ...sample.theme, modes: { ...sample.theme.modes,
+    light: { ...sample.theme.modes.light, background: white, foreground: white } } };
+  const artifact = sample.css.replace(/--background: #[0-9a-f]{6};/, "--background: #ffffff;")
+    .replace(/--foreground: #[0-9a-f]{6};/, "--foreground: #ffffff;");
+  const app = emitAppThemeCss(sample.theme).replace(/--background: \d+ \d+ \d+;/, "--background: 255 255 255;")
+    .replace(/--foreground: \d+ \d+ \d+;/, "--foreground: 255 255 255;");
+  const modes = measureThemeCss(theme, artifact, app);
+  expect(modes[0]).toMatchObject({ status: "FAIL" });
+  expect(modes[0]?.pairs[0]).toMatchObject({ minimum: 4.5, artifact_ratio: 1, app_ratio: 1, status: "FAIL" });
+  expect(modes[0]?.pairs.find(pair => pair.usage === "large")).toMatchObject({ minimum: 3, status: "FAIL" });
+  expect(modes[1]).toMatchObject({ status: "PASS" });
+});
+
+test.each(["#ffffff", "rgb(255 255 255)", "255, 255, 255", "256 0 0", "0.5 0 0"])(
+  "Given invalid app colour channels %s When read Then Tailwind-incompatible values fail", async value => {
+    const sample = await semanticSample();
+    const app = emitAppThemeCss(sample.theme).replace(/--foreground: \d+ \d+ \d+;/, `--foreground: ${value};`);
+    expect(() => measureThemeCss(sample.theme, sample.css, app)).toThrow("B_CHANNEL_FORMAT");
+  });
+
+test.each(["info", "font-sans", "motion-fast"])(
+  "Given a missing %s role When emitted CSS is read Then incomplete coverage fails", async role => {
+    const sample = await semanticSample();
+    const artifact = sample.css.replace(new RegExp(`  --${role}: [^;]+;\\n`), "");
+    expect(() => measureThemeCss(sample.theme, artifact, emitAppThemeCss(sample.theme))).toThrow("B_MISSING_ROLE");
+  });
+
+test("Given valid but inconsistent channel readback When measured Then matching CSS syntax is insufficient", async () => {
+  const sample = await semanticSample();
+  const app = emitAppThemeCss(sample.theme).replace(/--foreground: \d+ \d+ \d+;/, "--foreground: 1 2 3;");
+  expect(() => measureThemeCss(sample.theme, sample.css, app)).toThrow("B_COLOR_READBACK");
+});
+
+test.each(["json", "css", "skill"] as const)(
+  "Given missing or stale installed %s When bound Then generated candidates cannot pass for installed evidence", async member => {
+    const sample = await semanticSample();
+    const installed = { json: sample.json, css: sample.css, skill: sample.skill };
+    const missing = measureInstalledCanonical(sample, { ...installed, [member]: null });
+    const changed = measureInstalledCanonical(sample, { ...installed, [member]: `${installed[member]}\n` });
+    expect(missing.status).toBe("FAIL");
+    expect(missing.members.find(row => row.member === member)?.installed_sha256).toBeNull();
+    expect(changed.status).toBe("FAIL");
+    expect(changed.members.find(row => row.member === member)?.installed_sha256)
+      .not.toBe(changed.members.find(row => row.member === member)?.expected_sha256);
+  });
+
+test("Given byte-identical installed canonical files When bound Then all three actual readback hashes match", async () => {
+  const sample = await semanticSample();
+  const readback = measureInstalledCanonical(sample, { json: sample.json, css: sample.css, skill: sample.skill });
+  expect(readback.status).toBe("PASS");
+  expect(readback.members.every(member => member.installed_sha256 === member.expected_sha256)).toBe(true);
+});
+
+test("Given the real Tailwind configuration When inspected Then its semantic bindings accept integer channels", async () => {
+  const config = await readFile(path.resolve(import.meta.dir, "../../packages/frontend/tailwind.config.ts"), "utf8");
+  const measured = measureTailwindBindings(config);
+  expect(measured.status).toBe("PASS");
+  expect(measured.bound_roles).toContain("background");
+  expect(measured.bound_roles).toContain("primary-foreground");
+});
+
+test("Given a full-colour Tailwind semantic binding When inspected Then alpha-compatible readback fails", async () => {
+  const config = await readFile(path.resolve(import.meta.dir, "../../packages/frontend/tailwind.config.ts"), "utf8");
+  const invalid = config.replace('border: "rgb(var(--border) / <alpha-value>)"', 'border: "var(--border)"');
+  expect(() => measureTailwindBindings(invalid)).toThrow("B_TAILWIND_BINDING");
 });

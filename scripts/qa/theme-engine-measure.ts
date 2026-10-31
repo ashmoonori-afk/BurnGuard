@@ -18,6 +18,7 @@ const SOURCE_FILES = ["packages/shared/src/color.ts", "packages/shared/src/color
   "scripts/qa/theme-engine-measure.ts", "scripts/qa/theme-engine-a-measurement.ts"] as const;
 export type MeasureOptions = {
   readonly corpus: string; readonly output: string; readonly python: readonly string[];
+  readonly section?: "a" | "b";
 };
 export function parseMeasureArgs(args: readonly string[]): MeasureOptions {
   const values = new Map<string, string>();
@@ -27,14 +28,15 @@ export function parseMeasureArgs(args: readonly string[]): MeasureOptions {
       && value !== undefined && value.length > 0 && !value.startsWith("--") && !values.has(key), "USAGE");
     values.set(key, value);
   }
-  requireMeasurement(values.get("--section") === "a", "UNSUPPORTED_SECTION");
+  const section = values.get("--section");
+  requireMeasurement(section === "a" || section === "b", "UNSUPPORTED_SECTION");
   const output = values.get("--output") ?? "-";
   if (output !== "-") {
     const relative = path.relative(path.join(ROOT, ".omo/evidence"), path.resolve(ROOT, output));
     requireMeasurement(relative.length > 0 && !relative.startsWith("..") && !path.isAbsolute(relative)
       && relative.endsWith(".json"), "OUTPUT_PATH");
   }
-  return { corpus: path.resolve(ROOT, values.get("--corpus") ?? CORPUS_ROOT), output,
+  return { section, corpus: path.resolve(ROOT, values.get("--corpus") ?? CORPUS_ROOT), output,
     python: values.has("--python") ? [values.get("--python") ?? ""]
       : process.platform === "win32" ? ["py", "-3"] : ["python3"] };
 }
@@ -47,8 +49,8 @@ export async function verifyMeasurementCorpus(root: string): Promise<string> {
   await runCorpus("verify", root);
   return digest(bytes);
 }
-async function sourceHashes(): Promise<Readonly<Record<string, string>>> {
-  return Object.fromEntries(await Promise.all(SOURCE_FILES.map(async name =>
+async function sourceHashes(files: readonly string[] = SOURCE_FILES): Promise<Readonly<Record<string, string>>> {
+  return Object.fromEntries(await Promise.all(files.map(async name =>
     [name, digest(await readFile(path.join(ROOT, name)))])));
 }
 async function pythonProcess(command: readonly string[], input: string): Promise<string> {
@@ -141,6 +143,20 @@ export async function measureSectionA(options: MeasureOptions) {
       input_sha256: digest(JSON.stringify(inputs)), receipt_sha256: digest(JSON.stringify(receipt)), rows: conversion, receipt },
     maximum_oracle: { method: "decimal-outward-90-six-face-v1", receipt_sha256: maximum.sha256, receipt: maximum.value } };
 }
+export async function measureSectionB(options: MeasureOptions) {
+  const manifest = await verifyMeasurementCorpus(options.corpus);
+  const { B_SOURCE_FILES, measureBundledThemes } = await import("./theme-engine-b-measurement");
+  const hashes = await sourceHashes(B_SOURCE_FILES);
+  try {
+    const result = await measureBundledThemes(ROOT);
+    return { schema_version: 1, section: "b", scope: "B_CANONICAL_ROLES_AND_INSTALLED_READBACK",
+      ...result, identity: { manifest_sha256: manifest, source_sha256: hashes },
+      excluded_acceptance: ["A-conversion-oracle", "runtime-UI", "canonical-authority-history"] };
+  } finally {
+    requireMeasurement(await verifyMeasurementCorpus(options.corpus) === manifest
+      && isDeepStrictEqual(hashes, await sourceHashes(B_SOURCE_FILES)), "INPUT_CHANGED_DURING_MEASUREMENT");
+  }
+}
 async function emit(output: string, report: unknown): Promise<void> {
   const json = `${JSON.stringify(report, null, 2)}\n`;
   if (output === "-") { process.stdout.write(json); return; }
@@ -165,13 +181,15 @@ export async function main(args: readonly string[]): Promise<number> {
   let options: MeasureOptions | undefined;
   try {
     options = parseMeasureArgs(args);
-    const report = await measureSectionA(options);
+    const report = options.section === "b" ? await measureSectionB(options) : await measureSectionA(options);
     await emit(options.output, report);
     return report.status === "PASS" ? 0 : 1;
   } catch (error) {
     const code = error instanceof MeasurementError ? error.code : error instanceof CorpusError ? "CORPUS_MISMATCH"
       : error instanceof OracleError ? error.code : error instanceof SyntaxError ? "EVIDENCE_JSON" : "MEASUREMENT_FAILED";
-    const failure = { schema_version: 1, section: "a", scope: "A_NUMERICAL_ONLY", status: "FAIL",
+    const section = options?.section ?? "a";
+    const failure = { schema_version: 1, section,
+      scope: section === "b" ? "B_CANONICAL_ROLES_AND_INSTALLED_READBACK" : "A_NUMERICAL_ONLY", status: "FAIL",
       code, metrics: null, measurement: "UNMEASURED" };
     try { await emit(options?.output ?? "-", failure); }
     catch (writeError) {
