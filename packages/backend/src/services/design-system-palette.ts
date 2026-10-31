@@ -112,8 +112,15 @@ export const validatePaletteContent: ContentValidator = async (root, journal) =>
 };
 export function paletteContentEnvironment(db: Database = getSqlite(), root: string = systemsDir): ContentEnvironment {
   return { db, systemsRoot: root, operationId: randomUUID, now: Date.now,
-    validators: { palette: validatePaletteContent, canonical: validateCanonicalContent, "bundle-import": validateCanonicalContent } };
+    validators: { palette: validatePaletteContent, canonical: validateCanonicalContent, "bundle-import": validateBundleImportContent } };
 }
+const validateBundleImportContent: ContentValidator = async (root, journal) => {
+  if (journal.mode !== "create" || journal.base !== null || journal.palette_history !== null) return corrupt();
+  await validateCanonicalContent(root, journal);
+  const pair = await readPair(root, await inspectContentTree(root));
+  if (!pair.present) return corrupt();
+  validatePair(pair, pairEmitterVersion(pair));
+};
 function required(base: ContentObservation): void {
   if (base.row === null) throw new DesignSystemPaletteError("design_system_not_found");
   if (base.row.lifecycle !== "active") throw new DesignSystemPaletteError("invalid_lifecycle");

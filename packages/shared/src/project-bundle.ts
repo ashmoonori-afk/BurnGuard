@@ -2,6 +2,7 @@ import { BACKEND_IDS, type BackendId, type ProjectType } from "./app";
 import { isRecord, UpgradeContractError, type UnknownRecord } from "./contract-parser";
 import type { DesignSystemSourceType } from "./design-system";
 import { parsePaletteTransferProof, type PaletteTransferProof } from "./palette";
+import { parseCanonicalTransferProof, type CanonicalTransferProof } from "./theme";
 
 export const PROJECT_BUNDLE_FORMAT_VERSION = 1 as const;
 export const PROJECT_BUNDLE_MANIFEST_PATH = "burnguard-project.json";
@@ -71,6 +72,7 @@ export type ProjectBundleDesignSystem =
       readonly tokens_css_path: string | null;
       readonly readme_md_path: string | null;
       readonly palette_transfer?: PaletteTransferProof;
+      readonly canonical_transfer?: CanonicalTransferProof;
     });
 
 export interface ProjectBundleManifest {
@@ -216,8 +218,19 @@ function parseDesignSystem(input: unknown): ProjectBundleDesignSystem {
     try { paletteTransfer = parsePaletteTransferProof(input["palette_transfer"]); }
     catch (error) { if (error instanceof UpgradeContractError) invalid(); throw error; }
   }
+  let canonicalTransfer: CanonicalTransferProof | undefined;
+  if ("canonical_transfer" in input) {
+    // A canonical theme and its palette are transferred together.
+    if (paletteTransfer === undefined) invalid();
+    try { canonicalTransfer = parseCanonicalTransferProof(input["canonical_transfer"]); }
+    catch (error) { if (error instanceof UpgradeContractError) invalid(); throw error; }
+  }
   const keys = ["kind", "original_id", "name", "description", "status", "source_type", "is_template", "skill_md_path", "tokens_css_path", "readme_md_path", "pin"];
-  const value = record(input, paletteTransfer === undefined ? keys : [...keys, "palette_transfer"]);
+  const value = record(input, [
+    ...keys,
+    ...(paletteTransfer === undefined ? [] : ["palette_transfer"]),
+    ...(canonicalTransfer === undefined ? [] : ["canonical_transfer"]),
+  ]);
   const description = nullableText(value["description"], 4_000);
   const sourceType = value["source_type"] === null ? null : member(value["source_type"], SOURCE_TYPES);
   return {
@@ -227,6 +240,7 @@ function parseDesignSystem(input: unknown): ProjectBundleDesignSystem {
     tokens_css_path: nullablePath(value["tokens_css_path"]), readme_md_path: nullablePath(value["readme_md_path"]),
     pin: parsePin(value["pin"]),
     ...(paletteTransfer === undefined ? {} : { palette_transfer: paletteTransfer }),
+    ...(canonicalTransfer === undefined ? {} : { canonical_transfer: canonicalTransfer }),
   };
 }
 

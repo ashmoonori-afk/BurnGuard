@@ -1,4 +1,5 @@
 import type { Database } from "bun:sqlite";
+import type { PaletteTransferProof } from "@bg/shared/palette";
 import { parseCanonicalTransferProof, type CanonicalTransferProof } from "@bg/shared/theme";
 import { CanonicalTransferRepositoryError, validateCanonicalTransferReceipt } from "../db/canonical-transfer-repository";
 import { mkdir, open, readdir, rm } from "node:fs/promises";
@@ -6,8 +7,10 @@ import path from "node:path";
 import { getCatalogRow, getCurrentSystemContent, getPendingSystemOperation, type CatalogReceiptRow, type CatalogRow } from "../db/catalog-repository";
 import {
   assertSystemContentAuthority, commitSystemContent, getSystemContentReceipt, listSystemContentReceipts,
-  prepareSystemContent, removeRolledBackContentCreate, systemContentHead, transitionSystemContent, type NewContentSystem,
+  prepareImportedSystemContent, prepareSystemContent, removeRolledBackContentCreate, systemContentHead, transitionSystemContent, type NewContentSystem,
 } from "../db/design-system-repository";
+import { validatePaletteTransferReceipt } from "../db/palette-transfer-repository";
+import { assertBundleImportSystemOwner, hasUnresolvedBundleImport, inspectBundleImportCandidate, validateBundleImportedContent } from "./project-bundle-import-receipt";
 import { resolveManagedPath } from "../lib/paths";
 import { assertSafeName } from "../security/path-boundary";
 import { defaultManagedTreeIo, type ManagedTreeIo } from "./artifact-tree-storage";
@@ -165,6 +168,14 @@ async function candidate(env: ContentEnvironment, target: string, receipt: Catal
   try { canonical = validateCanonicalTransferReceipt(env.db, receipt); }
   catch (error) { if (error instanceof CanonicalTransferRepositoryError) return corrupt(); throw error; }
   if (canonical !== null) await validateCanonicalTransferAtRoot(target, canonical);
+  if (provenance.writer === "bundle-import") {
+    const palette = validatePaletteTransferReceipt(env.db, receipt);
+    if (canonical === null || palette === null) return corrupt();
+    for (const [name, member] of [["palette/state.json", palette.state], ["palette/scales.css", palette.css]] as const) {
+      const bytes = await readPreservedFile(target, name);
+      if (bytes.length !== member.size_bytes || contentHash(bytes) !== member.sha256) conflict();
+    }
+  }
 }
 async function oldTree(target: string, journal: ContentJournal): Promise<void> {
   if (journal.base === null) conflict();
@@ -446,6 +457,76 @@ export async function publishSystemContent(env: ContentEnvironment, input: {
     throw new SystemContentError("system_content_failed");
   }
 }
+
+/** Adopt only the current outer import's fresh row, never an existing system or a second head. */
+export async function prepareImportedContentPublication(env: ContentEnvironment, input: {
+  readonly systemId: string; readonly outerOperationId: string; readonly lease: SystemContentLease;
+  readonly canonicalTransfer: CanonicalTransferProof; readonly paletteTransfer: PaletteTransferProof;
+}): Promise<CatalogReceiptRow> {
+  assertSystemContentLease(input.lease, env.systemsRoot, input.systemId);
+  const row = getCatalogRow(env.db, input.systemId);
+  if (row === null || row.metadataRevision !== 0 || row.lifecycle !== "active" ||
+    systemContentHead(env.db, input.systemId) !== null || getPendingSystemOperation(env.db, input.systemId) !== null) conflict();
+  const op = operationId(env.operationId());
+  const paths = await contentPaths(env.systemsRoot, input.systemId, op);
+  if (row.dirPath !== paths.live || await pathStat(paths.control) !== null) conflict();
+  await assertBundleImportSystemOwner(input.systemId, input.outerOperationId);
+  const result = await inspectBundleImportCandidate(paths.live, input.outerOperationId);
+  for (const stored of [row.skillMdPath, row.tokensCssPath, row.readmeMdPath]) {
+    if (stored === null) continue;
+    const relative = contentPath(path.relative(paths.live, resolveManagedPath(paths.live, stored)).split(path.sep).join("/"));
+    if (!result.inventory.some(entry => entry[0] === "file" && entry[1] === relative)) conflict();
+  }
+  const journal = parseContentJournal({
+    transaction_version: 1, operation_id: op, system_id: input.systemId, mode: "create",
+    intent: "publish", cleanup: "pending", base: null, result_preservation_digest: result.preservation_digest,
+    write_set: result.inventory.filter(entry => entry[0] === "file").map(entry => entry[1]),
+    palette_history: null, failure_code: null,
+  });
+  const validate = env.validators["bundle-import"];
+  if (validate === undefined) throw new SystemContentError("system_content_unavailable");
+  await validate(paths.live, journal);
+  await validateCanonicalTransferAtRoot(paths.live, input.canonicalTransfer);
+  for (const [name, member] of [["palette/state.json", input.paletteTransfer.state], ["palette/scales.css", input.paletteTransfer.css]] as const) {
+    const bytes = await readPreservedFile(paths.live, name);
+    if (bytes.length !== member.size_bytes || contentHash(bytes) !== member.sha256) conflict();
+  }
+  await writeOwner(env, paths, input.systemId, op);
+  try {
+    await syncContentTree(paths.live, await inspectContentTree(paths.live), ioFor(env));
+    await assertBundleImportSystemOwner(input.systemId, input.outerOperationId);
+    const current = await inspectBundleImportCandidate(paths.live, input.outerOperationId);
+    if (current.preservation_digest !== result.preservation_digest || current.manifest.tree_digest !== result.manifest.tree_digest) conflict();
+    return prepareImportedSystemContent(env.db, {
+      id: `system-content-${op}`, journal, manifest: result.manifest, live: paths.live, row, now: env.now(),
+      canonicalTransfer: input.canonicalTransfer, paletteTransfer: input.paletteTransfer,
+    });
+  } catch (error) {
+    if (getSystemContentReceipt(env.db, `system-content-${op}`) === null) await removeOwnedOrphan(env, paths, op, input.systemId);
+    throw error;
+  }
+}
+
+export async function validateImportedContentPublication(
+  env: ContentEnvironment, receipt: CatalogReceiptRow, outerOperationId: string, lease: SystemContentLease,
+): Promise<void> {
+  assertSystemContentLease(lease, env.systemsRoot, receipt.designSystemId);
+  await assertBundleImportSystemOwner(receipt.designSystemId, outerOperationId);
+  assertSystemContentAuthority(env.db, receipt.designSystemId, null, true);
+  if (getPendingSystemOperation(env.db, receipt.designSystemId)?.id !== receipt.id) conflict();
+  await verifiedPaths(env, receipt);
+  await validateBundleImportedContent(env.db, receipt, outerOperationId, true);
+}
+
+/** Marker removal changes only the private inventory; use the ordinary publisher to finish this head. */
+export async function completeImportedContentPublication(
+  env: ContentEnvironment, receipt: CatalogReceiptRow, lease: SystemContentLease,
+): Promise<void> {
+  assertSystemContentLease(lease, env.systemsRoot, receipt.designSystemId);
+  const committed = await resumePublish(env, receipt);
+  await cleanup(env, committed);
+}
+
 async function removeOwnedOrphan(env: ContentEnvironment, paths: Paths, op: string, id: string): Promise<void> {
   if (getSystemContentReceipt(env.db, `system-content-${op}`) !== null) conflict();
   await verifyOwner(paths, { operation_id: op, system_id: id });
@@ -463,6 +544,11 @@ export async function recoverSystemContent(env: ContentEnvironment): Promise<{ r
     try {
       const parsed = parseReceipt(initial);
       const paths = await contentPaths(env.systemsRoot, parsed.journal.system_id, parsed.journal.operation_id);
+      if (parsed.provenance.writer === "bundle-import" &&
+        await hasUnresolvedBundleImport(initial.designSystemId, paths.live)) {
+        held.push(initial.id);
+        continue;
+      }
       if (parsed.journal.cleanup === "complete" && await pathStat(paths.control) === null && !(parsed.journal.mode === "create" && parsed.journal.intent === "rollback")) {
         if (initial.status === "committed" && getPendingSystemOperation(env.db, initial.designSystemId) === null) {
           await withSystemContentAccess(env.db, env.systemsRoot, [initial.designSystemId], async () => {

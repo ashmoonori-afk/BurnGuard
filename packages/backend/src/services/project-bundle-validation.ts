@@ -46,6 +46,7 @@ export function validateProjectBundleMetadata(manifest: ProjectBundleManifest): 
     }
   }
   validateProjectBundlePaletteFiles(manifest.design_system, manifest.files);
+  validateProjectBundleCanonicalFiles(manifest.design_system, manifest.files);
   const pin = manifest.design_system.pin;
   if (pin && (pin.revision < 1 || createHash("sha256").update(JSON.stringify([pin.context, pin.tokens])).digest("hex") !== pin.digest)) invalid();
 }
@@ -65,6 +66,22 @@ export function validateProjectBundlePaletteFiles(system: ProjectBundleDesignSys
     if (file.size_bytes !== member.size_bytes || file.sha256 !== member.sha256) {
       throw new ProjectBundleError("project_bundle_digest");
     }
+  }
+}
+
+export function validateProjectBundleCanonicalFiles(system: ProjectBundleDesignSystem, files: readonly ProjectBundleFile[]): void {
+  const reserved = files.filter(file => file.path.startsWith("design-system/") &&
+    file.path.slice("design-system/".length).split("/")[0]?.normalize("NFC").toLowerCase() === "canonical");
+  const proof = system.kind === "custom" ? system.canonical_transfer : undefined;
+  if (proof === undefined) {
+    if (reserved.length !== 0) invalid();
+    return;
+  }
+  if (reserved.length !== 3) invalid();
+  for (const [name, member] of [["theme.json", proof.json], ["theme.css", proof.css], ["SKILL.md", proof.skill]] as const) {
+    const file = reserved.find(candidate => candidate.path === `design-system/canonical/${name}`);
+    if (file?.kind !== "design_system") invalid();
+    if (file.size_bytes !== member.size_bytes || file.sha256 !== member.sha256) throw new ProjectBundleError("project_bundle_digest");
   }
 }
 

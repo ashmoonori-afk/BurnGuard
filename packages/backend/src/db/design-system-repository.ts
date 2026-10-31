@@ -4,7 +4,7 @@ import { getCurrentSystemContent, getPendingSystemOperation } from "./catalog-re
 import { PipelineRepositoryError, parseJsonRecord } from "./pipeline-repository";
 import { designSystemReceiptsTable, designSystemTagsTable } from "./pipeline-schema";
 import type { Database } from "bun:sqlite";
-import { getCatalogRow, type CatalogReceiptRow } from "./catalog-repository";
+import { getCatalogRow, type CatalogReceiptRow, type CatalogRow } from "./catalog-repository";
 import { parseContentJournal, parseContentProvenance, SystemContentError, type ContentBase, type ContentHead } from "../services/system-content-format";
 import { parseCanonicalTreeManifest } from "../services/canonical-tree-manifest";
 import { parsePaletteTransferProof, type PaletteTransferProof } from "@bg/shared/palette";
@@ -210,6 +210,44 @@ export function prepareSystemContent(db: Database, input: {
   return result;
 }
 
+/** The outer bundle import already owns this fresh row and its published candidate. */
+export function prepareImportedSystemContent(db: Database, input: {
+  readonly id: string; readonly journal: unknown; readonly manifest: unknown; readonly live: string;
+  readonly now: number; readonly row: CatalogRow;
+  readonly canonicalTransfer: CanonicalTransferProof; readonly paletteTransfer: PaletteTransferProof;
+}): CatalogReceiptRow {
+  const journal = parseContentJournal(input.journal);
+  const manifest = parseCanonicalTreeManifest(input.manifest);
+  const provenance = parseContentProvenance({ format: "system-content-v1", writer: "bundle-import", source_extraction: null });
+  if (input.id !== `system-content-${journal.operation_id}` || journal.system_id !== input.row.id ||
+    journal.mode !== "create" || journal.base !== null || journal.intent !== "publish" ||
+    journal.cleanup !== "pending" || journal.failure_code !== null || journal.palette_history !== null ||
+    input.row.dirPath !== input.live) throw new SystemContentError("system_content_corrupt");
+  db.transaction(() => {
+    assertSystemContentAuthority(db, journal.system_id, null, true);
+    if (JSON.stringify(getCatalogRow(db, journal.system_id)) !== JSON.stringify(input.row)) {
+      throw new SystemContentError("system_content_conflict");
+    }
+    const existing = db.prepare("SELECT 1 FROM design_system_receipts WHERE design_system_id=? LIMIT 1");
+    try {
+      if (existing.get(journal.system_id) !== null) throw new SystemContentError("system_content_conflict");
+    } finally { existing.finalize(); }
+    const insert = db.prepare(`INSERT INTO design_system_receipts
+      (id,design_system_id,status,content_revision,schema_version,digest,manifest_json,provenance_json,
+       created_at,updated_at,operation,metadata_json,destination_path)
+      VALUES (?,?,'prepared',1,2,?,?,?,?,?,'content',?,?)`);
+    try {
+      insert.run(input.id, journal.system_id, manifest.tree_digest, JSON.stringify(manifest),
+        JSON.stringify(provenance), input.now, input.now, JSON.stringify(journal), input.live);
+    } finally { insert.finalize(); }
+    insertCanonicalTransfer(db, input.id, input.canonicalTransfer);
+    insertPaletteTransfer(db, input.id, input.paletteTransfer);
+  })();
+  const result = getSystemContentReceipt(db, input.id);
+  if (result === null) throw new SystemContentError("system_content_corrupt");
+  return result;
+}
+
 export function commitSystemContent(db: Database, receipt: CatalogReceiptRow, now: number): void {
   const journal = parseContentJournal(JSON.parse(receipt.metadataJson));
   if (journal.intent !== "publish") throw new SystemContentError("system_content_conflict");
@@ -217,6 +255,7 @@ export function commitSystemContent(db: Database, receipt: CatalogReceiptRow, no
     assertSystemContentAuthority(db, journal.system_id, journal.base, journal.mode === "create");
     if (getPendingSystemOperation(db, journal.system_id)?.id !== receipt.id) throw new SystemContentError("system_content_conflict");
     validateCanonicalTransferReceipt(db, receipt);
+    validatePaletteTransferReceipt(db, receipt);
     const changed = db.query(`UPDATE design_system_receipts SET status='committed',updated_at=? WHERE id=? AND schema_version=2 AND operation='content'
       AND status IN ('prepared','recovering') AND digest=? AND metadata_json=? AND manifest_json=? AND provenance_json=?`).run(now, receipt.id, receipt.digest, receipt.metadataJson, receipt.manifestJson, receipt.provenanceJson).changes;
     if (changed !== 1) throw new SystemContentError("system_content_conflict");

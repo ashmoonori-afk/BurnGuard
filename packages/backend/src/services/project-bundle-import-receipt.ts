@@ -3,6 +3,11 @@ import { lstat, mkdir, readdir, readFile, realpath, rename, rm, writeFile } from
 import path from "node:path";
 import { projectsDir, systemsDir } from "../lib/paths";
 import { resolveWithin } from "../security/path-boundary";
+import { getPendingSystemOperation, type CatalogReceiptRow } from "../db/catalog-repository";
+import { validateCanonicalTransferReceipt } from "../db/canonical-transfer-repository";
+import { validatePaletteTransferReceipt } from "../db/palette-transfer-repository";
+import { contentHash, parseContentJournal, parseContentProvenance, SystemContentError } from "./system-content-format";
+import { inspectContentTree, pathStat, readPreservedFile, type ContentTree } from "./system-content-tree";
 
 /**
  * A bundle import owns a durable receipt from before its first visible side effect. A "pending"
@@ -70,6 +75,13 @@ export async function reconcileProjectBundleImports(db: Database): Promise<{ rea
       continue;
     }
     if (receipt.phase === "pending") {
+      if (receipt.system_id !== null) {
+        const pending = getPendingSystemOperation(db, receipt.system_id);
+        if (pending?.schemaVersion === 2) {
+          // A prepared one-head import may be removed only while its exact candidate is still owned.
+          await validateBundleImportedContent(db, pending, receipt.operation_id, true);
+        }
+      }
       if (await ownedByOperation(projectsDir, receipt.project_id, receipt.operation_id)) {
         db.prepare("DELETE FROM projects WHERE id=?").run(receipt.project_id);
         await removeOwnedDirectory(projectsDir, receipt.project_id);
@@ -80,6 +92,26 @@ export async function reconcileProjectBundleImports(db: Database): Promise<{ rea
         await removeOwnedDirectory(systemsDir, receipt.system_id);
       }
       rolledBack += 1;
+    } else if (receipt.system_id !== null && getPendingSystemOperation(db, receipt.system_id)?.schemaVersion === 2) {
+      // Outer commit is durable. Remove only validated markers before ordinary inner recovery.
+      if (receipt.system_id !== null) {
+        const pending = getPendingSystemOperation(db, receipt.system_id);
+        if (pending?.schemaVersion === 2) await validateBundleImportedContent(db, pending, receipt.operation_id, false);
+        const directory = await ownedChildDirectory(systemsDir, receipt.system_id);
+        if (directory !== null && await pathStat(path.join(directory, ...OWNER_MARKER)) !== null) {
+          if (!await ownedByOperation(systemsDir, receipt.system_id, receipt.operation_id)) {
+            throw new SystemContentError("system_content_conflict");
+          }
+          await removeBundleImportOwnerMarker(directory);
+        }
+      }
+      const project = await ownedChildDirectory(projectsDir, receipt.project_id);
+      if (project !== null && await pathStat(path.join(project, ...OWNER_MARKER)) !== null) {
+        if (!await ownedByOperation(projectsDir, receipt.project_id, receipt.operation_id)) {
+          throw new SystemContentError("system_content_conflict");
+        }
+        await removeBundleImportOwnerMarker(project);
+      }
     }
     await removeOwnedDirectory(projectsDir, path.basename(projectBundlePayloadStage(receipt.operation_id)), ".bundle-imports");
     if (receipt.system_id !== null) await removeOwnedDirectory(systemsDir, path.basename(projectBundleSystemStage(receipt.system_id)));
@@ -89,6 +121,62 @@ export async function reconcileProjectBundleImports(db: Database): Promise<{ rea
 }
 
 const OWNER_MARKER = [".meta", "bundle-import-owner.json"] as const;
+
+/** A marker is excluded only after authenticating its exact current operation bytes. Keep .meta. */
+export async function inspectBundleImportCandidate(directory: string, operationId: string): Promise<ContentTree> {
+  const tree = await inspectContentTree(directory);
+  const relative = OWNER_MARKER.join("/");
+  const marker = tree.inventory.find(entry => entry[1] === relative);
+  const expected = JSON.stringify({ operation_id: operationId });
+  if (marker?.[0] !== "file" ||
+    (await readPreservedFile(directory, relative, marker, 1024)).toString("utf8") !== expected) {
+    throw new SystemContentError("system_content_conflict");
+  }
+  const inventory = tree.inventory.filter(entry => entry[1] !== relative);
+  return { ...tree, inventory,
+    preservation_digest: contentHash(JSON.stringify(["system-content-preservation-v1", inventory])) };
+}
+
+export async function assertBundleImportSystemOwner(systemId: string, operationId: string): Promise<void> {
+  const root = projectBundleImportReceiptsDir();
+  const receipt = parseReceipt((await readPreservedFile(root, `${operationId}.json`, undefined, 1024)).toString("utf8"));
+  if (receipt?.operation_id !== operationId || receipt.system_id !== systemId || receipt.phase !== "pending" ||
+    !await ownedByOperation(systemsDir, systemId, operationId)) throw new SystemContentError("system_content_conflict");
+}
+
+/** The outer receipt and the marker both precede any v1/v2 content recovery. */
+export async function hasUnresolvedBundleImport(systemId: string, live: string): Promise<boolean> {
+  if (await pathStat(path.join(live, ...OWNER_MARKER)) !== null) return true;
+  const root = projectBundleImportReceiptsDir();
+  if (await pathStat(root) === null) return false;
+  for (const name of await readdir(root)) {
+    if (!name.endsWith(".json") && !name.endsWith(".json.quarantined")) continue;
+    const receipt = parseReceipt((await readPreservedFile(root, name, undefined, 1024)).toString("utf8"));
+    if (receipt === null || receipt.system_id === systemId) return true;
+  }
+  return false;
+}
+
+/** Before outer commit use the projected tree; after marker removal use the ordinary tree. */
+export async function validateBundleImportedContent(
+  db: Database, receipt: CatalogReceiptRow, operationId: string, requireMarker: boolean,
+): Promise<void> {
+  const journal = parseContentJournal(JSON.parse(receipt.metadataJson));
+  const provenance = parseContentProvenance(JSON.parse(receipt.provenanceJson));
+  const live = resolveWithin(systemsDir, receipt.designSystemId);
+  if (provenance.writer !== "bundle-import" || provenance.source_extraction !== null ||
+    receipt.id !== `system-content-${journal.operation_id}` || journal.system_id !== receipt.designSystemId ||
+    journal.mode !== "create" || journal.base !== null || journal.intent !== "publish" ||
+    journal.failure_code !== null || receipt.contentRevision !== 1 || receipt.sourcePath !== null ||
+    receipt.destinationPath !== live) throw new SystemContentError("system_content_conflict");
+  const marked = await pathStat(path.join(live, ...OWNER_MARKER)) !== null;
+  if (requireMarker && !marked) throw new SystemContentError("system_content_conflict");
+  const tree = marked ? await inspectBundleImportCandidate(live, operationId) : await inspectContentTree(live);
+  if (tree.manifest.tree_digest !== receipt.digest || tree.preservation_digest !== journal.result_preservation_digest ||
+    validateCanonicalTransferReceipt(db, receipt) === null || validatePaletteTransferReceipt(db, receipt) === null) {
+    throw new SystemContentError("system_content_conflict");
+  }
+}
 
 /** Written before any row naming the directory exists, so recovery can prove the import created it. */
 export async function writeBundleImportOwnerMarker(directory: string, operationId: string): Promise<void> {
