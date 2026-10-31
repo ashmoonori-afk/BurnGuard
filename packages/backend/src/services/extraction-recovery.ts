@@ -4,11 +4,13 @@ import { sql } from "drizzle-orm";
 import { commitDesignSystemReceipt } from "../db/design-system-repository";
 import { getDb, getSqlite } from "../db/client";
 import { readPaletteTransfer } from "../db/palette-transfer-repository";
+import { readCanonicalTransfer } from "../db/canonical-transfer-repository";
 import { resolveManagedPath, systemsDir } from "../lib/paths";
 import { resolveWithin } from "../security/path-boundary";
 import { parseCanonicalTreeManifest, validateCanonicalTree } from "./canonical-tree-manifest";
 import { classifyExtractionRecovery, type ExtractionRecoverySnapshot } from "./extraction-recovery-state";
 import { validatePaletteTransferAtRoot } from "./design-system-palette";
+import { validateCanonicalTransferAtRoot } from "./canonical-theme-files";
 import {
   completeExtractionPublication,
   publishExtractionBundle,
@@ -57,6 +59,7 @@ export async function reconcileExtractionState(now = Date.now()): Promise<Extrac
       const reservation = await recoveryReservation(row.designSystemId, destinationDir);
       const manifest = parseCanonicalTreeManifest(JSON.parse(row.manifestJson));
       const paletteTransfer = readPaletteTransfer(getSqlite(), row.receiptId);
+      const canonicalTransfer = readCanonicalTransfer(getSqlite(), row.receiptId);
       const destinationExists = await stat(destinationDir).then((item) => item.isDirectory()).catch(() => false);
       if (!destinationExists) {
         if (reservation.stagingDir === destinationDir) throw new ExtractionRecoveryError("staging_missing");
@@ -64,6 +67,7 @@ export async function reconcileExtractionState(now = Date.now()): Promise<Extrac
         if (sidecar.content_digest !== row.digest || sidecar.manifest.tree_digest !== manifest.tree_digest) throw new ExtractionRecoveryError("digest_mismatch");
         await validateCanonicalTree(reservation.stagingDir, manifest);
         if (paletteTransfer !== null) await validatePaletteTransferAtRoot(reservation.stagingDir, paletteTransfer);
+        if (canonicalTransfer !== null) await validateCanonicalTransferAtRoot(reservation.stagingDir, canonicalTransfer);
         await publishExtractionBundle(reservation, undefined, manifest);
       }
       const published = { ...reservation, stagingDir: destinationDir } satisfies ExtractionReservation;
@@ -71,6 +75,7 @@ export async function reconcileExtractionState(now = Date.now()): Promise<Extrac
       if (sidecar.content_digest !== row.digest) throw new ExtractionRecoveryError("digest_mismatch");
       await validateCanonicalTree(destinationDir, manifest);
       if (paletteTransfer !== null) await validatePaletteTransferAtRoot(destinationDir, paletteTransfer);
+      if (canonicalTransfer !== null) await validateCanonicalTransferAtRoot(destinationDir, canonicalTransfer);
       commitDesignSystemReceipt(getDb(), { id: row.receiptId, digest: row.digest, updatedAt: now });
       await completeExtractionPublication(reservation);
       committed += 1;

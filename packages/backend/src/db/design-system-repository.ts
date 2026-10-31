@@ -4,11 +4,13 @@ import { getCurrentSystemContent, getPendingSystemOperation } from "./catalog-re
 import { PipelineRepositoryError, parseJsonRecord } from "./pipeline-repository";
 import { designSystemReceiptsTable, designSystemTagsTable } from "./pipeline-schema";
 import type { Database } from "bun:sqlite";
-import { getCatalogRow, type CatalogReceiptRow } from "./catalog-repository";
+import { getCatalogRow, type CatalogReceiptRow, type CatalogRow } from "./catalog-repository";
 import { parseContentJournal, parseContentProvenance, SystemContentError, type ContentBase, type ContentHead } from "../services/system-content-format";
 import { parseCanonicalTreeManifest } from "../services/canonical-tree-manifest";
 import { parsePaletteTransferProof, type PaletteTransferProof } from "@bg/shared/palette";
 import { insertPaletteTransfer, readPaletteTransfer, validatePaletteTransferReceipt } from "./palette-transfer-repository";
+import { parseCanonicalTransferProof, type CanonicalTransferProof } from "@bg/shared/theme";
+import { insertCanonicalTransfer, readCanonicalTransfer, validateCanonicalTransferReceipt } from "./canonical-transfer-repository";
 
 type MetadataUpdate = {
   readonly id: string;
@@ -28,6 +30,7 @@ type ReceiptInput = {
   readonly provenance: Readonly<Record<string, unknown>>;
   readonly createdAt: number;
   readonly paletteTransfer?: PaletteTransferProof;
+  readonly canonicalTransfer?: CanonicalTransferProof;
 };
 type Receipt = {
   readonly id: string;
@@ -71,6 +74,11 @@ export function prepareDesignSystemReceipt(db: PipelineDatabase, input: ReceiptI
       if (JSON.stringify(storedProof) !== JSON.stringify(suppliedProof)) {
         throw new PipelineRepositoryError("content_receipt_mismatch", input.designSystemId);
       }
+      const storedCanonical = readCanonicalTransfer(db.$client, current.id);
+      const suppliedCanonical = input.canonicalTransfer === undefined ? null : parseCanonicalTransferProof(input.canonicalTransfer);
+      if (JSON.stringify(storedCanonical) !== JSON.stringify(suppliedCanonical)) {
+        throw new PipelineRepositoryError("content_receipt_mismatch", input.designSystemId);
+      }
       return parseReceipt(current);
     }
     tx.insert(designSystemReceiptsTable).values({
@@ -85,6 +93,7 @@ export function prepareDesignSystemReceipt(db: PipelineDatabase, input: ReceiptI
       createdAt: input.createdAt,
       updatedAt: input.createdAt,
     }).run();
+    if (input.canonicalTransfer !== undefined) insertCanonicalTransfer(db.$client, input.id, input.canonicalTransfer);
     if (input.paletteTransfer !== undefined) insertPaletteTransfer(db.$client, input.id, input.paletteTransfer);
     return { id: input.id, contentRevision: input.contentRevision, schemaVersion: input.schemaVersion, digest: input.digest, manifest: input.manifest, provenance: input.provenance };
   });
@@ -96,6 +105,7 @@ export function commitDesignSystemReceipt(db: PipelineDatabase, input: { readonl
       WHERE id=? AND digest=? AND operation='content' AND status IN ('prepared','recovering')`).get(input.id, input.digest);
     if (row === null) throw new PipelineRepositoryError("content_receipt_mismatch", input.id);
     validatePaletteTransferReceipt(db.$client, row);
+    validateCanonicalTransferReceipt(db.$client, row);
     tx.update(designSystemReceiptsTable).set({ status: "committed", updatedAt: input.updatedAt }).where(and(
       eq(designSystemReceiptsTable.id, input.id),
       eq(designSystemReceiptsTable.operation, "content"),
@@ -171,6 +181,7 @@ export type NewContentSystem = {
 export function prepareSystemContent(db: Database, input: {
   readonly id: string; readonly journal: unknown; readonly manifest: unknown; readonly provenance: unknown;
   readonly live: string; readonly now: number; readonly create: NewContentSystem | null;
+  readonly canonicalTransfer?: CanonicalTransferProof;
 }): CatalogReceiptRow {
   const journal = parseContentJournal(input.journal);
   const manifest = parseCanonicalTreeManifest(input.manifest);
@@ -192,6 +203,45 @@ export function prepareSystemContent(db: Database, input: {
       journal.base?.head?.receipt_id ?? null, journal.base?.head?.digest ?? null, JSON.stringify(journal),
       journal.mode === "replace" ? input.live : null, input.live,
     );
+    if (input.canonicalTransfer !== undefined) insertCanonicalTransfer(db, input.id, input.canonicalTransfer);
+  })();
+  const result = getSystemContentReceipt(db, input.id);
+  if (result === null) throw new SystemContentError("system_content_corrupt");
+  return result;
+}
+
+/** The outer bundle import already owns this fresh row and its published candidate. */
+export function prepareImportedSystemContent(db: Database, input: {
+  readonly id: string; readonly journal: unknown; readonly manifest: unknown; readonly live: string;
+  readonly now: number; readonly row: CatalogRow;
+  readonly canonicalTransfer: CanonicalTransferProof; readonly paletteTransfer: PaletteTransferProof;
+}): CatalogReceiptRow {
+  const journal = parseContentJournal(input.journal);
+  const manifest = parseCanonicalTreeManifest(input.manifest);
+  const provenance = parseContentProvenance({ format: "system-content-v1", writer: "bundle-import", source_extraction: null });
+  if (input.id !== `system-content-${journal.operation_id}` || journal.system_id !== input.row.id ||
+    journal.mode !== "create" || journal.base !== null || journal.intent !== "publish" ||
+    journal.cleanup !== "pending" || journal.failure_code !== null || journal.palette_history !== null ||
+    input.row.dirPath !== input.live) throw new SystemContentError("system_content_corrupt");
+  db.transaction(() => {
+    assertSystemContentAuthority(db, journal.system_id, null, true);
+    if (JSON.stringify(getCatalogRow(db, journal.system_id)) !== JSON.stringify(input.row)) {
+      throw new SystemContentError("system_content_conflict");
+    }
+    const existing = db.prepare("SELECT 1 FROM design_system_receipts WHERE design_system_id=? LIMIT 1");
+    try {
+      if (existing.get(journal.system_id) !== null) throw new SystemContentError("system_content_conflict");
+    } finally { existing.finalize(); }
+    const insert = db.prepare(`INSERT INTO design_system_receipts
+      (id,design_system_id,status,content_revision,schema_version,digest,manifest_json,provenance_json,
+       created_at,updated_at,operation,metadata_json,destination_path)
+      VALUES (?,?,'prepared',1,2,?,?,?,?,?,'content',?,?)`);
+    try {
+      insert.run(input.id, journal.system_id, manifest.tree_digest, JSON.stringify(manifest),
+        JSON.stringify(provenance), input.now, input.now, JSON.stringify(journal), input.live);
+    } finally { insert.finalize(); }
+    insertCanonicalTransfer(db, input.id, input.canonicalTransfer);
+    insertPaletteTransfer(db, input.id, input.paletteTransfer);
   })();
   const result = getSystemContentReceipt(db, input.id);
   if (result === null) throw new SystemContentError("system_content_corrupt");
@@ -204,6 +254,8 @@ export function commitSystemContent(db: Database, receipt: CatalogReceiptRow, no
   db.transaction(() => {
     assertSystemContentAuthority(db, journal.system_id, journal.base, journal.mode === "create");
     if (getPendingSystemOperation(db, journal.system_id)?.id !== receipt.id) throw new SystemContentError("system_content_conflict");
+    validateCanonicalTransferReceipt(db, receipt);
+    validatePaletteTransferReceipt(db, receipt);
     const changed = db.query(`UPDATE design_system_receipts SET status='committed',updated_at=? WHERE id=? AND schema_version=2 AND operation='content'
       AND status IN ('prepared','recovering') AND digest=? AND metadata_json=? AND manifest_json=? AND provenance_json=?`).run(now, receipt.id, receipt.digest, receipt.metadataJson, receipt.manifestJson, receipt.provenanceJson).changes;
     if (changed !== 1) throw new SystemContentError("system_content_conflict");

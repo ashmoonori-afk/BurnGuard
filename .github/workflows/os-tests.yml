@@ -68,6 +68,7 @@ jobs:
           packages/backend/tests/artifact-tree-durability.test.ts
           packages/backend/tests/system-content-publication.test.ts
           packages/backend/tests/design-system-palette.test.ts
+          packages/backend/tests/design-system-canonical.test.ts
           packages/backend/tests/design-system-wireframe.test.ts
           packages/backend/tests/design-system-visual-diff.test.ts
           packages/backend/tests/design-system-hero-assets.test.ts
@@ -150,6 +151,7 @@ jobs:
           packages/shared/tests/runtime-diagnostics.test.ts
           packages/shared/tests/color.test.ts
           packages/shared/tests/palette.test.ts
+          packages/shared/tests/theme.test.ts
           packages/backend/tests/session-routes.test.ts
           packages/backend/tests/turn-error-sanitizer.test.ts
           scripts/qa/har-mask.test.ts

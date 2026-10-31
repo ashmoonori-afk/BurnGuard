@@ -6,6 +6,7 @@ import {
   serializePalette, type DesignSystemPaletteResponse, type PaletteState, type PaletteTransferProof, type SaveDesignSystemPaletteRequest,
 } from "@bg/shared/palette";
 import { UpgradeContractError } from "@bg/shared/contract-parser";
+import { updateThemePalette } from "@bg/shared/theme";
 import { getCurrentSystemContent, type CatalogReceiptRow } from "../db/catalog-repository";
 import { PaletteTransferRepositoryError, validatePaletteTransferReceipt } from "../db/palette-transfer-repository";
 import { getSqlite } from "../db/sqlite-client";
@@ -22,6 +23,8 @@ import {
   observeSystemContent, publishSystemContent, type ContentEnvironment, type ContentObservation, type ContentValidator,
 } from "./system-content-publication";
 import { inspectContentTree, readPreservedFile, safeContentChild, type ContentTree } from "./system-content-tree";
+import { canonicalFiles, validateCanonicalContent, writeCanonicalCandidate } from "./canonical-theme-files";
+import { readOwnedCanonical } from "./design-system-canonical";
 
 const PAIR_PATHS = ["palette/scales.css", "palette/state.json"] as const;
 const LEGACY_EMITTER_VERSION = "burnguard-palette-1";
@@ -108,8 +111,16 @@ export const validatePaletteContent: ContentValidator = async (root, journal) =>
   }
 };
 export function paletteContentEnvironment(db: Database = getSqlite(), root: string = systemsDir): ContentEnvironment {
-  return { db, systemsRoot: root, operationId: randomUUID, now: Date.now, validators: { palette: validatePaletteContent } };
+  return { db, systemsRoot: root, operationId: randomUUID, now: Date.now,
+    validators: { palette: validatePaletteContent, canonical: validateCanonicalContent, "bundle-import": validateBundleImportContent } };
 }
+const validateBundleImportContent: ContentValidator = async (root, journal) => {
+  if (journal.mode !== "create" || journal.base !== null || journal.palette_history !== null) return corrupt();
+  await validateCanonicalContent(root, journal);
+  const pair = await readPair(root, await inspectContentTree(root));
+  if (!pair.present) return corrupt();
+  validatePair(pair, pairEmitterVersion(pair));
+};
 function required(base: ContentObservation): void {
   if (base.row === null) throw new DesignSystemPaletteError("design_system_not_found");
   if (base.row.lifecycle !== "active") throw new DesignSystemPaletteError("invalid_lifecycle");
@@ -235,13 +246,22 @@ export async function saveDesignSystemPalette(id: string, input: SaveDesignSyste
     const pair = await actualPair(base);
     if (await expectedIdentity(base) !== request.expected_digest) throw new SystemContentError("expected_digest_conflict");
     assertOwned(env, base, pair);
+    const canonical = await readOwnedCanonical(env, base, lease);
+    const nextCanonical = canonical === null ? null : serializePalette(canonical.theme.palette) === json
+      ? canonical : canonicalFiles(updateThemePalette(canonical.theme, request.state));
     const prior = getCurrentSystemContent(env.db, id);
     const source = prior === null ? null : prior.schemaVersion === 2 ? parseContentProvenance(JSON.parse(prior.provenanceJson)).source_extraction :
       { receipt_id: prior.operation === "content" ? prior.id : prior.parentReceiptId, digest: prior.digest };
     if (source !== null && source.receipt_id === null) return corrupt();
     const sourceExtraction = source === null || source.receipt_id === null ? null : { receipt_id: source.receipt_id, digest: source.digest };
     const values = new Map([["palette/state.json", json], ["palette/scales.css", css]]);
-    const changed = PAIR_PATHS.filter(name => !pair.present || (name === "palette/state.json" ? pair.json.bytes : pair.css.bytes) !== values.get(name));
+    const changed: string[] = PAIR_PATHS.filter(name => !pair.present || (name === "palette/state.json" ? pair.json.bytes : pair.css.bytes) !== values.get(name));
+    if (canonical !== null && nextCanonical !== null) for (const [name, before, after] of [
+      ["canonical/theme.json", canonical.json, nextCanonical.json],
+      ["canonical/theme.css", canonical.css, nextCanonical.css],
+      ["canonical/SKILL.md", canonical.skill, nextCanonical.skill],
+    ] as const) if (before !== after) changed.push(name);
+    changed.sort();
     const result = await publishSystemContent(env, { systemId: id, mode: "replace", expectedDigest: request.expected_digest, lease, adapter: {
       provenance: { format: "system-content-v1", writer: "palette", source_extraction: sourceExtraction },
       expectedIdentity, writeSet: () => changed,
@@ -251,8 +271,10 @@ export async function saveDesignSystemPalette(id: string, input: SaveDesignSyste
         await boundary("stage-state-written");
         await writeFile(await safeContentChild(stage, "palette", "scales.css"), css);
         await boundary("stage-css-written");
+        if (nextCanonical !== null) await writeCanonicalCandidate(stage, nextCanonical.theme);
       },
       validate: validatePaletteContent,
+      canonicalTransfer: async () => nextCanonical?.proof ?? null,
       paletteHistory: async () => ({ emitter_version: PALETTE_EMITTER_VERSION, before: pair,
         after: { present: true, json: snapshot(Buffer.from(json)), css: snapshot(Buffer.from(css)) } }),
     } });

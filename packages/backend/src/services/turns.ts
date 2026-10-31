@@ -74,6 +74,8 @@ import { inspectCanonicalTree, type CanonicalTreeManifest } from "./canonical-tr
 import { manifestEntry, readManagedFile } from "./artifact-tree-storage";
 import { resolveWithin } from "../security/path-boundary";
 import { logoIdeationOutputComplete, withLogoMoodboardInputs } from "./logo-moodboard-inputs";
+import { provisionCanonicalPinStylesheet, selectedPinnedThemeCss } from "./canonical-pin-assets";
+import { renderPinnedDesignSystemContext } from "../harness/prompt-design-system";
 
 export function assertGraphicStarterReplaced(before: string, after: string): void {
   if (before.includes('data-bg-node-id="graphic-copy"') && before.includes("Start with one clear visual message.") && before === after) throw new Error("graphic_starter_unchanged");
@@ -526,6 +528,7 @@ async function runUserTurnInternal(
         if (project.type === "slide_deck") await prepareSlideDeckExport(stageDir, project.entrypoint);
         // The skills point at this file; it lives outside the canonical tree so it is never published.
         await provisionLucideIconReference(stageDir);
+        if (sessionContext.designSystemPin) await provisionCanonicalPinStylesheet(stageDir, sessionContext.designSystemPin);
         let starterSeeded = false;
         // The starter stylesheet is written before the turn's baseline, so it never counts as a change the turn made.
         if (sessionContext.designSystemPin && surfaceForProjectType(project.type) === "website") {
@@ -639,7 +642,7 @@ async function runUserTurnInternal(
                 const deckSummary = await summarizeDeckHtml(path.join(stageDir, project.entrypoint));
                 const reviewPrompt = [
                   "## Project", `- id: ${project.id}`, `- name: ${project.name}`, `- type: ${project.type}`, `- entrypoint: ${project.entrypoint}`, `- directory: ${stageDir}`, `- locale: ${parseStoredProjectOptions(project.options_json).design_brief?.locale ?? "unknown"}`, "",
-                  ...(sessionContext.designSystemPin ? ["<pinned_design_system>", JSON.stringify({ revision: sessionContext.designSystemPin.revision, digest: sessionContext.designSystemPin.digest }), sessionContext.designSystemPin.context, "</pinned_design_system>", ""] : []),
+                  ...(sessionContext.designSystemPin ? ["<pinned_design_system>", JSON.stringify({ revision: sessionContext.designSystemPin.revision, digest: sessionContext.designSystemPin.digest }), renderPinnedDesignSystemContext(sessionContext.designSystemPin), "</pinned_design_system>", ""] : []),
                   ...(deckSummary === null ? [] : ["## Deck structure", deckSummary, ""]),
                   ...(sourceInstructions === "" ? [] : [sourceInstructions.trim(), ""]),
                   IMAGE_ARTBOARD_COMPLETION_CHECKS, "",
@@ -676,7 +679,7 @@ async function runUserTurnInternal(
               const designReview = logoIdeate ? { result: null, repairs: 0 } : await (dependencies.reviewDesign ?? reviewTurnDesign)({
                 adapter: adapterInput, projectId: project.id, type: project.type, entrypoint: project.entrypoint,
                 revision: project.current_revision + 1, changedPaths, ...(canvas ? { canvas } : {}),
-                ...(sessionContext.designSystemPin ? { tokensCss: sessionContext.designSystemPin.tokens } : {}),
+                ...(sessionContext.designSystemPin ? { tokensCss: selectedPinnedThemeCss(sessionContext.designSystemPin) } : {}),
                 ...(pinnedContext !== undefined && canvas === undefined && surfaceForProjectType(project.type) === "website"
                   ? { conformance: (signal: AbortSignal) => reviewDesignSystemConformance({ projectDir: stageDir, entrypoint: project.entrypoint, pinnedContext, changedPaths, signal }), requestText: payload.text, conformanceRepairable: !builtAgainstSystem }
                   : {}),

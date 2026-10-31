@@ -2,7 +2,8 @@ import { Hono } from "hono";
 import { parseSaveDesignSystemPaletteRequest } from "@bg/shared/palette";
 import { UpgradeContractError } from "@bg/shared/contract-parser";
 import { PathBoundaryError, assertSafeName } from "../security/path-boundary";
-import { DesignSystemPaletteError, readDesignSystemPalette, saveDesignSystemPalette } from "../services/design-system-palette";
+import { DesignSystemPaletteError, paletteContentEnvironment, readDesignSystemPalette, saveDesignSystemPalette } from "../services/design-system-palette";
+import { readDesignSystemCanonical } from "../services/design-system-canonical";
 import { SystemContentError } from "../services/system-content-format";
 import { MAX_PAGE_LIMIT } from "@bg/shared";
 import type {
@@ -74,6 +75,19 @@ function parseExtractionLineage(input: unknown): DesignSystemExtractionLineageRe
 }
 
 export const systemRoutes = new Hono();
+
+systemRoutes.get("/api/design-systems/:id/canonical", async c => {
+  try {
+    const result = await readDesignSystemCanonical(assertSafeName(c.req.param("id")), paletteContentEnvironment());
+    return result === null ? c.json(fail("design_system_not_found", "Design system not found"), 404) : c.json(ok(result));
+  } catch (error) {
+    if (error instanceof PathBoundaryError) return c.json(fail("invalid_body", "Invalid design system request"), 400);
+    if (error instanceof SystemContentError) {
+      return c.json(fail(error.code, "Canonical theme is unavailable"), error.code === "system_content_failed" ? 500 : 409);
+    }
+    return c.json(fail("system_content_failed", "Canonical theme is unavailable"), 500);
+  }
+});
 
 function paletteFailure(error: unknown) {
   if (error instanceof UpgradeContractError || error instanceof PathBoundaryError || error instanceof SyntaxError) {

@@ -31,7 +31,9 @@ import { withCatalogSnapshot, type CatalogAccessEvents } from "./catalog-snapsho
 import { SystemContentError } from "./system-content-format";
 import { type SystemContentLease } from "./system-content-access";
 import { authenticatePaletteTransfer, DesignSystemPaletteError, paletteContentEnvironment } from "./design-system-palette";
-import { validateProjectBundlePaletteFiles } from "./project-bundle-validation";
+import { validateProjectBundleCanonicalFiles, validateProjectBundlePaletteFiles } from "./project-bundle-validation";
+import { readOwnedCanonical } from "./design-system-canonical";
+import { observeSystemContent } from "./system-content-publication";
 
 type AttachmentRow = {
   readonly turn_id: string | null;
@@ -79,7 +81,10 @@ export async function exportProjectBundle(projectId: string, faults: ProjectBund
       designSystem = { kind: "builtin", id: system.id, pin: portablePin(projectId) };
     } else {
       if (lease === undefined) throw new ProjectBundleError("project_bundle_unavailable");
-      const paletteTransfer = await authenticatePaletteTransfer(paletteContentEnvironment(), system.id, lease);
+      const environment = paletteContentEnvironment();
+      const paletteTransfer = await authenticatePaletteTransfer(environment, system.id, lease);
+      const canonicalTransfer = (await readOwnedCanonical(environment,
+        await observeSystemContent(environment, system.id, lease), lease))?.proof ?? null;
       systemRoot = resolveManagedPath(systemsDir, system.dir_path);
       systemEntries = await collectDesignSystemBundleEntries(systemRoot, budget);
       designSystem = {
@@ -95,8 +100,12 @@ export async function exportProjectBundle(projectId: string, faults: ProjectBund
         readme_md_path: relativeSystemPath(systemRoot, system.readme_md_path),
         pin: portablePin(projectId),
         ...(paletteTransfer === null ? {} : { palette_transfer: paletteTransfer }),
+        ...(canonicalTransfer === null ? {} : { canonical_transfer: canonicalTransfer }),
       };
-      try { validateProjectBundlePaletteFiles(designSystem, systemEntries.map(entry => entry.file)); }
+      try {
+        validateProjectBundlePaletteFiles(designSystem, systemEntries.map(entry => entry.file));
+        validateProjectBundleCanonicalFiles(designSystem, systemEntries.map(entry => entry.file));
+      }
       catch (error) {
         if (error instanceof ProjectBundleError) throw new ProjectBundleError("project_bundle_unavailable");
         throw error;
@@ -134,6 +143,12 @@ export async function exportProjectBundle(projectId: string, faults: ProjectBund
     if (lease === undefined) throw new ProjectBundleError("project_bundle_unavailable");
     const confirmedTransfer = await authenticatePaletteTransfer(paletteContentEnvironment(), designSystem.original_id, lease);
     if (JSON.stringify(confirmedTransfer) !== JSON.stringify(designSystem.palette_transfer ?? null)) {
+      throw new ProjectBundleError("project_bundle_unavailable");
+    }
+    const environment = paletteContentEnvironment();
+    const confirmedCanonical = (await readOwnedCanonical(environment,
+      await observeSystemContent(environment, designSystem.original_id, lease), lease))?.proof ?? null;
+    if (JSON.stringify(confirmedCanonical) !== JSON.stringify(designSystem.canonical_transfer ?? null)) {
       throw new ProjectBundleError("project_bundle_unavailable");
     }
   }
@@ -254,5 +269,7 @@ function relativeSystemPath(root: string, absolute: string | null): string | nul
 
 function portablePin(projectId: string): ProjectBundleDesignSystem["pin"] {
   const pin = readProjectDesignSystemPin(projectId);
-  return pin ? { revision: pin.revision, digest: pin.digest, context: pin.context, tokens: pin.tokens } : null;
+  if (pin === null) return null;
+  const content = { revision: pin.revision, digest: pin.digest, context: pin.context, tokens: pin.tokens };
+  return pin.format === "canonical-v1" ? { ...content, format: "canonical-v1", schema_version: 2 } : content;
 }

@@ -8,6 +8,8 @@ import { processProjectFilesystemSignal } from "../services/watchers";
 import { designDirectionRoutes } from "./design-directions";
 import { chartRoutes } from "./charts";
 import { DesignSystemPinError, inspectProjectDesignSystemPin, refreshProjectDesignSystemPin } from "../services/project-design-system-pin";
+import { parseCanonicalPinSelection, parseRefreshProjectDesignSystemPinRequest, type CanonicalPinSelection } from "@bg/shared/canonical-pin";
+import { UpgradeContractError } from "@bg/shared/contract-parser";
 import { exportProjectBundle, ProjectBundleError } from "../services/project-bundle";
 import { figmaImportRoutes } from "./figma-import";
 import { createProjectFolderRoutes } from "./project-folder";
@@ -86,21 +88,25 @@ projectRoutes.get("/api/projects/:id/print-preflight", async (c) => {
 });
 
 projectRoutes.get("/api/projects/:id/design-system-pin", async (c) => {
-  try { return c.json(ok(await inspectProjectDesignSystemPin(c.req.param("id")))); }
+  try {
+    const query = c.req.query();
+    const selection = Object.keys(query).length === 0 ? undefined : parseCanonicalPinSelection(query);
+    return c.json(ok(await inspectProjectDesignSystemPin(c.req.param("id"), {}, selection)));
+  }
   catch (error) {
+    if (error instanceof UpgradeContractError) return c.json(fail("invalid_body", "Invalid pin selection"), 400);
     if (error instanceof DesignSystemPinError) return c.json(fail(error.code, "Design system version unavailable"), 409);
     throw error;
   }
 });
 projectRoutes.post("/api/projects/:id/design-system-pin", async (c) => {
-  const body: unknown = await c.req.json().catch(() => null);
-  if (!body || typeof body !== "object" || Object.keys(body).length !== 2 ||
-    !("expected_digest" in body) || typeof body.expected_digest !== "string" || !/^[a-f0-9]{64}$/.test(body.expected_digest) ||
-    !("candidate_digest" in body) || typeof body.candidate_digest !== "string" || !/^[a-f0-9]{64}$/.test(body.candidate_digest)) return c.json(fail("invalid_body", "Expected version identities"), 400);
   try {
-    await refreshProjectDesignSystemPin(c.req.param("id"), body.expected_digest, body.candidate_digest);
+    const body = parseRefreshProjectDesignSystemPinRequest(await c.req.json<unknown>().catch(() => null));
+    const selection: CanonicalPinSelection | undefined = body.format === "canonical-v1" ? { format: body.format, mode: body.mode } : undefined;
+    await refreshProjectDesignSystemPin(c.req.param("id"), body.expected_digest, body.candidate_digest, selection);
     return c.json(ok(await inspectProjectDesignSystemPin(c.req.param("id"))));
   } catch (error) {
+    if (error instanceof UpgradeContractError) return c.json(fail("invalid_body", "Expected version identities"), 400);
     if (error instanceof DesignSystemPinError) return c.json(fail(error.code, "Design system version changed or project is busy"), 409);
     throw error;
   }

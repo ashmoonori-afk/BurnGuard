@@ -2,8 +2,13 @@ import type { BackendId } from "./app";
 import type { ProjectSummary } from "./home";
 import type { SessionStatus } from "./harness";
 import type { NormalizedEvent } from "./events";
+import type { SemanticThemeMode } from "./theme";
 
 export interface ProjectDesignSystemPin {
+  readonly format?: "canonical-v1";
+  readonly mode?: SemanticThemeMode;
+  readonly candidate_format?: "canonical-v1";
+  readonly candidate_mode?: SemanticThemeMode;
   readonly revision: number;
   readonly digest: string;
   readonly candidate_digest: string;

@@ -4,12 +4,12 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, expect, spyOn, test } from "bun:test";
 import JSZip from "jszip";
-import { PROJECT_BUNDLE_MANIFEST_PATH, parseProjectBundleManifest, type ProjectBundleManifest } from "@bg/shared";
+import { PROJECT_BUNDLE_MANIFEST_PATH, parseProjectBundleManifest, type ProjectBundleFile, type ProjectBundleManifest } from "@bg/shared";
 import { runMigrations } from "../src/db/migrate-local";
 import { getSqlite } from "../src/db/sqlite-client";
 import { projectsDir, systemsDir } from "../src/lib/paths";
 import { getProjectDetail } from "../src/db/project-read-repository";
-import { getDesignSystemDetail } from "../src/db/seed";
+import { createDesignSystemRecord, createProjectRecord, getDesignSystemDetail } from "../src/db/seed";
 import { getContentReceipt, getCurrentSystemContent, getPendingSystemOperation } from "../src/db/catalog-repository";
 import { validateCatalogReceiptTree } from "../src/services/catalog-files";
 import { projectBundleImportReceiptsDir, projectBundlePayloadStage, projectBundleSystemStage, reconcileProjectBundleImports, writeBundleImportOwnerMarker, writeProjectBundleImportReceipt } from "../src/services/project-bundle-import-receipt";
@@ -18,14 +18,25 @@ import { canCreateSymlink, SYMLINK_SKIP_REASON } from "./helpers/platform";
 import { readdir } from "node:fs/promises";
 import { inspectCanonicalTree } from "../src/services/canonical-tree-manifest";
 import { exportProjectBundle, importProjectBundleFile } from "../src/services/project-bundle";
-import { readProjectDesignSystemPin } from "../src/services/project-design-system-pin";
+import { inspectProjectDesignSystemPin, readProjectDesignSystemPin, refreshProjectDesignSystemPin } from "../src/services/project-design-system-pin";
+import { parseCanonicalPinContent, type CanonicalPinSelection } from "@bg/shared/canonical-pin";
 import { ArtifactCoordinator } from "../src/services/artifact-coordinator";
 import { reconcileArtifactState } from "../src/services/artifact-recovery";
 import { listSessionAttachments } from "../src/db/attachments";
 import { selectContextAttachments } from "../src/services/context";
 import { createDefaultPalette, emitPaletteCss, serializePalette } from "@bg/shared/palette";
-import { readDesignSystemPalette, saveDesignSystemPalette } from "../src/services/design-system-palette";
+import { paletteContentEnvironment, readDesignSystemPalette, saveDesignSystemPalette } from "../src/services/design-system-palette";
 import { upsertDesignSystemColorToken } from "../src/services/design-system-extract";
+import { validateProjectBundleCanonicalFiles } from "../src/services/project-bundle-validation";
+import { parseHexColor } from "@bg/shared/color";
+import { createDefaultThemeSettings, synthesizeTheme } from "@bg/shared/theme";
+import { canonicalFiles, validateCanonicalContent, writeCanonicalCandidate } from "../src/services/canonical-theme-files";
+import { readOwnedCanonical } from "../src/services/design-system-canonical";
+import { withSystemContentAccess } from "../src/services/system-content-access";
+import { contentObservationDigest, observeSystemContent, publishSystemContent, recoverSystemContent } from "../src/services/system-content-publication";
+import { parseContentProvenance } from "../src/services/system-content-format";
+import { readCanonicalTransfer } from "../src/db/canonical-transfer-repository";
+import { reconcileExtractionState } from "../src/services/extraction-recovery";
 import { authoringContentEnvironment } from "../src/services/design-system-authoring";
 import { withCatalogSnapshot } from "../src/services/catalog-snapshot";
 import { isArtifactProjectBusy } from "../src/services/artifact-project-lock";
@@ -79,14 +90,335 @@ async function bundleFixture() {
   return { project, system };
 }
 
-async function savedPaletteBundle() {
-  const fixture = await bundleFixture();
+async function manualBundleFixture() {
+  const id = `manual-bundle-${crypto.randomUUID()}`;
+  const directory = path.join(systemsDir, id);
+  await mkdir(directory);
+  for (const name of ["README.md", "SKILL.md", "colors_and_type.css"]) {
+    await writeFile(path.join(directory, name), await readFile(path.join(sourceSystemDir, name)));
+  }
+  const system = await createDesignSystemRecord({
+    id, name: "Manual portable theme", description: null, status: "published", sourceType: "manual",
+    sourceUri: null, dirPath: directory, skillMdPath: path.join(directory, "SKILL.md"),
+    tokensCssPath: path.join(directory, "colors_and_type.css"), readmeMdPath: path.join(directory, "README.md"),
+    thumbnailPath: null,
+  });
+  createdSystemIds.push(id);
+  if (system === null) throw new Error("Missing manual theme");
+  const created = await createProjectRecord({
+    name: "Manual theme project", type: "prototype", designSystemId: id, backendId: "codex",
+    optionsJson: null, entrypoint: "index.html", thumbnailPath: null,
+    initializeArtifact: stage => writeFile(path.join(stage, "index.html"), "<h1>Manual theme</h1>"),
+  });
+  createdProjectIds.push(created.id);
+  const project = await getProjectDetail(created.id);
+  if (project === null) throw new Error("Missing manual project");
+  return { project, system };
+}
+
+async function savedPaletteBundle(canonicalOnly = false) {
+  const fixture = canonicalOnly ? await manualBundleFixture() : await bundleFixture();
   const initial = await readDesignSystemPalette(fixture.system.id);
   const state = { ...createDefaultPalette(), curve: { ...createDefaultPalette().curve, amount: 0.413 } };
   await saveDesignSystemPalette(fixture.system.id, { expected_digest: initial.expected_digest, state });
   const archive = await exportProjectBundle(fixture.project.id);
   return { ...fixture, state, archive };
 }
+
+async function savedCanonicalBundle(canonicalOnly = false) {
+  const fixture = await savedPaletteBundle(canonicalOnly);
+  const theme = synthesizeTheme({
+    system_id: "portable-bundle-theme", default_mode: "light", palette: fixture.state,
+    sources: { brand: { kind: "color", color: parseHexColor("#123456") }, surface: { kind: "scale", id: "neutral" },
+      status: { success: parseHexColor("#15803d"), warning: parseHexColor("#a16207"),
+        destructive: parseHexColor("#b91c1c"), info: parseHexColor("#0369a1") } },
+    settings: { light: createDefaultThemeSettings(), dark: createDefaultThemeSettings() },
+  });
+  const environment = paletteContentEnvironment();
+  await withSystemContentAccess(getSqlite(), systemsDir, [fixture.system.id], async lease => {
+    const base = await observeSystemContent(environment, fixture.system.id, lease);
+    const head = getCurrentSystemContent(getSqlite(), fixture.system.id);
+    if (head === null) throw new Error("Missing palette source receipt");
+    const provenance = parseContentProvenance(JSON.parse(head.provenanceJson));
+    await publishSystemContent(environment, {
+      systemId: fixture.system.id, mode: "replace", expectedDigest: contentObservationDigest(base), lease,
+      adapter: {
+        provenance: { ...provenance, writer: "canonical" },
+        writeSet: () => ["canonical/SKILL.md", "canonical/theme.css", "canonical/theme.json"],
+        transform: async stage => { await writeCanonicalCandidate(stage, theme); },
+        validate: validateCanonicalContent,
+        canonicalTransfer: async () => canonicalFiles(theme).proof,
+      },
+    });
+  });
+  return { ...fixture, theme, archive: await exportProjectBundle(fixture.project.id) };
+}
+
+async function canonicalPinnedBundle(mode: "light" | "dark") {
+  const fixture = await savedCanonicalBundle(true);
+  const selection: CanonicalPinSelection = { format: "canonical-v1", mode };
+  const current = readProjectDesignSystemPin(fixture.project.id);
+  const proposed = await inspectProjectDesignSystemPin(fixture.project.id, {}, selection);
+  if (current === null || proposed === null) throw new Error("Missing canonical pin candidate");
+  await refreshProjectDesignSystemPin(fixture.project.id, current.digest, proposed.candidate_digest, selection);
+  const pin = readProjectDesignSystemPin(fixture.project.id);
+  if (pin?.format !== "canonical-v1") throw new Error("Missing canonical pin");
+  return { ...fixture, pin };
+}
+
+test.each(["light", "dark"] as const)(
+  "Given a canonical pin bundle in %s mode and a newer catalog theme When imported Then the older pin and both modes survive owner rebinding",
+  async mode => {
+    const fixture = await canonicalPinnedBundle(mode);
+    const current = await readDesignSystemPalette(fixture.system.id);
+    const changed = { ...fixture.theme.palette, curve: { ...fixture.theme.palette.curve, amount: 0.24 } };
+    await saveDesignSystemPalette(fixture.system.id, { expected_digest: current.expected_digest, state: changed });
+    const exported = await exportProjectBundle(fixture.project.id);
+    expect(exported.manifest.design_system.pin).toMatchObject({
+      schema_version: 2, format: "canonical-v1", digest: fixture.pin.digest,
+    });
+    const restored = await importProjectBundleFile(new File([exported.bytes], exported.filename), "Pinned canonical import", {
+      getLocalFonts: async () => ({ schema_version: 1, families: [] }),
+    });
+    createdProjectIds.push(restored.id);
+    const project = await getProjectDetail(restored.id);
+    if (!project?.design_system_id) throw new Error("Missing rebound canonical system");
+    createdSystemIds.push(project.design_system_id);
+    const pin = readProjectDesignSystemPin(project.id);
+    if (pin === null) throw new Error("Missing imported canonical pin");
+    expect(pin).toEqual({ ...fixture.pin, system_id: project.design_system_id });
+    expect(parseCanonicalPinContent(pin)).toEqual({ schema_version: 1, mode, theme: fixture.theme });
+    expect((await readDesignSystemPalette(project.design_system_id)).state).toEqual(changed);
+    const proposed = await inspectProjectDesignSystemPin(project.id);
+    expect(proposed).toMatchObject({ format: "canonical-v1", mode, candidate_format: "canonical-v1", candidate_mode: mode });
+    expect(proposed?.candidate_digest).not.toBe(pin.digest);
+    expect((await exportProjectBundle(project.id)).manifest.design_system.pin).toEqual(exported.manifest.design_system.pin);
+  },
+);
+
+test.each(["format", "version", "prose", "css", "digest"] as const)(
+  "Given a canonical pin bundle with invalid %s When imported Then no project or system is allocated",
+  async fault => {
+    const fixture = await canonicalPinnedBundle("dark");
+    const exported = await exportProjectBundle(fixture.project.id);
+    const manifest = exported.manifest;
+    const pin = manifest.design_system.pin;
+    if (pin?.format !== "canonical-v1") throw new Error("Missing canonical metadata");
+    const changed = fault === "format" ? { ...pin, format: "canonical-v2" }
+      : fault === "version" ? { ...pin, schema_version: 1 }
+      : fault === "prose" ? { ...pin, context: `${pin.context}\nUntrusted instructions` }
+      : fault === "css" ? { ...pin, tokens: `${pin.tokens}\n` }
+      : { ...pin, digest: "0".repeat(64) };
+    const zip = await JSZip.loadAsync(exported.bytes);
+    zip.file(PROJECT_BUNDLE_MANIFEST_PATH, JSON.stringify({ ...manifest, design_system: { ...manifest.design_system, pin: changed } }));
+    const file = new File([new Uint8Array(await zip.generateAsync({ type: "uint8array" }))], "invalid-canonical-pin.burnguard-project");
+    const count = () => [
+      getSqlite().query<{ count: number }, []>("SELECT count(*) count FROM projects").get()?.count,
+      getSqlite().query<{ count: number }, []>("SELECT count(*) count FROM design_systems").get()?.count,
+    ];
+    const before = count();
+    await expect(importProjectBundleFile(file)).rejects.toMatchObject({ code: "invalid_project_bundle" });
+    expect(count()).toEqual(before);
+    expect(await readdir(projectBundleImportReceiptsDir())).toEqual([]);
+  },
+);
+
+test("Given a canonical-only theme When imported after source deletion Then exactly one v2 owner reopens and saves independently", async () => {
+  const { project, system, theme, archive } = await savedCanonicalBundle(true);
+  expect(archive.manifest.files.some(file => file.path === "design-system/extraction-provenance.json")).toBe(false);
+  getSqlite().query("DELETE FROM projects WHERE id=?").run(project.id);
+  await rm(project.dir_path, { recursive: true, force: true });
+  getSqlite().query("DELETE FROM design_systems WHERE id=?").run(system.id);
+  await rm(system.dir_path, { recursive: true, force: true });
+
+  const imported = await importProjectBundleFile(new File([archive.bytes], archive.filename), "Canonical-only import");
+  createdProjectIds.push(imported.id);
+  const detail = await getProjectDetail(imported.id);
+  if (!detail?.design_system_id) throw new Error("Missing canonical-only import");
+  const id = detail.design_system_id;
+  createdSystemIds.push(id);
+  const head = getCurrentSystemContent(getSqlite(), id);
+  if (head === null) throw new Error("Missing canonical-only owner");
+  expect(head).toMatchObject({ schemaVersion: 2, contentRevision: 1, status: "committed" });
+  expect(getSqlite().query("SELECT id FROM design_system_receipts WHERE design_system_id=?").all(id)).toEqual([{ id: head.id }]);
+  expect(readCanonicalTransfer(getSqlite(), head.id)).toEqual(canonicalFiles(theme).proof);
+  expect(readPaletteTransfer(getSqlite(), head.id)).not.toBeNull();
+  expect(await exists(path.join(systemsDir, id, "extraction-provenance.json"))).toBe(false);
+  expect(await exists(path.join(systemsDir, id, ".meta", "bundle-import-owner.json"))).toBe(false);
+  const reopened = await readDesignSystemPalette(id);
+  expect(reopened.state).toEqual(theme.palette);
+  const changed = { ...theme.palette, curve: { ...theme.palette.curve, amount: 0.27 } };
+  await saveDesignSystemPalette(id, { expected_digest: reopened.expected_digest, state: changed });
+  const environment = paletteContentEnvironment();
+  const actual = await withSystemContentAccess(getSqlite(), systemsDir, [id], async lease =>
+    readOwnedCanonical(environment, await observeSystemContent(environment, id, lease), lease));
+  expect(actual?.theme.palette).toEqual(changed);
+  expect(actual?.theme.system_id).toBe(theme.system_id);
+  expect((await exportProjectBundle(imported.id)).manifest.design_system)
+    .toMatchObject({ kind: "custom", canonical_transfer: actual?.proof });
+  expect(await readdir(projectBundleImportReceiptsDir())).toEqual([]);
+});
+
+test.each(["outer-committed", "owner-removed"] as const)(
+  "Given a canonical-only import interrupted at %s When inner then outer recovery run Then only outer reconciliation releases the same v2 owner",
+  async boundary => {
+    const { archive, theme } = await savedCanonicalBundle(true);
+    let id: string | undefined;
+    await expect(importProjectBundleFile(new File([archive.bytes], archive.filename), "Canonical-only recovery", {
+      atBoundary: async (name, owner) => {
+        if (name !== boundary || owner.systemId === null) return;
+        id = owner.systemId;
+        createdSystemIds.push(id);
+        createdProjectIds.push(owner.projectId);
+        throw new Error("injected canonical-only interruption");
+      },
+    })).rejects.toMatchObject({ code: "project_bundle_unavailable" });
+    if (id === undefined) throw new Error("Missing interrupted owner");
+    const pending = getPendingSystemOperation(getSqlite(), id);
+    if (pending === null) throw new Error("Missing prepared owner");
+    expect(pending).toMatchObject({ schemaVersion: 2, status: "prepared", contentRevision: 1 });
+    const environment = paletteContentEnvironment();
+    expect((await recoverSystemContent(environment)).held).toContain(pending.id);
+    expect(getCurrentSystemContent(getSqlite(), id)).toBeNull();
+    await reconcileProjectBundleImports(getSqlite());
+    expect((await recoverSystemContent(environment)).held).not.toContain(pending.id);
+    expect(getCurrentSystemContent(getSqlite(), id)).toMatchObject({ id: pending.id, status: "committed" });
+    expect(getSqlite().query("SELECT id FROM design_system_receipts WHERE design_system_id=?").all(id)).toEqual([{ id: pending.id }]);
+    expect((await readDesignSystemPalette(id)).state).toEqual(theme.palette);
+    expect(await exists(path.join(systemsDir, id, ".meta", "bundle-import-owner.json"))).toBe(false);
+    expect(await readdir(projectBundleImportReceiptsDir())).toEqual([]);
+  },
+);
+
+test.each(["system-restored", "before-commit"] as const)(
+  "Given a canonical-only import failing at %s When its owned rollback completes Then no local receipt or proof remains",
+  async boundary => {
+    const { archive } = await savedCanonicalBundle(true);
+    let id: string | undefined;
+    await expect(importProjectBundleFile(new File([archive.bytes], archive.filename), "Canonical-only rollback", {
+      atBoundary: async (name, owner) => {
+        if (name !== boundary || owner.systemId === null) return;
+        id = owner.systemId;
+        expect(getPendingSystemOperation(getSqlite(), id)).toMatchObject({ schemaVersion: 2, contentRevision: 1 });
+        throw new Error("injected canonical-only rollback");
+      },
+    })).rejects.toMatchObject({ code: "invalid_project_bundle" });
+    if (id === undefined) throw new Error("Missing rollback owner");
+    expect(await getDesignSystemDetail(id)).toBeNull();
+    expect(await exists(path.join(systemsDir, id))).toBe(false);
+    expect(getSqlite().query("SELECT id FROM design_system_receipts WHERE design_system_id=?").all(id)).toEqual([]);
+    expect(await readdir(projectBundleImportReceiptsDir())).toEqual([]);
+    await recoverSystemContent(paletteContentEnvironment());
+  },
+);
+
+test.each(["marker", "private-file", "canonical-file"] as const)(
+  "Given a canonical-only import with changed %s after preparation When rollback and recovery run Then divergent bytes and proofs stay held",
+  async fault => {
+    const { archive } = await savedCanonicalBundle(true);
+    let owner: { readonly systemId: string; readonly projectId: string; readonly operationId: string } | undefined;
+    let target: string | undefined;
+    let original: Buffer | undefined;
+    const changed = Buffer.from("unowned changed bytes");
+    try {
+      await expect(importProjectBundleFile(new File([archive.bytes], archive.filename), "Canonical-only divergent import", {
+        atBoundary: async (name, value) => {
+          if (name !== "before-commit" || value.systemId === null) return;
+          owner = { ...value, systemId: value.systemId };
+          createdSystemIds.push(value.systemId);
+          createdProjectIds.push(value.projectId);
+          const relative = fault === "marker" ? ".meta/bundle-import-owner.json"
+            : fault === "private-file" ? ".meta/foreign.txt" : "canonical/theme.css";
+          target = path.join(systemsDir, value.systemId, relative);
+          if (fault !== "private-file") original = await readFile(target);
+          await writeFile(target, changed);
+        },
+      })).rejects.toMatchObject({ code: "project_bundle_unavailable" });
+      if (owner === undefined || target === undefined) throw new Error("Missing divergent import");
+      const pending = getPendingSystemOperation(getSqlite(), owner.systemId);
+      if (pending === null) throw new Error("Missing held owner");
+      const proof = readCanonicalTransfer(getSqlite(), pending.id);
+      expect(proof).not.toBeNull();
+      await expect(reconcileProjectBundleImports(getSqlite())).rejects.toMatchObject({ code: "system_content_conflict" });
+      expect((await recoverSystemContent(paletteContentEnvironment())).held).toContain(pending.id);
+      expect(getPendingSystemOperation(getSqlite(), owner.systemId)?.id).toBe(pending.id);
+      expect(readCanonicalTransfer(getSqlite(), pending.id)).toEqual(proof);
+      expect(await readFile(target)).toEqual(changed);
+      expect(await getProjectDetail(owner.projectId)).not.toBeNull();
+      expect(await exists(path.join(projectBundleImportReceiptsDir(), `${owner.operationId}.json`))).toBe(true);
+    } finally {
+      // Restore only the test's injected bytes so the shared fixture can reconcile normally.
+      if (target !== undefined) {
+        if (original === undefined) await rm(target);
+        else await writeFile(target, original);
+        await reconcileProjectBundleImports(getSqlite());
+        await recoverSystemContent(paletteContentEnvironment());
+      }
+    }
+  },
+);
+
+test("Given an owned canonical theme with extraction lineage When imported after source deletion Then the new v1 receipt owns both components", async () => {
+  const { project, system, theme, archive } = await savedCanonicalBundle();
+  const expected = canonicalFiles(theme);
+  expect(archive.manifest.design_system).toMatchObject({ kind: "custom", canonical_transfer: expected.proof });
+  getSqlite().query("DELETE FROM projects WHERE id=?").run(project.id);
+  await rm(project.dir_path, { recursive: true, force: true });
+  getSqlite().query("DELETE FROM design_systems WHERE id=?").run(system.id);
+  await rm(system.dir_path, { recursive: true, force: true });
+
+  const imported = await importProjectBundleFile(new File([archive.bytes], archive.filename), "Canonical import");
+  createdProjectIds.push(imported.id);
+  const detail = await getProjectDetail(imported.id);
+  if (!detail?.design_system_id) throw new Error("Missing imported canonical system");
+  const id = detail.design_system_id;
+  createdSystemIds.push(id);
+
+  const head = getCurrentSystemContent(getSqlite(), id);
+  if (head === null) throw new Error("Missing imported owner");
+  expect(head).toMatchObject({ schemaVersion: 1, contentRevision: 1, status: "committed" });
+  expect(readCanonicalTransfer(getSqlite(), head.id)).toEqual(expected.proof);
+  const environment = paletteContentEnvironment();
+  const actual = await withSystemContentAccess(getSqlite(), systemsDir, [id], async lease =>
+    readOwnedCanonical(environment, await observeSystemContent(environment, id, lease), lease));
+  expect(actual).toEqual(expected);
+  expect((await readDesignSystemPalette(id)).state).toEqual(theme.palette);
+  expect(await getDesignSystemDetail(system.id)).toBeNull();
+});
+
+test.each(["outer-committed", "owner-removed"] as const)(
+  "Given an owned canonical import interrupted at %s When outer and v1 recovery run Then the same prepared owner commits",
+  async boundary => {
+    const { archive, theme } = await savedCanonicalBundle();
+    const captured: string[] = [];
+    await expect(importProjectBundleFile(new File([archive.bytes], archive.filename), "Canonical recovery", {
+      atBoundary: async (name, owner) => {
+        if (name !== boundary) return;
+        if (owner.systemId === null) throw new Error("Missing canonical import owner");
+        createdProjectIds.push(owner.projectId);
+        createdSystemIds.push(owner.systemId);
+        captured.push(owner.systemId);
+        throw new Error("injected canonical import interruption");
+      },
+    })).rejects.toMatchObject({ code: "project_bundle_unavailable" });
+    const id = captured[0];
+    if (id === undefined) throw new Error("Missing interrupted system");
+    const pending = getPendingSystemOperation(getSqlite(), id);
+    if (pending === null) throw new Error("Missing prepared canonical receipt");
+
+    await reconcileProjectBundleImports(getSqlite());
+    const recovery = await reconcileExtractionState();
+
+    expect(recovery.failed).toBe(0);
+    expect(getCurrentSystemContent(getSqlite(), id)?.id).toBe(pending.id);
+    expect(readCanonicalTransfer(getSqlite(), pending.id)).toEqual(canonicalFiles(theme).proof);
+    const environment = paletteContentEnvironment();
+    const actual = await withSystemContentAccess(getSqlite(), systemsDir, [id], async lease =>
+      readOwnedCanonical(environment, await observeSystemContent(environment, id, lease), lease));
+    expect(actual?.theme).toEqual(theme);
+    expect(await readdir(projectBundleImportReceiptsDir())).toEqual([]);
+  },
+);
 
 test("Given an authenticated saved palette When exported and imported after its source is deleted Then the new owner reopens and saves independently", async () => {
   // Given
@@ -164,6 +496,116 @@ test.each(["missing", "null", "unknown", "hash", "partial", "alias", "extra", "e
     await expect(importProjectBundleFile(file)).rejects.toMatchObject({ code: fault === "hash" ? "project_bundle_digest" : "invalid_project_bundle" });
     expect(count()).toEqual(before);
     expect(await readdir(projectBundleImportReceiptsDir())).toEqual([]);
+  },
+);
+
+const canonicalDeclaration = {
+  schema_version: 1,
+  emitter_version: "burnguard-canonical-1",
+  json: { size_bytes: 1200, sha256: "a".repeat(64) },
+  css: { size_bytes: 800, sha256: "b".repeat(64) },
+  skill: { size_bytes: 400, sha256: "c".repeat(64) },
+} as const;
+
+let canonicalDeclarationBase: Promise<ProjectBundleManifest> | undefined;
+async function canonicalDeclarationInput(): Promise<ProjectBundleManifest> {
+  // These parser cases need independent values, not a fresh filesystem export for each mutation.
+  canonicalDeclarationBase ??= savedPaletteBundle().then(({ archive }) => archive.manifest);
+  return structuredClone(await canonicalDeclarationBase);
+}
+
+async function canonicalDeclarationManifest(canonical_transfer: unknown, withPalette = true): Promise<unknown> {
+  const manifest = await canonicalDeclarationInput();
+  if (manifest.design_system.kind !== "custom" || manifest.design_system.palette_transfer === undefined) throw new Error("Missing proof fixture");
+  const { palette_transfer, ...rest } = manifest.design_system;
+  return { ...manifest, design_system: { ...rest, ...(withPalette ? { palette_transfer } : {}), canonical_transfer } };
+}
+
+test("Given a custom descriptor with palette and canonical declarations When parsed Then both machine declarations are preserved and legacy descriptors stay unchanged", async () => {
+  const declared = await canonicalDeclarationInput();
+  if (declared.design_system.kind !== "custom") throw new Error("Missing custom descriptor");
+  const parsed = parseProjectBundleManifest({ ...declared, design_system: { ...declared.design_system, canonical_transfer: canonicalDeclaration } });
+  if (parsed.design_system.kind !== "custom") throw new Error("Missing custom descriptor");
+  expect(parsed.design_system.canonical_transfer).toEqual(canonicalDeclaration);
+  expect(parsed.design_system.palette_transfer).toEqual(declared.design_system.palette_transfer);
+  const legacy = parseProjectBundleManifest(JSON.parse(JSON.stringify(declared)));
+  if (legacy.design_system.kind !== "custom") throw new Error("Missing legacy descriptor");
+  expect("canonical_transfer" in legacy.design_system).toBe(false);
+  expect(legacy.design_system.palette_transfer).toEqual(declared.design_system.palette_transfer);
+});
+
+test.each([
+  "null", "version", "emitter", "short_digest", "upper_digest", "zero_length", "oversized_json", "oversized_css",
+  "oversized_skill", "fractional_length", "extra_field", "extra_member_field", "missing_member",
+] as const)("Given a canonical declaration with %s When parsed Then the closed schema rejects it", async fault => {
+  const bad: Record<typeof fault, unknown> = {
+    null: null,
+    version: { ...canonicalDeclaration, schema_version: 2 },
+    emitter: { ...canonicalDeclaration, emitter_version: "unrecognised-emitter" },
+    short_digest: { ...canonicalDeclaration, css: { ...canonicalDeclaration.css, sha256: "b".repeat(63) } },
+    upper_digest: { ...canonicalDeclaration, css: { ...canonicalDeclaration.css, sha256: "B".repeat(64) } },
+    zero_length: { ...canonicalDeclaration, skill: { ...canonicalDeclaration.skill, size_bytes: 0 } },
+    oversized_json: { ...canonicalDeclaration, json: { ...canonicalDeclaration.json, size_bytes: 262145 } },
+    oversized_css: { ...canonicalDeclaration, css: { ...canonicalDeclaration.css, size_bytes: 262145 } },
+    oversized_skill: { ...canonicalDeclaration, skill: { ...canonicalDeclaration.skill, size_bytes: 65537 } },
+    fractional_length: { ...canonicalDeclaration, json: { ...canonicalDeclaration.json, size_bytes: 1.5 } },
+    extra_field: { ...canonicalDeclaration, receipt_id: "untrusted-owner" },
+    extra_member_field: { ...canonicalDeclaration, json: { ...canonicalDeclaration.json, path: "canonical/theme.json" } },
+    missing_member: { schema_version: 1, emitter_version: canonicalDeclaration.emitter_version, json: canonicalDeclaration.json, css: canonicalDeclaration.css },
+  };
+  const manifest = await canonicalDeclarationManifest(bad[fault]);
+  expect(() => parseProjectBundleManifest(manifest)).toThrow("invalid_project_bundle_manifest");
+});
+
+test("Given a canonical declaration without a palette declaration When parsed Then the descriptor is rejected", async () => {
+  const manifest = await canonicalDeclarationManifest(canonicalDeclaration, false);
+  expect(() => parseProjectBundleManifest(manifest)).toThrow("invalid_project_bundle_manifest");
+});
+
+test("Given a canonical declaration on a non-custom descriptor When parsed Then the closed descriptor rejects it", async () => {
+  const manifest = await canonicalDeclarationManifest(canonicalDeclaration);
+  if (typeof manifest !== "object" || manifest === null) throw new Error("Missing manifest fixture");
+  for (const descriptor of [
+    { kind: "none", pin: null, canonical_transfer: canonicalDeclaration },
+    { kind: "builtin", id: "builtin-theme-fixture", pin: null, canonical_transfer: canonicalDeclaration },
+  ]) {
+    expect(() => parseProjectBundleManifest({ ...manifest, design_system: descriptor })).toThrow("invalid_project_bundle_manifest");
+  }
+});
+
+test.each(["valid", "unproved", "missing", "extra", "case", "hash", "size", "kind"] as const)(
+  "Given canonical file declarations with %s When bound to their proof Then only exact members are accepted",
+  async fault => {
+    const manifest = parseProjectBundleManifest(await canonicalDeclarationManifest(canonicalDeclaration));
+    if (manifest.design_system.kind !== "custom") throw new Error("Missing custom descriptor");
+    let system = manifest.design_system;
+    let files: ProjectBundleFile[] = [
+      { path: "design-system/canonical/theme.json", kind: "design_system", ...canonicalDeclaration.json },
+      { path: "design-system/canonical/theme.css", kind: "design_system", ...canonicalDeclaration.css },
+      { path: "design-system/canonical/SKILL.md", kind: "design_system", ...canonicalDeclaration.skill },
+    ];
+    const first = files[0];
+    if (first === undefined) throw new Error("Missing canonical file");
+    switch (fault) {
+      case "valid": break;
+      case "unproved": {
+        const { canonical_transfer: _proof, ...legacy } = system;
+        system = legacy;
+        break;
+      }
+      case "missing": files = files.slice(1); break;
+      case "extra": files.push({ ...first, path: "design-system/canonical/extra.json" }); break;
+      case "case": files[0] = { ...first, path: "design-system/Canonical/theme.json" }; break;
+      case "hash": files[0] = { ...first, sha256: "0".repeat(64) }; break;
+      case "size": files[0] = { ...first, size_bytes: first.size_bytes + 1 }; break;
+      case "kind": files[0] = { ...first, kind: "project" }; break;
+      default: throw new Error("Unexpected declaration case");
+    }
+    if (fault === "valid") expect(() => validateProjectBundleCanonicalFiles(system, files)).not.toThrow();
+    else {
+      const code = fault === "hash" || fault === "size" ? "project_bundle_digest" : "invalid_project_bundle";
+      expect(() => validateProjectBundleCanonicalFiles(system, files)).toThrow(code);
+    }
   },
 );
 
@@ -558,11 +1000,12 @@ test("Given a durable outer commit When finalization fails Then the imported own
     .rejects.toMatchObject({ code: "system_content_unavailable" });
 });
 
-test.each((["plain", "palette"] as const).flatMap(mode =>
+test.each((["plain", "palette", "canonical-only"] as const).flatMap(mode =>
   (["system-reserved", "system-restored", "outer-committed", "owner-removed"] as const).map(boundary => ({ mode, boundary }))))(
-  "Given a real $mode import stopped at $boundary When its process exits Then outer-first startup recovers only its owned project and v1 system",
+  "Given a real $mode import stopped at $boundary When its process exits Then outer-first startup recovers only its owned project and single system head",
   async ({ mode, boundary }) => {
-    const palette = mode === "palette" ? await savedPaletteBundle() : null;
+    const palette = mode === "canonical-only" ? await savedCanonicalBundle(true)
+      : mode === "palette" ? await savedPaletteBundle() : null;
     const exported = palette?.archive ?? await exportProjectBundle(sourceProjectId);
     const originalSource = await inspectCanonicalTree(sourceSystemDir);
     const home = await mkdtemp(path.join(tmpdir(), "bg-bundle-consumer-"));
@@ -620,21 +1063,28 @@ test.each((["plain", "palette"] as const).flatMap(mode =>
           system: null, project: null, head: null, pin: null,
           system_present: false, project_present: false, system_owner: false, project_owner: false,
           palette: null, palette_transfer: null,
+          canonical_transfer: null, receipt_count: 0,
         });
       } else {
         expect(result).toMatchObject({
           first: {
-            head: { schemaVersion: 1, contentRevision: 1, status: "committed" },
+            head: { schemaVersion: mode === "canonical-only" ? 2 : 1, contentRevision: 1, status: "committed" },
             system_manifest: before.system_manifest, project_manifest: before.project_manifest, pin: before.pin,
           },
-          head: { schemaVersion: 1, contentRevision: 1, status: "committed" },
+          head: { schemaVersion: mode === "canonical-only" ? 2 : 1, contentRevision: 1, status: "committed" },
           system_manifest: before.system_manifest, project_manifest: before.project_manifest,
           pin: before.pin, sidecar: before.sidecar, system_present: true, project_present: true,
-          // Existing committed-outer recovery preserves live owner evidence if exit preceded its removal.
-          system_owner: boundary === "outer-committed", project_owner: boundary === "outer-committed",
+          // Legacy recovery keeps its markers; v2 excludes and removes only its validated outer marker.
+          system_owner: mode !== "canonical-only" && boundary === "outer-committed",
+          project_owner: mode !== "canonical-only" && boundary === "outer-committed",
           palette: palette === null ? null : { state: palette.state, css: emitPaletteCss(palette.state) },
           palette_transfer: exported.manifest.design_system.kind === "custom" ? exported.manifest.design_system.palette_transfer ?? null : null,
+          canonical_transfer: exported.manifest.design_system.kind === "custom" ? exported.manifest.design_system.canonical_transfer ?? null : null,
+          receipt_count: 1,
         });
+        if (!("pending" in before) || typeof before.pending !== "object" || before.pending === null ||
+          !("id" in before.pending) || typeof before.pending.id !== "string") throw new Error("Missing prepared receipt identity");
+        expect(result).toMatchObject({ head: { id: before.pending.id } });
       }
       expect(await inspectCanonicalTree(sourceSystemDir)).toEqual(originalSource);
     } finally {

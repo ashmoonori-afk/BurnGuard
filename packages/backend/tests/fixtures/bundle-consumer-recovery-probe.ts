@@ -13,6 +13,7 @@ import { readDesignSystemTokens, upsertDesignSystemColorToken } from "../../src/
 import { projectBundleImportReceiptsDir, projectBundlePayloadStage, projectBundleSystemStage } from "../../src/services/project-bundle-import-receipt";
 import { DesignSystemPinError, inspectProjectDesignSystemPin, readProjectDesignSystemPin } from "../../src/services/project-design-system-pin";
 import { readPaletteTransfer } from "../../src/db/palette-transfer-repository";
+import { readCanonicalTransfer } from "../../src/db/canonical-transfer-repository";
 import { readDesignSystemPalette } from "../../src/services/design-system-palette";
 
 const [phase, boundary, archive, output] = process.argv.slice(2);
@@ -46,14 +47,15 @@ if (phase === "prepare") {
         pending: getPendingSystemOperation(getSqlite(), owner.systemId),
         project_manifest: await inspectCanonicalTree(path.join(projectsDir, owner.projectId)),
         system_manifest: present ? await inspectCanonicalTree(live) : null,
-        sidecar: present ? await readFile(path.join(live, "extraction-provenance.json"), "utf8") : null,
+        sidecar: present && await exists(path.join(live, "extraction-provenance.json"))
+          ? await readFile(path.join(live, "extraction-provenance.json"), "utf8") : null,
         pin: readProjectDesignSystemPin(owner.projectId),
         project_owner: await exists(projectOwner) ? await readFile(projectOwner, "utf8") : null,
         system_owner: await exists(systemOwner) ? await readFile(systemOwner, "utf8") : null,
       }));
       process.stdout.write("BUNDLE_BOUNDARY\n");
       if ((await release).trim() !== "exit") throw new Error("Missing parent exit command");
-      // A real exit leaves the outer receipt, prepared v1 receipt and genuine lock untouched.
+      // A real exit leaves the outer receipt, prepared content receipt and genuine lock untouched.
       process.exit(77);
     },
   });
@@ -88,7 +90,7 @@ if (phase === "edit") {
   }
   closeSqlite();
 } else if (phase === "recover") {
-  // Outer import recovery MUST run before shared-lock and v1 recovery on the same launch.
+  // Outer import recovery MUST run before shared-lock and content recovery on the same launch.
   await bootstrapLocalAppData();
   const retained = boundary === "outer-committed" || boundary === "owner-removed";
   if (retained) await readDesignSystemTokens(systemId);
@@ -116,11 +118,16 @@ if (phase === "edit") {
     system: await getDesignSystemDetail(systemId), project: await getProjectDetail(projectId),
     head: getCurrentSystemContent(getSqlite(), systemId),
     palette, palette_transfer: paletteTransfer,
+    canonical_transfer: head === null ? null : readCanonicalTransfer(getSqlite(), head.id),
+    receipt_count: getSqlite().query<{ readonly count: number }, [string]>(
+      "SELECT count(*) count FROM design_system_receipts WHERE design_system_id=?",
+    ).get(systemId)?.count,
     pending: getPendingSystemOperation(getSqlite(), systemId),
     pin: readProjectDesignSystemPin(projectId),
     system_manifest: retained ? await inspectCanonicalTree(live) : null,
     project_manifest: retained ? await inspectCanonicalTree(path.join(projectsDir, projectId)) : null,
-    sidecar: retained ? await readFile(path.join(live, "extraction-provenance.json"), "utf8") : null,
+    sidecar: retained && await exists(path.join(live, "extraction-provenance.json"))
+      ? await readFile(path.join(live, "extraction-provenance.json"), "utf8") : null,
     system_present: await exists(live), project_present: await exists(path.join(projectsDir, projectId)),
     project_owner: await exists(path.join(projectsDir, projectId, ".meta", "bundle-import-owner.json")),
     system_owner: await exists(path.join(live, ".meta", "bundle-import-owner.json")),

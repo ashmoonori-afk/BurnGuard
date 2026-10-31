@@ -63,6 +63,7 @@ jobs:
           packages/backend/tests/project-folder.test.ts
           packages/backend/tests/system-content-publication.test.ts
           packages/backend/tests/design-system-palette.test.ts
+          packages/backend/tests/design-system-canonical.test.ts
           packages/backend/tests/logo-tracer.test.ts
           packages/frontend/tests/canvas-device-width.test.ts
           packages/frontend/tests/toolbar-overflow.test.ts
@@ -234,6 +235,7 @@ jobs:
           packages/shared/tests/runtime-diagnostics.test.ts
           packages/shared/tests/color.test.ts
           packages/shared/tests/palette.test.ts
+          packages/shared/tests/theme.test.ts
           scripts/qa/har-mask.test.ts
           scripts/qa/task-8-gates.test.ts
           packages/backend/tests/project-bundle-routes.test.ts

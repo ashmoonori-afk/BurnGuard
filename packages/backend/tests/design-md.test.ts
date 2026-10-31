@@ -142,15 +142,21 @@ describe("one-file design Markdown", () => {
       const creator = Bun.spawn([process.execPath, probe, "prepare", boundary, output], {
         env, stdin: "pipe", stdout: "pipe", stderr: "pipe",
       });
-      const creatorExit = creator.exited;
-      const creatorErrors = new Response(creator.stderr).text();
+      let creatorExited = false, creatorStderrClosed = false, stage = "boundary";
+      const creatorExit = creator.exited.then(code => { creatorExited = true; return code; });
+      const creatorErrors = new Response(creator.stderr).text().then(text => { creatorStderrClosed = true; return text; });
       const reader = creator.stdout.getReader();
       const run = async (phase: string) => {
         const child = Bun.spawn([process.execPath, probe, phase, boundary, output], { env, stdout: "ignore", stderr: "pipe" });
-        const exited = child.exited;
+        let childExited = false, stderrClosed = false;
+        const exited = child.exited.then(code => { childExited = true; return code; });
+        const errors = new Response(child.stderr).text().then(text => { stderrClosed = true; return text; });
         try {
-          const [code, errors] = await bounded(Promise.all([exited, new Response(child.stderr).text()]), 90_000);
-          expect(code, errors).toBe(0);
+          const [code, diagnostics] = await bounded(Promise.all([exited, errors]), 90_000);
+          expect(code, diagnostics).toBe(0);
+        } catch (error) {
+          console.error("V1_CONSUMER_FAILURE", JSON.stringify({ boundary, phase, childExited, stderrClosed }));
+          throw error;
         } finally { child.kill(); await child.exited; }
       };
       try {
@@ -163,12 +169,16 @@ describe("one-file design Markdown", () => {
         }
         expect(event.trim()).toBe("CREATE_BOUNDARY");
         const before: unknown = JSON.parse(await fsp.readFile(output, "utf8"));
+        stage = "edit-before-exit";
         await run("edit");
         // When: the child exits at the exact barrier, bypassing all cleanup and lock release.
+        stage = "creator-exit";
         creator.stdin.write("exit\n");
         creator.stdin.end();
         expect(await bounded(creatorExit), await creatorErrors).toBe(77);
+        stage = "edit-after-exit";
         await run("edit");
+        stage = "recover";
         await run("recover");
         const result: unknown = JSON.parse(await fsp.readFile(output, "utf8"));
         if (typeof before !== "object" || before === null || !("manifest" in before) || !("sidecar" in before)) {
@@ -184,6 +194,9 @@ describe("one-file design Markdown", () => {
         if (boundary !== "receipt-committed") {
           expect(result).toMatchObject({ initialLocks: { held: ["leased-v1-create"], cleared: 0 } });
         }
+      } catch (error) {
+        console.error("V1_CREATOR_FAILURE", JSON.stringify({ boundary, stage, creatorExited, creatorStderrClosed }));
+        throw error;
       } finally {
         creator.kill();
         await creatorExit;
