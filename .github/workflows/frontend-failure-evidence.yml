@@ -8,6 +8,7 @@ on:
       - packages/shared/**
       - scripts/test-preload.ts
       - scripts/qa/frontend-failure-evidence*
+      - scripts/qa/check-ci-runners*
       - bun.lock
       - bunfig.toml
       - .github/workflows/frontend-failure-evidence.yml
@@ -17,6 +18,7 @@ on:
       - packages/shared/**
       - scripts/test-preload.ts
       - scripts/qa/frontend-failure-evidence*
+      - scripts/qa/check-ci-runners*
       - bun.lock
       - bunfig.toml
       - .github/workflows/frontend-failure-evidence.yml
@@ -35,7 +37,7 @@ jobs:
     # Keep the matching private key OFF GitHub. No evidence is uploaded unencrypted.
     # Explicit opt-in is needed because artifacts in a public repository are not private.
     if: vars.BG_FRONTEND_EVIDENCE_PUBLIC_KEY != ''
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Enclose three 15-minute phases, one two-minute frontend build and setup/upload.
     timeout-minutes: 50
     steps:
@@ -43,6 +45,8 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.14
+      - name: Check runner compatibility before setup
+        run: bun scripts/qa/check-ci-runners.ts
       - uses: actions/setup-node@v4
         with:
           node-version: 24.13.0

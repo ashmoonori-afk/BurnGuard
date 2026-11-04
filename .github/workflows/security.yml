@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   security:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
@@ -24,6 +24,8 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.14
+      - name: Check runner compatibility before setup
+        run: bun scripts/qa/check-ci-runners.ts
       - run: bun install --frozen-lockfile
       - run: bun run typecheck
       - run: bun run check:whitespace
@@ -188,6 +190,7 @@ jobs:
           packages/backend/tests/chromium-launch-hardening.test.ts
           packages/backend/tests/design-audit-skip-link.test.ts
           scripts/qa/check-os-matrix-coverage.test.ts
+          scripts/qa/check-ci-runners.test.ts
           scripts/qa/frontend-failure-evidence.test.ts
           scripts/qa/check-flake-patterns.test.ts
           scripts/qa/check-migration-order.test.ts
