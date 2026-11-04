@@ -13,7 +13,6 @@ import {
   mkdtemp,
   readFile,
   rm,
-  stat,
   writeFile,
 } from "node:fs/promises";
 import { createHash } from "node:crypto";
@@ -50,8 +49,7 @@ import { settleOwnedProcess, spawnOwnedProcess } from "../adapters/owned-process
 import { commitDesignSystemReceipt, getDesignSystemReceiptById, prepareDesignSystemReceipt } from "../db/design-system-repository";
 import { getDb } from "../db/client";
 import { createDesignSystemRecord, deleteDesignSystemRecord, getDesignSystemDetail } from "../db/seed";
-import { resolveManagedPath, systemsDir } from "../lib/paths";
-import { resolveWithin } from "../security/path-boundary";
+import { systemsDir } from "../lib/paths";
 import {
   completeExtractionPublication,
   ExtractionPublicationError,
@@ -2687,40 +2685,4 @@ function escapeHtml(value: string): string {
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
-}
-
-function resolveDesignSystemRecordPath(systemId: string, dirPath: string, target: string): string {
-  const managedDir = resolveManagedPath(systemsDir, dirPath);
-  const expectedDir = path.join(systemsDir, systemId);
-  if (managedDir !== expectedDir) {
-    throw new DesignSystemAssetEditError("unsafe_managed_path", "Design system path is outside its canonical managed directory");
-  }
-  const managedTarget = resolveManagedPath(systemsDir, target);
-  const relative = path.relative(managedDir, managedTarget);
-  if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
-    throw new DesignSystemAssetEditError("unsafe_managed_path", "Design system asset path escapes its managed directory");
-  }
-  return managedTarget;
-}
-
-export async function resolveDesignSystemFile(
-  systemId: string,
-  relPath: string,
-): Promise<string | null> {
-  const detail = await getDesignSystemDetail(systemId);
-  if (!detail) return null;
-  const normalized = relPath.replaceAll("\\", "/");
-  if (
-    !normalized ||
-    normalized.includes("..") ||
-    normalized.startsWith("/") ||
-    path.isAbsolute(normalized)
-  ) {
-    return null;
-  }
-  const managedDir = resolveDesignSystemRecordPath(systemId, detail.dir_path, detail.dir_path);
-  const absolute = resolveWithin(managedDir, ...normalized.split("/"));
-  const info = await stat(absolute).catch(() => null);
-  if (!info?.isFile()) return null;
-  return absolute;
 }
