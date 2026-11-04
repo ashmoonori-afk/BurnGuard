@@ -3,6 +3,7 @@ import type { PaletteTransferProof } from "@bg/shared/palette";
 import type { CanonicalTransferProof } from "@bg/shared/theme";
 import { insertPaletteTransfer, validatePaletteTransferReceipt } from "./palette-transfer-repository";
 import { insertCanonicalTransfer, validateCanonicalTransferReceipt } from "./canonical-transfer-repository";
+import { RECEIPT_SELECT } from "./catalog-receipt-query";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import type { CatalogKind, CatalogLicense, CatalogProvenance, DesignSystemSourceType, ProjectType } from "@bg/shared";
@@ -199,8 +200,3 @@ function childPath(destination: string, parentPath: string | null): string | nul
   const fileName = parentPath.replaceAll("\\", "/").split("/").at(-1);
   return fileName === undefined ? null : path.join(destination, fileName);
 }
-
-const RECEIPT_SELECT = `SELECT id,design_system_id designSystemId,status,content_revision contentRevision,schema_version schemaVersion,
-  digest,manifest_json manifestJson,provenance_json provenanceJson,operation,parent_system_id parentSystemId,
-  parent_receipt_id parentReceiptId,parent_digest parentDigest,reason,metadata_json metadataJson,source_path sourcePath,destination_path destinationPath
-  FROM design_system_receipts`;

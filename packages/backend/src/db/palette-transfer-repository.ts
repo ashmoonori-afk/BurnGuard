@@ -2,6 +2,7 @@ import type { Database } from "bun:sqlite";
 import { parsePaletteTransferProof, type PaletteTransferProof } from "@bg/shared/palette";
 import { UpgradeContractError } from "@bg/shared/contract-parser";
 import type { CatalogReceiptRow } from "./catalog-repository";
+import { getCatalogReceiptById } from "./catalog-receipt-query";
 import { CanonicalTreeManifestError, parseCanonicalTreeManifest } from "../services/canonical-tree-manifest";
 import { validateCanonicalTransferReceipt } from "./canonical-transfer-repository";
 import { parseContentJournal, parseContentProvenance, SystemContentError } from "../services/system-content-format";
@@ -14,15 +15,6 @@ function corrupt(receiptId: string): never { throw new PaletteTransferRepository
 function parseProof(input: unknown, receiptId: string): PaletteTransferProof {
   try { return parsePaletteTransferProof(input); }
   catch (error) { if (error instanceof UpgradeContractError) return corrupt(receiptId); throw error; }
-}
-function receiptById(db: Database, receiptId: string): CatalogReceiptRow | null {
-  const statement = db.prepare<CatalogReceiptRow, [string]>(`SELECT id,design_system_id designSystemId,status,
-    content_revision contentRevision,schema_version schemaVersion,digest,manifest_json manifestJson,
-    provenance_json provenanceJson,operation,parent_system_id parentSystemId,parent_receipt_id parentReceiptId,
-    parent_digest parentDigest,reason,metadata_json metadataJson,source_path sourcePath,destination_path destinationPath
-    FROM design_system_receipts WHERE id=?`);
-  try { return statement.get(receiptId); }
-  finally { statement.finalize(); }
 }
 function bindManifest(db: Database, receipt: CatalogReceiptRow, proof: PaletteTransferProof): void {
   const copy = receipt.operation === "duplicate" || receipt.operation === "derive";
@@ -63,7 +55,7 @@ function bindManifest(db: Database, receipt: CatalogReceiptRow, proof: PaletteTr
 /** Trusted prepare paths only. The caller owns the receipt/proof transaction. */
 export function insertPaletteTransfer(db: Database, receiptId: string, input: PaletteTransferProof): void {
   const proof = parseProof(input, receiptId);
-  const receipt = receiptById(db, receiptId);
+  const receipt = getCatalogReceiptById(db, receiptId);
   if (receipt === null || receipt.status !== "prepared") throw new PaletteTransferRepositoryError("palette_transfer_conflict", receiptId);
   bindManifest(db, receipt, proof);
   const statement = db.prepare(`INSERT INTO design_system_palette_transfers
@@ -97,7 +89,7 @@ export function readPaletteTransfer(db: Database, receiptId: string): PaletteTra
 export function validatePaletteTransferReceipt(db: Database, receipt: CatalogReceiptRow): PaletteTransferProof | null {
   const proof = readPaletteTransfer(db, receipt.id);
   if (proof === null) return null;
-  const stored = receiptById(db, receipt.id);
+  const stored = getCatalogReceiptById(db, receipt.id);
   const fields = ["id", "designSystemId", "status", "contentRevision", "schemaVersion", "digest", "manifestJson",
     "provenanceJson", "operation", "parentSystemId", "parentReceiptId", "parentDigest", "reason", "metadataJson",
     "sourcePath", "destinationPath"] as const;

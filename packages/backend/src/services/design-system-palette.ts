@@ -8,6 +8,7 @@ import {
 import { UpgradeContractError } from "@bg/shared/contract-parser";
 import { updateThemePalette } from "@bg/shared/theme";
 import { getCurrentSystemContent, type CatalogReceiptRow } from "../db/catalog-repository";
+import { getCatalogReceiptById } from "../db/catalog-receipt-query";
 import { PaletteTransferRepositoryError, validatePaletteTransferReceipt } from "../db/palette-transfer-repository";
 import { getSqlite } from "../db/sqlite-client";
 import { systemsDir } from "../lib/paths";
@@ -176,11 +177,7 @@ function ownedVersion(env: ContentEnvironment, base: ContentObservation, pair: P
       return version;
     }
     if (receipt.parentReceiptId === null) return null;
-    const parent: CatalogReceiptRow | null = env.db.query<CatalogReceiptRow, [string]>(`SELECT id,design_system_id designSystemId,status,
-      content_revision contentRevision,schema_version schemaVersion,digest,manifest_json manifestJson,
-      provenance_json provenanceJson,operation,parent_system_id parentSystemId,parent_receipt_id parentReceiptId,
-      parent_digest parentDigest,reason,metadata_json metadataJson,source_path sourcePath,destination_path destinationPath
-      FROM design_system_receipts WHERE id=?`).get(receipt.parentReceiptId);
+    const parent = getCatalogReceiptById(env.db, receipt.parentReceiptId);
     if (parent === null || head === null || parent.digest !== head.digest || parent.designSystemId !== base.systemId ||
       parent.contentRevision !== head.revision || parent.schemaVersion !== head.schema_version ||
       JSON.stringify(parseCanonicalTreeManifest(JSON.parse(parent.manifestJson))) !== JSON.stringify(journal.base?.manifest)) return corrupt();

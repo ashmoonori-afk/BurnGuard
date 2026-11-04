@@ -1,5 +1,6 @@
 import type { DesignSystemCanonicalResponse } from "@bg/shared/theme";
 import { getCurrentSystemContent, type CatalogReceiptRow } from "../db/catalog-repository";
+import { getCatalogReceiptById } from "../db/catalog-receipt-query";
 import { CanonicalTransferRepositoryError, validateCanonicalTransferReceipt } from "../db/canonical-transfer-repository";
 import { PathBoundaryError } from "../security/path-boundary";
 import { bundledThemeHistory, themeAdditiveDigest, themeFileHash } from "./bundled-theme-refresh";
@@ -54,14 +55,7 @@ function hasReceiptOwnership(env: ContentEnvironment, base: ContentObservation, 
       receipt.parentSystemId !== (head === null ? null : base.systemId) ||
       (provenance.writer === "palette") !== (journal.palette_history !== null)) return corrupt();
     if (receipt.parentReceiptId === null) return false;
-    const statement = env.db.prepare<CatalogReceiptRow, [string]>(`SELECT id,design_system_id designSystemId,status,
-      content_revision contentRevision,schema_version schemaVersion,digest,manifest_json manifestJson,
-      provenance_json provenanceJson,operation,parent_system_id parentSystemId,parent_receipt_id parentReceiptId,
-      parent_digest parentDigest,reason,metadata_json metadataJson,source_path sourcePath,destination_path destinationPath
-      FROM design_system_receipts WHERE id=?`);
-    let parent: CatalogReceiptRow | null;
-    try { parent = statement.get(receipt.parentReceiptId); }
-    finally { statement.finalize(); }
+    const parent = getCatalogReceiptById(env.db, receipt.parentReceiptId);
     if (parent === null || head === null || parent.digest !== head.digest || parent.designSystemId !== base.systemId ||
       parent.contentRevision !== head.revision || parent.schemaVersion !== head.schema_version ||
       JSON.stringify(parseCanonicalTreeManifest(JSON.parse(parent.manifestJson))) !== JSON.stringify(journal.base?.manifest)) return corrupt();
