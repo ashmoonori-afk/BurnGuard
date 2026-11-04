@@ -52,13 +52,15 @@ export function checkWorkflowRunners(source: string): readonly string[] {
         problems.push(`${name}: unsupported_runner (${label}); Linux jobs must use ${RUNNER}`);
       }
     }
-    const steps = Array.isArray(value.steps) ? value.steps : [];
-    const firstCommand = steps.find(step => isRecord(step) && typeof step.run === "string");
-    if (!isRecord(firstCommand) || typeof firstCommand.run !== "string" || firstCommand.run.trim() !== COMMAND ||
+    const steps: readonly unknown[] = Array.isArray(value.steps) ? value.steps : [];
+    const [checkout, setupBun, firstCommand] = steps;
+    if (!isRecord(checkout) || typeof checkout.uses !== "string" || !checkout.uses.startsWith("actions/checkout@") ||
+      !isRecord(setupBun) || typeof setupBun.uses !== "string" || !setupBun.uses.startsWith("oven-sh/setup-bun@") ||
+      !isRecord(firstCommand) || typeof firstCommand.run !== "string" || firstCommand.run.trim() !== COMMAND ||
       firstCommand.if !== undefined ||
       firstCommand["continue-on-error"] !== undefined && firstCommand["continue-on-error"] !== false ||
       value["continue-on-error"] !== undefined && value["continue-on-error"] !== false) {
-      problems.push(`${name}: missing_early_guard; first shell command must be ${COMMAND} without conditions or ignored errors`);
+      problems.push(`${name}: missing_early_guard; checkout and Bun setup must be followed immediately by ${COMMAND} without conditions or ignored errors`);
     }
   }
   return problems;

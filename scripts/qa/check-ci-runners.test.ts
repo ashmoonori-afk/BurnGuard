@@ -6,8 +6,9 @@ import { checkPlaywrightPin, checkRepositoryRunners, checkRunnerHost, checkWorkf
 
 const guard = "bun scripts/qa/check-ci-runners.ts";
 const manifest = { dependencies: { "playwright-core": "1.59.1" } };
+const bootstrap = [{ uses: "actions/checkout@v4" }, { uses: "oven-sh/setup-bun@v2" }] as const;
 const workflow = (runner: unknown, extra: Record<string, unknown> = {}) => JSON.stringify({
-  jobs: { browser: { "runs-on": runner, steps: [{ run: guard }, { run: "node playwright install chromium" }], ...extra } },
+  jobs: { browser: { "runs-on": runner, steps: [...bootstrap, { run: guard }, { uses: "actions/setup-node@v4" }, { run: "node playwright install chromium" }], ...extra } },
 });
 
 test("Given supported explicit runners When inspected Then browser jobs retain the early guard", () => {
@@ -40,11 +41,14 @@ test("Given the native include-only matrix When inspected Then every supported r
 });
 
 test.each([
-  { steps: [{ run: "bun test" }] },
-  { steps: [{ run: "bun install" }, { run: guard }] },
-  { steps: [{ run: guard, if: "false" }] },
-  { steps: [{ run: guard, "continue-on-error": true }] },
+  { steps: [...bootstrap, { run: "bun test" }] },
+  { steps: [...bootstrap, { run: "bun install" }, { run: guard }] },
+  { steps: [...bootstrap, { run: guard, if: "false" }] },
+  { steps: [...bootstrap, { run: guard, "continue-on-error": true }] },
   { "continue-on-error": true },
+  { steps: [{ uses: "actions/setup-node@v4" }, ...bootstrap, { run: guard }] },
+  { steps: [bootstrap[0], { uses: "actions/setup-node@v4" }, bootstrap[1], { run: guard }] },
+  { steps: [...bootstrap, { uses: "./.github/actions/install-browser" }, { run: guard }] },
 ])("Given a missing late or suppressible guard %# When inspected Then CI rejects the bypass", extra => {
   const problems = checkWorkflowRunners(workflow("ubuntu-24.04", extra));
   expect(problems).toHaveLength(1);
@@ -53,7 +57,7 @@ test.each([
 
 test("Given explicitly fatal guard settings When inspected Then safe defaults remain accepted", () => {
   expect(checkWorkflowRunners(workflow("ubuntu-24.04", {
-    "continue-on-error": false, steps: [{ run: guard, "continue-on-error": false }],
+    "continue-on-error": false, steps: [...bootstrap, { run: guard, "continue-on-error": false }],
   }))).toEqual([]);
 });
 
