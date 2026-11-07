@@ -2,6 +2,7 @@ import type { Database } from "bun:sqlite";
 import { parseCanonicalTransferProof, type CanonicalTransferProof } from "@bg/shared/theme";
 import { UpgradeContractError } from "@bg/shared/contract-parser";
 import type { CatalogReceiptRow } from "./catalog-repository";
+import { getCatalogReceiptById } from "./catalog-receipt-query";
 import { CanonicalTreeManifestError, parseCanonicalTreeManifest } from "../services/canonical-tree-manifest";
 import { parseContentJournal, parseContentProvenance, SystemContentError } from "../services/system-content-format";
 
@@ -13,15 +14,6 @@ function corrupt(id: string): never { throw new CanonicalTransferRepositoryError
 function parseProof(input: unknown, id: string): CanonicalTransferProof {
   try { return parseCanonicalTransferProof(input); }
   catch (error) { if (error instanceof UpgradeContractError) return corrupt(id); throw error; }
-}
-function receiptById(db: Database, id: string): CatalogReceiptRow | null {
-  const statement = db.prepare<CatalogReceiptRow, [string]>(`SELECT id,design_system_id designSystemId,status,
-    content_revision contentRevision,schema_version schemaVersion,digest,manifest_json manifestJson,
-    provenance_json provenanceJson,operation,parent_system_id parentSystemId,parent_receipt_id parentReceiptId,
-    parent_digest parentDigest,reason,metadata_json metadataJson,source_path sourcePath,destination_path destinationPath
-    FROM design_system_receipts WHERE id=?`);
-  try { return statement.get(id); }
-  finally { statement.finalize(); }
 }
 function bindManifest(receipt: CatalogReceiptRow, proof: CanonicalTransferProof): void {
   const copy = receipt.operation === "duplicate" || receipt.operation === "derive";
@@ -56,7 +48,7 @@ function bindManifest(receipt: CatalogReceiptRow, proof: CanonicalTransferProof)
 }
 /** Only trusted prepare paths call this inside their receipt transaction. */
 export function insertCanonicalTransfer(db: Database, id: string, input: CanonicalTransferProof): void {
-  const proof = parseProof(input, id), receipt = receiptById(db, id);
+  const proof = parseProof(input, id), receipt = getCatalogReceiptById(db, id);
   if (receipt === null || receipt.status !== "prepared") throw new CanonicalTransferRepositoryError("canonical_transfer_conflict", id);
   bindManifest(receipt, proof);
   const statement = db.prepare(`INSERT INTO design_system_canonical_transfers
@@ -93,7 +85,7 @@ export function readCanonicalTransfer(db: Database, id: string): CanonicalTransf
 export function validateCanonicalTransferReceipt(db: Database, receipt: CatalogReceiptRow): CanonicalTransferProof | null {
   const proof = readCanonicalTransfer(db, receipt.id);
   if (proof === null) return null;
-  const stored = receiptById(db, receipt.id);
+  const stored = getCatalogReceiptById(db, receipt.id);
   const fields = ["id", "designSystemId", "status", "contentRevision", "schemaVersion", "digest", "manifestJson",
     "provenanceJson", "operation", "parentSystemId", "parentReceiptId", "parentDigest", "reason", "metadataJson",
     "sourcePath", "destinationPath"] as const;
