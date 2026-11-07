@@ -12,7 +12,7 @@ const workflow = (runner: unknown, extra: Record<string, unknown> = {}) => JSON.
 });
 
 test("Given supported explicit runners When inspected Then browser jobs retain the early guard", () => {
-  for (const runner of ["ubuntu-24.04", "macos-14", "windows-latest"]) {
+  for (const runner of ["ubuntu-24.04", "macos-15", "windows-latest"]) {
     expect(checkWorkflowRunners(workflow(runner))).toEqual([]);
   }
 });
@@ -20,7 +20,7 @@ test("Given supported explicit runners When inspected Then browser jobs retain t
 test.each([
   { runner: "ubuntu-latest", count: 1 }, { runner: "ubuntu-26.04", count: 1 },
   { runner: ["self-hosted", "linux"], count: 2 }, { runner: "${{ inputs.runner }}", count: 1 },
-  { runner: "macos-13", count: 1 }, { runner: "windows-2016", count: 1 },
+  { runner: "macos-13", count: 1 }, { runner: "macos-14", count: 1 }, { runner: "windows-2016", count: 1 },
 ])(
   "Given an unreviewed runner %# When inspected Then the workflow cannot pass",
   ({ runner, count }) => {
@@ -29,14 +29,14 @@ test.each([
 );
 
 test("Given a mixed runner matrix When an include adds Ubuntu 26 Then the unsupported job is detected", () => {
-  const matrix = { os: ["macos-14", "ubuntu-24.04"], include: [{ os: "ubuntu-26.04" }] };
+  const matrix = { os: ["macos-15", "ubuntu-24.04"], include: [{ os: "ubuntu-26.04" }] };
   expect(checkWorkflowRunners(workflow("${{ matrix.os }}", { strategy: { matrix } })))
     .toEqual([expect.stringMatching(/^browser: unsupported_runner \(ubuntu-26\.04\);/)]);
 });
 
 test("Given the native include-only matrix When inspected Then every supported runner is resolved", () => {
   expect(checkWorkflowRunners(workflow("${{ matrix.os }}", {
-    strategy: { matrix: { include: [{ os: "macos-14" }, { os: "windows-latest" }] } },
+    strategy: { matrix: { include: [{ os: "macos-15" }, { os: "windows-latest" }] } },
   }))).toEqual([]);
 });
 
