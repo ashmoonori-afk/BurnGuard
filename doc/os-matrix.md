@@ -4,7 +4,7 @@ BurnGuard ships for macOS arm64 and Windows x64 and is developed on Linux. One s
 OS-specific branch exists only where the OS behaves differently, and each branch is pinned by a test that injects the
 platform (or by a suite that self-skips with a stated reason).
 
-CI: `security.yml` runs on Ubuntu (the Linux column); `os-tests.yml` runs the platform-sensitive suites on `macos-14`
+CI: `security.yml` runs on Ubuntu (the Linux column); `os-tests.yml` runs the platform-sensitive suites on `macos-15`
 (arm64) and `windows-latest`; the release workflows run the native smokes on their own OS. The last column says which
 jobs run each pinning suite.
 

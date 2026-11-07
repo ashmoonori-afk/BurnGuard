@@ -47,7 +47,7 @@ export function checkWorkflowRunners(source: string): readonly string[] {
     else for (const label of labels) {
       const native = /^(macos|windows)-(latest|[0-9]+)(?:-large|-xlarge)?$/.exec(label);
       const nativeSupported = native !== null && (native[2] === "latest" ||
-        Number(native[2]) >= (native[1] === "macos" ? 14 : 2019));
+        Number(native[2]) >= (native[1] === "macos" ? 15 : 2019));
       if (label !== RUNNER && !nativeSupported) {
         problems.push(`${name}: unsupported_runner (${label}); Linux jobs must use ${RUNNER}`);
       }
