@@ -57,7 +57,9 @@ export type TurnRejectionReason =
   | "logo_reference_copied"
   | "logo_reference_similar"
   | "logo_screening_failed"
-  | "logo_moodboard_changed";
+  | "logo_moodboard_changed"
+  | "logo_geometry_invalid"
+  | "logo_geometric_step_refused";
 
 /**
  * A turn that finished and was then refused. Nothing it produced reached the project, so a client

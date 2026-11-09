@@ -28,6 +28,8 @@ const TURN_REASON_MESSAGE_KEYS: Record<TurnRejectionReason, MessageKey> = {
   logo_reference_similar: "logo.pipeline.originalityRejected",
   logo_screening_failed: "logo.pipeline.screeningFailed",
   logo_moodboard_changed: "logo.pipeline.conflict",
+  logo_geometry_invalid: "chat.reason.logo_geometry_invalid",
+  logo_geometric_step_refused: "chat.reason.logo_geometric_step_refused",
 };
 
 const TURN_ERROR_MESSAGE_KEYS: Record<TurnErrorCode, MessageKey> = {

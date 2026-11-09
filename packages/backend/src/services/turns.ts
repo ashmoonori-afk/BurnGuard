@@ -69,6 +69,7 @@ import { provisionDesignSystemHeroAssets, provisionDesignSystemLayoutReference }
 import { resolveManagedPath, systemsDir } from "../lib/paths";
 import { designAuditCanvas, writeProjectAuditCache } from "./design-audit";
 import { assertLogoDeliverables, captureLogoTurnExpectation, LogoDeliverableError, LogoEvidenceCollector } from "./logo-deliverables";
+import { assertLogoGeometricScope, captureLogoGeometricTurn, completeLogoGeometricTurn, logoGeometricEnabled } from "./logo-geometric-turn";
 import { applyLogoDesignSystemPatch } from "./logo-design-system-sync";
 import { inspectCanonicalTree, type CanonicalTreeManifest } from "./canonical-tree-manifest";
 import { manifestEntry, readManagedFile } from "./artifact-tree-storage";
@@ -545,12 +546,20 @@ async function runUserTurnInternal(
         const graphicBefore = graphicEntrypoint === null ? null : await readFile(graphicEntrypoint, "utf8");
         // The logo gate's expectation is captured before the agent runs, so nothing the model writes
         // during the turn can change which phase is checked or which candidate counts as selected.
-        const logoExpectation = project.type === "logo" ? await captureLogoTurnExpectation(stageDir, payload.text, projectDir).catch((error: unknown) => {
+        // The method is decided before the agent runs too. A geometric turn has no raster
+        // expectation, so none of the raster gates apply to it; its own checks run after the agent.
+        const logoGeometric = project.type === "logo" ? await captureLogoGeometricTurn(stageDir, payload.text, parseStoredProjectOptions(project.options_json).logo_set, logoGeometricEnabled()).catch((error: unknown) => {
+          rejectionReason = turnRejectionReason(error);
+          throw error;
+        }) : null;
+        const logoExpectation = project.type === "logo" && logoGeometric === null ? await captureLogoTurnExpectation(stageDir, payload.text, projectDir).catch((error: unknown) => {
           rejectionReason = turnRejectionReason(error);
           throw error;
         }) : null;
         const logoTrace = logoExpectation === null ? null : await prepareLogoTrace(stageDir, logoExpectation, activeTurn.abortController.signal);
         const logoIdeate = logoExpectation?.phase === "ideate";
+        // Ideation and the geometric method author vectors or geometry by hand: no image tool, no pages.
+        const logoWithoutImages = logoIdeate || logoGeometric !== null;
         const logoEvidence = logoExpectation === null ? null : new LogoEvidenceCollector(stageDir, logoExpectation);
         const deckStarter = project.type === "slide_deck" && (await readFile(path.join(stageDir, project.entrypoint), "utf8")).includes("Send your first prompt in chat to expand this deck.");
         const waitsForInterrupt = process.env.BG_ARTIFACT_QA === "1" && operationId === process.env.BG_ARTIFACT_TURN_OPERATION_ID && process.env.BG_ARTIFACT_TURN_BARRIER === "abort";
@@ -580,7 +589,7 @@ async function runUserTurnInternal(
               ? { command: webAssetsMcpCommand(stageDir) }
               : undefined;
             const traceContext = logoTrace === null ? "" : `\n<burnguard-logo-trace-v1>\n${JSON.stringify({ schema_version: 1, status: logoTrace, file: LOGO_FILES.logo, source: logoExpectation?.selected?.file })}\n</burnguard-logo-trace-v1>\n`;
-            const prompt = await buildPrompt(sessionContext, contextPayload, { outputDirectory: stageDir, contextMode: config.chat.contextMode, visualSourceManifest: visualSources, stageAttachmentInputs: stageInputs, backendId, generation, ...(logoPipeline === undefined ? {} : { logoPipeline }), webAssetTools: webAssetTool !== undefined, onTaskGuidance: (value) => { shippedPreset = value; } }) + sourceInstructions + traceContext;
+            const prompt = await buildPrompt(sessionContext, contextPayload, { outputDirectory: stageDir, contextMode: config.chat.contextMode, visualSourceManifest: visualSources, stageAttachmentInputs: stageInputs, backendId, generation, ...(logoPipeline === undefined ? {} : { logoPipeline }), ...(logoGeometric === null ? {} : { logoGeometric }), webAssetTools: webAssetTool !== undefined, onTaskGuidance: (value) => { shippedPreset = value; } }) + sourceInstructions + traceContext;
             await appendSessionTrace(sessionId, { level: "prompt_built", turnId, prompt_chars: prompt.length, context_mode: config.chat.contextMode, backend_id: backendId, task_preset: shippedPreset });
             const adapterInput: Parameters<typeof runAdapterTurn>[1] = {
               sessionId, turnId, projectDir: stageDir, binaryPath, prompt,
@@ -591,7 +600,7 @@ async function runUserTurnInternal(
                 return () => clearSessionProcess(getSqlite(), sessionId, json);
               },
               generation,
-              ...(logoIdeate ? { imageGeneration: "forbidden" as const } : {}),
+              ...(logoWithoutImages ? { imageGeneration: "forbidden" as const } : {}),
               ...(webAssetTool === undefined ? {} : { webAssetTool }),
               ...(codexProgressMetrics ? { codexProgressMetrics: true } : {}),
               ...(generation.provider === "commandcode" ? { commandcodeApiKey: config.commandcodeApiKey ?? undefined } : {}),
@@ -625,7 +634,7 @@ async function runUserTurnInternal(
             const runAdapter = dependencies.runAdapter ?? runAdapterTurn;
             try {
               const phased = needsGenerationPhases(project.type, payload.text, deckStarter);
-              const result = logoIdeate
+              const result = logoWithoutImages
                 ? await runAdapter(backendId, adapterInput)
                 : phased
                 ? await runGenerationPhases(adapterInput, project.entrypoint, (input) => runAdapter(backendId, input), project.type, sourcePages, briefPages)
@@ -660,12 +669,12 @@ async function runUserTurnInternal(
               }
               if (logoIdeate) {
                 if (!await logoIdeationOutputComplete(stageDir)) throw new LogoDeliverableError("directions_invalid:incomplete_output");
-              } else if (!await generationOutputComplete(stageDir, project.entrypoint, project.type, undefined, undefined, briefPages)) throw new ArtifactOperationError("turn_failed", "Generated content is incomplete");
+              } else if (logoGeometric === null && !await generationOutputComplete(stageDir, project.entrypoint, project.type, undefined, undefined, briefPages)) throw new ArtifactOperationError("turn_failed", "Generated content is incomplete");
               if (modelProfile.logo_authoring === "css_svg" && project.type !== "logo") {
                 const cssLogos = checkCssLogos(await readFile(resolveWithin(stageDir, project.entrypoint), "utf8").catch(() => ""));
                 if (cssLogos.length > 0) await appendSessionTrace(sessionId, { level: "css_logo_check", turnId, logos: cssLogos });
               }
-              if (!logoIdeate) {
+              if (!logoWithoutImages) {
                 await ensureThreeSceneRuntime(stageDir);
                 await ensureCharts(stageDir);
               }
@@ -675,8 +684,26 @@ async function runUserTurnInternal(
               if (logoIdeate && changedPaths.some((changed) => changed !== "ideas/directions.json" && !LOGO_IDEA_FILES.some((file) => file === changed))) {
                 throw new LogoDeliverableError("directions_changed");
               }
+              if (logoGeometric !== null) assertLogoGeometricScope(logoGeometric, changedPaths);
+              if (logoGeometric?.kind === "make") {
+                // One review pass of its own context: the model looks at the renders and the measured
+                // findings and may rewrite its record once; the server then compiles it again.
+                await completeLogoGeometricTurn({
+                  dir: stageDir, capture: logoGeometric, signal: activeTurn.abortController.signal,
+                  label: parseStoredProjectOptions(project.options_json).logo_set?.brand_name ?? project.name,
+                  review: async (reviewPrompt) => {
+                    let reviewFailed = false;
+                    const review = await runAdapter(backendId, { ...adapterInput, turnId: `${turnId}-geometric-review`, prompt: reviewPrompt, userEvent: { type: "user.message", text: reviewPrompt }, onEvent: async (event) => {
+                      // A failed review belongs to this check, not the enclosing turn: retain it and refuse below.
+                      if (event.type === "status.error" || (event.type === "status.idle" && event.stopReason !== "end_turn")) { reviewFailed = true; return; }
+                      await adapterInput.onEvent(event);
+                    } });
+                    if (review.exitCode !== 0 || reviewFailed || providerReportedFailure) throw new ArtifactOperationError("turn_failed", "Geometric logo review did not complete");
+                  },
+                });
+              }
               const pinnedContext = sessionContext.designSystemPin?.context;
-              const designReview = logoIdeate ? { result: null, repairs: 0 } : await (dependencies.reviewDesign ?? reviewTurnDesign)({
+              const designReview = logoWithoutImages ? { result: null, repairs: 0 } : await (dependencies.reviewDesign ?? reviewTurnDesign)({
                 adapter: adapterInput, projectId: project.id, type: project.type, entrypoint: project.entrypoint,
                 revision: project.current_revision + 1, changedPaths, ...(canvas ? { canvas } : {}),
                 ...(sessionContext.designSystemPin ? { tokensCss: selectedPinnedThemeCss(sessionContext.designSystemPin) } : {}),
