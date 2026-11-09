@@ -6,7 +6,6 @@ import { projectFileUrl } from "@/api/files";
 import { appScreenPosition, appScreenScale, appScreenTarget, stepAppScreen } from "@/lib/app-screens";
 import { useT } from "@/i18n/t";
 import ScreenPreview from "./ScreenPreview";
-import "./app-screens.css";
 
 type Props = {
   readonly projectId: string;
