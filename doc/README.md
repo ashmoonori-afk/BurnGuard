@@ -26,6 +26,7 @@ Start with the [product introduction and setup](../README.md), available in [Kor
 - [The construction view of a geometric mark](26-logo-construction-2026-11-09.md)
 - [Measured self-review of a geometric mark](27-logo-geometry-review-2026-11-09.md)
 - [The gated flow of the geometric logo method](28-logo-geometric-flow-2026-11-09.md)
+- [The server side of one geometric logo step](29-logo-geometric-step-2026-11-09.md)
 - [Model capability profiles, CSS logos and web asset sourcing](model-profiles.md)
 - [Edit scope and revision comparison](edit-scope.md)
 - [Sample design system](<../design system sample/README.md>)

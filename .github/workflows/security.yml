@@ -238,6 +238,7 @@ jobs:
           packages/shared/tests/logo-construction.test.ts
           packages/shared/tests/logo-geometry-review.test.ts
           packages/shared/tests/logo-geometric-flow.test.ts
+          packages/backend/tests/logo-geometric-step.test.ts
           packages/backend/tests/pipeline-repositories.test.ts
           packages/backend/tests/catalog.test.ts
           packages/backend/tests/migration-pipeline-upgrade.test.ts
