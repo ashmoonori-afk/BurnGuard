@@ -1,0 +1,17 @@
+:root .app-screens-play[data-state="open"] {
+  animation: app-screens-fade-in 200ms ease-out;
+}
+:root .app-screens-play[data-state="closed"] {
+  animation: app-screens-fade-out 160ms ease-out;
+}
+@keyframes app-screens-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes app-screens-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  :root .app-screens-play[data-state] { animation: none; }
+}

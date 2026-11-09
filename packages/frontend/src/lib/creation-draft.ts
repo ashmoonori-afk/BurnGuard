@@ -98,6 +98,7 @@ export function parseCreationDraft(raw: string | null): BriefForm {
     : graphicKind === "banner_set" && restoredFrames.length > 0 ? restoredFrames.length : INITIAL_BRIEF_FORM.frameCount;
   return {
     ...INITIAL_BRIEF_FORM,
+    appFrame: record["appFrame"] === "desktop" ? "desktop" : INITIAL_BRIEF_FORM.appFrame,
     name: sameShape(record["name"], INITIAL_BRIEF_FORM.name),
     audience: sameShape(record["audience"], INITIAL_BRIEF_FORM.audience),
     objective: sameShape(record["objective"], INITIAL_BRIEF_FORM.objective),

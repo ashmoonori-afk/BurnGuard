@@ -10,7 +10,7 @@ import type {
   ProjectType,
   GenerationOptions,
 } from "@bg/shared";
-import { defaultGenerationOptions } from "@bg/shared";
+import { APP_SCREENS_DEFAULT_PRESET, defaultGenerationOptions } from "@bg/shared";
 import GenerationControls from "@/components/settings/GenerationControls";
 import { createProject, detectBackends } from "@/api/home";
 import { sendUserEvent } from "@/api/session";
@@ -273,6 +273,14 @@ export default function NewProjectPanel({
         <div className="space-y-2"><label htmlFor="creation-backend" className={PROJECT_LABEL_CLASS}>{t("home.creation.aiTool")}</label><select id="creation-backend" className={PROJECT_CONTROL_CLASS} value={backendSelect.placeholder === null ? effectiveBackend : ""} disabled={disabled || needsImageBackend || backendSelect.placeholder !== null} onChange={(event) => setBackendId(event.target.value as BackendId)}>{backendSelect.placeholder === null ? detectedBackends.map((backend) => <option key={backend.id} value={backend.id} disabled={!backend.found}>{backendOptionLabel(backend)}</option>) : <option value="">{t(backendSelect.placeholder)}</option>}</select>{detection.isError ? <p role="alert" className="text-xs text-destructive">{apiErrorCopy(detection.error)} <button type="button" onClick={() => void detection.refetch()} className="font-medium text-accent underline underline-offset-2 hover:no-underline">{t("home.retry")}</button></p> : null}</div>
         {nameField}
         {!guided && audienceField}
+        {effectiveType === "app_screens" && <div className="space-y-2">
+          <label htmlFor="app-screen-frame" className={PROJECT_LABEL_CLASS}>{t("appScreens.frame")}</label>
+          <select id="app-screen-frame" className={PROJECT_CONTROL_CLASS} value={form.appFrame ?? APP_SCREENS_DEFAULT_PRESET} disabled={disabled}
+            onChange={(event) => { const value = event.target.value; if (value === "phone" || value === "desktop") update("appFrame", value); }}>
+            <option value="phone">{t("appScreens.frame.phone")}</option>
+            <option value="desktop">{t("appScreens.frame.desktop")}</option>
+          </select>
+        </div>}
 
         <div className="space-y-1.5">
           <label htmlFor="design-system" className={PROJECT_LABEL_CLASS}>
