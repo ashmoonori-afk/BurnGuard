@@ -82,6 +82,7 @@ import { useSessionEvents } from "@/hooks/useSessionEvents";
 import { apiErrorCopy } from "@/lib/error-copy";
 import { sendFailureTitleKey } from "@/lib/composer-send";
 import Canvas from "@/components/canvas/Canvas";
+import AppScreensWorkspace from "@/components/app-screens/AppScreensWorkspace";
 import ColorPalette from "@/components/canvas/ColorPalette";
 import ArtifactHistory, { UnverifiedDraftBadge } from "@/components/canvas/ArtifactHistory";
 import { qualityFixRequest } from "@/lib/quality-fix-request";
@@ -1475,6 +1476,9 @@ export default function ProjectView() {
         )}
 
         {activeTab?.kind === "file" && (
+          <AppScreensWorkspace project={project} files={files} activeFile={activeRelPath}
+            revision={`${artifacts.current_digest}:${refreshTick}`}
+            onSelect={(file) => { openFileAsTab(file, setOpenFileTabs, setActiveTabId); setMode(null); }}>
           <div className="relative flex min-h-0 min-w-0 flex-1">
             <Canvas
               projectType={project.type}
@@ -1746,6 +1750,7 @@ export default function ProjectView() {
               onClearDraw={() => { if (!drawBlocked) drawLayerRef.current?.clear(); }}
             />
           </div>
+          </AppScreensWorkspace>
         )}
           </div>
         </div>

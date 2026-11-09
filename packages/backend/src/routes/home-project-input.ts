@@ -1,5 +1,5 @@
 import type { CreateProjectRequest } from "@bg/shared";
-import { BACKEND_IDS, UpgradeContractError } from "@bg/shared";
+import { APP_SCREENS_DEFAULT_FRAME, BACKEND_IDS, UpgradeContractError } from "@bg/shared";
 import { parseProjectOptions } from "../services/project-options";
 
 type ProjectInputErrorCode =
@@ -28,7 +28,7 @@ export type ParsedProjectInput = {
   readonly designSystemId: string | null;
   readonly backendId: CreateProjectRequest["backend_id"];
   readonly optionsJson: string | null;
-  readonly entrypoint: "deck.html" | "index.html";
+  readonly entrypoint: "deck.html" | "index.html" | "screens/start.html";
 };
 
 export function parseProjectInput(input: unknown): ParsedProjectInput {
@@ -71,13 +71,15 @@ export function parseProjectInput(input: unknown): ParsedProjectInput {
   let graphicCanvasPresent = false;
   let graphicSetPresent = false;
   let logoSetPresent = false;
-  if (input["options"] !== undefined) {
+  if (input["options"] !== undefined || type === "app_screens") {
     try {
       const options = parseProjectOptions(input["options"]);
       graphicCanvasPresent = options.graphic_canvas !== null;
       graphicSetPresent = isRecord(input["options"]) && "graphic_set" in input["options"];
       logoSetPresent = options.logo_set !== null;
-      optionsJson = JSON.stringify(options);
+      optionsJson = JSON.stringify(type === "app_screens"
+        ? { ...options, app_screens_frame: options.app_screens_frame ?? APP_SCREENS_DEFAULT_FRAME }
+        : options);
     } catch (error) {
       if (error instanceof UpgradeContractError) {
         throw new ProjectInputError(
@@ -113,7 +115,7 @@ export function parseProjectInput(input: unknown): ParsedProjectInput {
     designSystemId,
     backendId,
     optionsJson,
-    entrypoint: type === "slide_deck" ? "deck.html" : "index.html",
+    entrypoint: type === "slide_deck" ? "deck.html" : type === "app_screens" ? "screens/start.html" : "index.html",
   };
 }
 
@@ -126,6 +128,7 @@ function isProjectType(
 ): value is CreateProjectRequest["type"] {
   return (
     value === "prototype" ||
+    value === "app_screens" ||
     value === "slide_deck" ||
     value === "graphic" ||
     value === "logo" ||

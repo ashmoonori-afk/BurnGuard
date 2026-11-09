@@ -1,0 +1,25 @@
+import { defineMessages } from "../types";
+
+export const appScreensMessages = defineMessages({
+  "appScreens.type": { en: "App screens", ko: "앱 화면", "zh-CN": "应用界面" },
+  "appScreens.description": { en: "Linked screens on a board, ready to play through.", ko: "화면을 보드에 모으고 연결해서 눌러봐요.", "zh-CN": "在画板上排列关联界面并交互预览。" },
+  "appScreens.frame": { en: "Frame", ko: "화면 크기", "zh-CN": "画框" },
+  "appScreens.frame.phone": { en: "Phone 390 x 844", ko: "폰 390 x 844", "zh-CN": "手机 390 x 844" },
+  "appScreens.frame.desktop": { en: "Desktop 1440 x 900", ko: "데스크톱 1440 x 900", "zh-CN": "桌面 1440 x 900" },
+  "appScreens.board": { en: "Board", ko: "보드", "zh-CN": "画板" },
+  "appScreens.canvas": { en: "Canvas", ko: "캔버스", "zh-CN": "画布" },
+  "appScreens.screens": { en: "Screens", ko: "화면", "zh-CN": "界面" },
+  "appScreens.playSection": { en: "Play section", ko: "섹션 재생", "zh-CN": "播放分区" },
+  "appScreens.playHere": { en: "Play from here", ko: "이 화면부터 재생", "zh-CN": "从此处播放" },
+  "appScreens.edit": { en: "Edit {title}", ko: "{title} 편집", "zh-CN": "编辑 {title}" },
+  "appScreens.links": { en: "Links to: {titles}", ko: "연결된 화면: {titles}", "zh-CN": "链接到：{titles}" },
+  "appScreens.noLinks": { en: "No linked screens", ko: "연결된 화면이 없어요", "zh-CN": "没有关联界面" },
+  "appScreens.empty": { en: "No screens yet. Ask in chat to create your first screen.", ko: "아직 화면이 없어요. 채팅에서 첫 화면을 요청해 주세요.", "zh-CN": "暂无界面。请在聊天中创建第一个界面。" },
+  "appScreens.loading": { en: "Loading screens…", ko: "화면을 불러오고 있어요…", "zh-CN": "正在加载界面…" },
+  "appScreens.loadError": { en: "Could not load this screen. Retry to load it again.", ko: "화면을 불러오지 못했어요. 다시 시도해 주세요.", "zh-CN": "无法加载此界面。请重试。" },
+  "appScreens.retry": { en: "Retry", ko: "다시 시도", "zh-CN": "重试" },
+  "appScreens.previous": { en: "Previous", ko: "이전", "zh-CN": "上一个" },
+  "appScreens.next": { en: "Next", ko: "다음", "zh-CN": "下一个" },
+  "appScreens.position": { en: "{section}  {current} / {total}", ko: "{section}  {current} / {total}", "zh-CN": "{section}  {current} / {total}" },
+  "appScreens.close": { en: "Close", ko: "닫기", "zh-CN": "关闭" },
+});

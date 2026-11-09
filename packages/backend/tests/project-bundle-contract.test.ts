@@ -39,15 +39,17 @@ function manifest() {
 }
 
 describe("project bundle manifest contract", () => {
-  test("Given a canonical version-one manifest When parsed Then typed project identity and exclusions survive", () => {
+  test.each(["prototype", "app_screens"])("Given a canonical %s manifest When parsed Then typed project identity and exclusions survive", (type) => {
     // Given
     const input = manifest();
+    input.project.type = type;
 
     // When
     const parsed = parseProjectBundleManifest(input);
 
     // Then
     expect(parsed.project.current_revision).toBe(4);
+    expect(parsed.project.type).toBe(type);
     expect(parsed.files[0]?.path).toBe("project/index.html");
     expect(parsed.credential_exclusions).toEqual(PROJECT_BUNDLE_CREDENTIAL_EXCLUSIONS);
   });

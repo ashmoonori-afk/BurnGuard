@@ -28,6 +28,9 @@ import {
   UpgradeContractError,
   parseGraphicSetV1,
   parseLogoSetV1,
+  APP_SCREEN_FRAMES,
+  APP_SCREENS_DEFAULT_PRESET,
+  type AppScreenFramePreset,
 } from "@bg/shared";
 import { DETAIL_BRIEF_FIELDS } from "@/lib/graphic-set-form";
 import { t, type MessageKey } from "@/i18n/t";
@@ -107,6 +110,7 @@ export function coerceBriefChoice<T extends string>(choices: readonly BriefChoic
 }
 
 export type ProjectDraft = {
+  readonly appFrame?: AppScreenFramePreset;
   readonly name: string;
   readonly type: ProjectType;
   readonly backendId: BackendId;
@@ -143,6 +147,7 @@ export type BriefForm = Omit<
 >;
 
 export const INITIAL_BRIEF_FORM: BriefForm = {
+  appFrame: APP_SCREENS_DEFAULT_PRESET,
   name: "",
   audience: "",
   objective: "",
@@ -397,7 +402,7 @@ export function buildCreateProjectRequest(
     density: draft.density,
     // A graphic has its own canvas and a logo has the fixed 1920×1080 page, so
     // neither takes an output size from the brief.
-    output_size: draft.type === "graphic" || draft.type === "logo" ? "custom" : draft.outputSize,
+    output_size: draft.type === "graphic" || draft.type === "logo" || draft.type === "app_screens" ? "custom" : draft.outputSize,
   };
 
   return {
@@ -408,6 +413,7 @@ export function buildCreateProjectRequest(
       design_system_id: designSystemId,
       backend_id: draft.backendId,
       options: {
+        ...(draft.type === "app_screens" ? { app_screens_frame: APP_SCREEN_FRAMES[draft.appFrame ?? APP_SCREENS_DEFAULT_PRESET] } : {}),
         ...(draft.type === "slide_deck"
           ? { use_speaker_notes: draft.useSpeakerNotes }
           : {}),

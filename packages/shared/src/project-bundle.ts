@@ -116,7 +116,7 @@ export interface ProjectBundleImportResponse {
 }
 
 const SHA256 = /^[a-f0-9]{64}$/;
-const PROJECT_TYPES = ["prototype", "slide_deck", "graphic", "logo", "from_template", "other"] as const;
+const PROJECT_TYPES = ["prototype", "app_screens", "slide_deck", "graphic", "logo", "from_template", "other"] as const;
 const FILE_KINDS = ["project", "attachment", "checkpoint", "design_system"] as const;
 const SYSTEM_STATUSES = ["draft", "review", "published"] as const;
 const SOURCE_TYPES = ["sample", "github", "website", "figma", "upload", "manual"] as const;

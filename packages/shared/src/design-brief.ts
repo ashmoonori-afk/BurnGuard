@@ -7,6 +7,7 @@ import {
 
 export const DESIGN_BRIEF_OUTPUT_TYPES = [
   "prototype",
+  "app_screens",
   "slide_deck",
   "graphic",
   "logo",
@@ -133,6 +134,7 @@ function boundedString(
 function outputType(value: string): DesignBriefOutputType {
   switch (value) {
     case "prototype":
+    case "app_screens":
     case "slide_deck":
     case "graphic":
     case "logo":

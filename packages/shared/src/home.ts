@@ -7,6 +7,7 @@ import type {
 import type { DesignBriefV1 } from "./design-brief";
 import type { GraphicCanvasV1, GraphicSetV1 } from "./graphic";
 import type { LogoSetV1 } from "./logo";
+import type { AppScreenFrame } from "./app-screens";
 
 export interface ProjectSummary {
   id: string;
@@ -51,6 +52,7 @@ export interface CreateProjectRequest {
     graphic_canvas?: GraphicCanvasV1;
     graphic_set?: GraphicSetV1;
     logo_set?: LogoSetV1;
+    app_screens_frame?: AppScreenFrame;
   };
 }
 

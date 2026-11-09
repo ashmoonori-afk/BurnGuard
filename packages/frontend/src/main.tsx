@@ -9,6 +9,7 @@ import { applyLaunchTheme } from "./hooks/useTheme";
 import { applyDocumentLocale, useLocaleStore } from "./i18n/locale";
 import "./index.css";
 import "./components/systems/palette-preview.css";
+import "./components/app-screens/app-screens.css";
 
 async function main(): Promise<void> {
   const root = document.getElementById("root");

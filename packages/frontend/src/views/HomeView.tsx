@@ -57,6 +57,7 @@ type SystemImportMode = "url" | "upload";
 const PROJECT_TYPES = [
   { id: "slide_deck", label: "home.type.slide_deck", description: "home.type.slideDescription", icon: Presentation, color: "bg-tint-blue text-foreground" },
   { id: "prototype", label: "home.type.prototype", description: "home.type.webDescription", icon: Blocks, color: "bg-tint-violet text-foreground" },
+  { id: "app_screens", label: "appScreens.type", description: "appScreens.description", icon: Blocks, color: "bg-tint-blue text-foreground" },
   { id: "graphic", label: "home.type.graphic", description: "home.type.graphicDescription", icon: Image, color: "bg-tint-emerald text-foreground" },
   { id: "logo", label: "home.type.logo", description: "home.type.logoDescription", icon: PenTool, color: "bg-tint-fuchsia text-foreground" },
   { id: "from_template", label: "home.type.from_template", description: "home.type.templateDescription", icon: LayoutTemplate, color: "bg-tint-amber text-foreground" },

@@ -14,6 +14,7 @@ export const BACKEND_IDS = ["claude-code", "codex", "gemini", "copilot"] as cons
 export type BackendId = (typeof BACKEND_IDS)[number];
 export type ProjectType =
   | "prototype"
+  | "app_screens"
   | "slide_deck"
   | "graphic"
   | "logo"
@@ -21,7 +22,7 @@ export type ProjectType =
   | "other";
 /** Project types whose output is a web page rather than a deck, graphic or logo. */
 export function isWebProjectType(type: ProjectType): boolean {
-  return type === "prototype" || type === "from_template" || type === "other";
+  return type === "prototype" || type === "app_screens" || type === "from_template" || type === "other";
 }
 export type DesignSystemStatus = "draft" | "review" | "published";
 export type ThemeMode = "light" | "dark" | "auto";

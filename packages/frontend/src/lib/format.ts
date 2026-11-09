@@ -17,6 +17,7 @@ export function formatFullDate(ts: number): string {
 
 const PROJECT_TYPE_LABEL: Record<string, MessageKey> = {
   prototype: "home.type.prototype",
+  app_screens: "appScreens.type",
   slide_deck: "home.type.slide_deck",
   graphic: "home.type.graphic",
   logo: "home.type.logo",

@@ -117,6 +117,7 @@ jobs:
           packages/backend/tests/detached-descendant.test.ts
           packages/backend/tests/trace-security.test.ts
           packages/backend/tests/prompt-builder.test.ts
+          packages/backend/tests/app-screens.test.ts
           packages/backend/tests/desktop-lifecycle.test.ts
           packages/frontend/tests/canvas-source.test.ts
           packages/frontend/tests/side-input.test.ts
@@ -204,6 +205,7 @@ jobs:
           packages/frontend/tests/chat-status-slot-layout.test.ts
           packages/frontend/tests/generation-controls-guidance.test.ts
           packages/frontend/tests/project-creation.test.ts
+          packages/frontend/tests/app-screens.test.ts
           packages/frontend/tests/new-project-panel.test.ts
           packages/frontend/tests/first-run-guide.test.ts
           packages/frontend/tests/design-token-contrast.test.ts

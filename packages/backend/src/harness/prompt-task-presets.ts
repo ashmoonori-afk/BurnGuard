@@ -14,7 +14,7 @@ import { REVIEWED_TASK_EXAMPLES, type ReviewedExampleCorpus } from "./task-prese
 /** Provider route. A model ID alone never implies equivalence across routes. */
 export type Route = "codex/native" | "claude-code/native" | "claude-code/commandcode" | "generic/native";
 
-export type Deliverable = "prototype" | "slide_deck" | "graphic" | "logo" | "diagram" | "generic";
+export type Deliverable = "prototype" | "app_screens" | "slide_deck" | "graphic" | "logo" | "diagram" | "generic";
 
 export type ModelWording =
   | "luna" | "spark" | "terra" | "sol" | "gpt55" | "astra" | "sonnet" | "opus"
@@ -62,6 +62,10 @@ export interface PresetRegistry {
 }
 
 const DELIVERABLES: Readonly<Record<Deliverable, TextBlock>> = {
+  app_screens: {
+    id: "deliverable-app_screens-v1",
+    text: "Work section by section on linked app screens. Preserve the frame dimensions from burnguard-app-screens-v1, one HTML file per screen and the screens.json inventory on every turn. Verify links and keyboard actions at the chosen frame size.",
+  },
   prototype: {
     id: "deliverable-prototype-v1",
     text: "Work from page role to sections to shared navigation and linked routes, using the supplied brief and site map for exact scope. Associate each unit with its real-file/link, primary-action, keyboard, narrow-screen and long Korean-text checks. Check shared-token and navigation dependencies together.",

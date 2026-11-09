@@ -110,6 +110,7 @@ function creationMode(input: ResearchPurposeInput): CreationMode {
   switch (input.projectType) {
     case "from_template": return "template";
     case "prototype":
+    case "app_screens":
     case "slide_deck":
     case "graphic":
     case "logo": return input.hasCapturedFiles ? "existing" : "blank";

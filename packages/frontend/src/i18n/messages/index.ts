@@ -16,7 +16,8 @@ import { logoPipelineMessages } from "./logo-pipeline";
 import { promptsMessages } from "./prompts";
 import { revisionMessages } from "./revision";
 import { paletteMessages } from "./palette";
+import { appScreensMessages } from "./app-screens";
 
-export const messagePacks = [settingsMessages, shellMessages, errorsMessages, homeMessages, systemMessages, filesMessages, exportMessages, directionsMessages, canvasMessages, modesMessages, chatMessages, chatPolishMessages, workspaceMessages, logoMessages, logoPipelineMessages, promptsMessages, revisionMessages, paletteMessages] as const;
-export const messages = { ...settingsMessages, ...shellMessages, ...errorsMessages, ...homeMessages, ...systemMessages, ...filesMessages, ...exportMessages, ...directionsMessages, ...canvasMessages, ...modesMessages, ...chatMessages, ...chatPolishMessages, ...workspaceMessages, ...logoMessages, ...logoPipelineMessages, ...promptsMessages, ...revisionMessages, ...paletteMessages };
+export const messagePacks = [settingsMessages, shellMessages, errorsMessages, homeMessages, systemMessages, filesMessages, exportMessages, directionsMessages, canvasMessages, modesMessages, chatMessages, chatPolishMessages, workspaceMessages, logoMessages, logoPipelineMessages, promptsMessages, revisionMessages, paletteMessages, appScreensMessages] as const;
+export const messages = { ...settingsMessages, ...shellMessages, ...errorsMessages, ...homeMessages, ...systemMessages, ...filesMessages, ...exportMessages, ...directionsMessages, ...canvasMessages, ...modesMessages, ...chatMessages, ...chatPolishMessages, ...workspaceMessages, ...logoMessages, ...logoPipelineMessages, ...promptsMessages, ...revisionMessages, ...paletteMessages, ...appScreensMessages };
 export type MessageKey = keyof typeof messages;

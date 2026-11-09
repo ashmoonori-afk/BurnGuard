@@ -1,6 +1,6 @@
 import path from "node:path";
 import type { BackendId, GenerationOptions, VisualSourceManifestV1 } from "@bg/shared";
-import { surfaceForProjectType } from "@bg/shared";
+import { APP_SCREENS_DEFAULT_FRAME, surfaceForProjectType } from "@bg/shared";
 import type { StageAttachmentInput } from "../services/stage-attachment-inputs";
 import type { UserEvent } from "@bg/shared/events";
 import type { buildSessionContext } from "../services/context";
@@ -30,6 +30,7 @@ import { appendDesignSystemContext, appendDesignSystemStarter, compactPinnedDesi
 import { appendGraphicOutputContext } from "./prompt-graphic-set";
 import { appendLogoOutputContext, readLogoManifestForPrompt, type LogoPromptPipelineState } from "./prompt-logo-set";
 import { LOGO_SKILL_MD } from "./skills/logo-skill";
+import { appScreensSkill } from "./skills/app-screens-skill";
 import { DESIGN_CRAFT_RULES } from "./design-craft";
 import { CHART_AUTHORING_RULES } from "./chart-authoring";
 import { appendGenerationStyle } from "./prompt-generation-style";
@@ -300,7 +301,9 @@ export async function buildPrompt(
     lines.push("");
   }
 
-  if (project.project_type === "slide_deck") {
+  if (project.project_type === "app_screens") {
+    lines.push(appScreensSkill(projectOptions.app_screens_frame ?? APP_SCREENS_DEFAULT_FRAME, userEvent.active_rel_path ?? project.entrypoint), "");
+  } else if (project.project_type === "slide_deck") {
     lines.push("## Slide deck skill");
     lines.push(
       contextMode === "compact"
@@ -428,6 +431,7 @@ export function renderTextEncodingBlock(platform: NodeJS.Platform = process.plat
  * selection it shipped instead of re-deriving it and drifting.
  */
 export function resolveDeliverable(projectType: string, requestText: string): Deliverable {
+  if (projectType === "app_screens") return "app_screens";
   if (projectType === "prototype") return "prototype";
   if (projectType === "slide_deck") return "slide_deck";
   if (projectType === "graphic") return "graphic";
@@ -453,6 +457,8 @@ function selectVisualCraft(projectType: SessionContext["project"]["project_type"
 
 function selectTasteByType(deliverable: Deliverable): string | null {
   switch (deliverable) {
+    case "app_screens":
+      return null;
     case "prototype":
     case "slide_deck":
     case "graphic":
