@@ -392,12 +392,8 @@ function uniqueSorted(values: readonly number[]): number[] {
   return sorted.filter((value, index) => index === 0 || value - sorted[index - 1] > ON_CURVE).map((value) => Math.round(value * 1e6) / 1e6);
 }
 
-/**
- * Compiles a parsed geometry record into its outline and the facts the construction view draws.
- * Throws `LogoGeometryCompileError` when the tree leaves nothing on the artboard or the kept edges
- * do not close.
- */
-export function compileLogoGeometry(geometry: LogoGeometryV1): LogoGeometryCompiled {
+/** Whether a point lies inside the mark: on the artboard, inside the tree and outside every notch. */
+export function logoGeometryInside(geometry: LogoGeometryV1): (p: Vec) => boolean {
   const radii = radiiOf(geometry);
   const primitives = new Map(geometry.primitives.map((primitive) => [primitive.id, primitive]));
   const notches = geometry.optical.flatMap((item) => item.kind === "notch" ? [item.primitive] : []);
@@ -406,10 +402,27 @@ export function compileLogoGeometry(geometry: LogoGeometryV1): LogoGeometryCompi
     return primitive !== undefined && contains(primitive, p, radii);
   };
   const g = LOGO_GEOMETRY_GRID;
-  const inside = (p: Vec): boolean => p.x > 0 && p.x < g && p.y > 0 && p.y < g
+  return (p) => p.x > 0 && p.x < g && p.y > 0 && p.y < g
     && evaluate(geometry.tree, (id) => has(id, p)) && !notches.some((id) => has(id, p));
+}
 
-  const curves = curvesOf(geometry, radii);
+export type LogoGeometryBoundary =
+  | { readonly kind: "segment"; readonly a: Vec; readonly b: Vec; readonly owners: readonly string[] }
+  | { readonly kind: "circle"; readonly c: Vec; readonly r: number; readonly owners: readonly string[] };
+
+/** Every boundary the compiler splits: circles (after overshoot), clipped lines, shape edges and the artboard. */
+export function logoGeometryBoundaries(geometry: LogoGeometryV1): readonly LogoGeometryBoundary[] {
+  return curvesOf(geometry, radiiOf(geometry));
+}
+
+/**
+ * Compiles a parsed geometry record into its outline and the facts the construction view draws.
+ * Throws `LogoGeometryCompileError` when the tree leaves nothing on the artboard or the kept edges
+ * do not close.
+ */
+export function compileLogoGeometry(geometry: LogoGeometryV1): LogoGeometryCompiled {
+  const inside = logoGeometryInside(geometry);
+  const curves = curvesOf(geometry, radiiOf(geometry));
   const vertices = new Vertices();
   const splits = curves.map(() => new Set<number>());
   const tangentHits: { point: Vec; owners: [string, string] }[] = [];
