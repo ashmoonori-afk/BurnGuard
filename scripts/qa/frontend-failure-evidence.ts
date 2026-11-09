@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-// F06: preserve the next failure, not a guessed fix for the unrecovered hpdesk failure.
+// F06: preserve the next failure, not a guessed fix for the unrecovered Windows-host failure.
 import { constants, createCipheriv, createHash, createPublicKey, publicEncrypt, randomBytes } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
