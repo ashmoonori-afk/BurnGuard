@@ -24,7 +24,8 @@ export type ExportOptionDisabledReason =
   | "web_only"
   | "frames_only"
   | "mixed_frames"
-  | "pdf_too_large";
+  | "pdf_too_large"
+  | "construction_missing";
 
 export const EXPORT_DISABLED_LABEL: Record<ExportOptionDisabledReason, string> = {
   get deck_only() { return t("export.disabled.deck_only"); },
@@ -32,6 +33,7 @@ export const EXPORT_DISABLED_LABEL: Record<ExportOptionDisabledReason, string> =
   get frames_only() { return t("export.disabled.frames_only"); },
   get mixed_frames() { return t("export.disabled.mixed_frames"); },
   get pdf_too_large() { return t("export.disabled.pdf_too_large"); },
+  get construction_missing() { return t("export.disabled.construction_missing"); },
 };
 
 export type ExportOptionField = {
@@ -113,6 +115,23 @@ export function renderPhaseFailureMessage(failure: RenderPhaseFailure): string {
   return t(failure.kind === "timeout" ? "export.phase.timeout" : "export.phase.failed", { phase: phaseName });
 }
 
+export type ConstructionFailure = "missing" | "invalid" | "too_large";
+
+/** Construction exports fail with a typed code (`construction_too_large`) kept in the failure message. */
+export function classifyConstructionFailure(errorMessage: string | null): ConstructionFailure | null {
+  if (errorMessage === null) return null;
+  if (errorMessage.includes("construction_missing")) return "missing";
+  if (errorMessage.includes("construction_invalid")) return "invalid";
+  if (errorMessage.includes("construction_too_large")) return "too_large";
+  return null;
+}
+
+export const CONSTRUCTION_FAILURE_MESSAGE: Record<ConstructionFailure, string> = {
+  get missing() { return t("export.construction.missing"); },
+  get invalid() { return t("export.construction.invalid"); },
+  get too_large() { return t("export.construction.too_large"); },
+};
+
 export const CHROMIUM_FAILURE_MESSAGE: Record<ChromiumFailure, string> = {
   get launch_timeout() { return t("export.chromium.launch_timeout"); },
   get not_installed() { return t("export.chromium.not_installed"); },
@@ -134,11 +153,13 @@ export function buildExportMenuModel(
   projectType: ProjectType,
   optionsJson: string | null,
   values: ExportOptionValues = DEFAULT_EXPORT_OPTION_VALUES,
+  /** Whether the logo project has its construction record; only logo projects read it. */
+  constructionReady = false,
 ): ExportMenuModel {
   if (projectType === "logo") {
     return {
       ok: true,
-      options: [...logoExportOptions(), ...platformPackageOptions(projectType, values)],
+      options: [...logoExportOptions(constructionReady), ...platformPackageOptions(projectType, values)],
     };
   }
   if (projectType !== "graphic") {
