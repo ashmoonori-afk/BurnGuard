@@ -1,13 +1,14 @@
 import { afterEach, expect, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { LOGO_ACTION_TAG, parseLogoAction, type DesignAuditFinding, type DesignAuditResult, type UxReviewReport } from "@bg/shared";
+import { LOGO_ACTION_TAG, LOGO_GEOMETRIC_TAG, parseLogoAction, parseLogoGeometricAction, type DesignAuditFinding, type DesignAuditResult, type UxReviewReport } from "@bg/shared";
 import UserMessage from "../src/components/chat/blocks/UserMessage";
 import { uxReviewRequest } from "../src/components/modes/UxReviewPanel";
 import { useLocaleStore } from "../src/i18n/locale";
 import { t } from "../src/i18n/t";
 import { platformFixRequest } from "../src/lib/platform-fix-request";
 import { qualityFixRequest } from "../src/lib/quality-fix-request";
+import { logoGeometricActionMessage } from "../src/lib/logo-project";
 import { requestDisplayText } from "../src/lib/request-display";
 
 afterEach(() => useLocaleStore.getState().setLocale("ko"));
@@ -58,6 +59,17 @@ test("Given a rendered user message holding a quality fix request When rendered 
   expect(html).toContain(t("workspace.quality.fixDisplay", { count: 2 }));
   expect(html).not.toContain(digest);
   expect(html).not.toContain("&quot;node&quot;");
+});
+
+test("Given a geometric logo action When rendered Then the bubble shows the app's own line and never the sentinel", () => {
+  const action = { action: "revise", step: "symbol", record_sha256: "c".repeat(64), note: "Open the counter" } as const;
+  const text = logoGeometricActionMessage(action);
+  expect(parseLogoGeometricAction(text)).toEqual(action);
+  expect(requestDisplayText(text)).toBe(text.slice(text.indexOf("\n") + 1));
+  expect(requestDisplayText(`<${LOGO_GEOMETRIC_TAG}>${JSON.stringify(action)}</${LOGO_GEOMETRIC_TAG}>`)).toBe(text.slice(text.indexOf("\n") + 1));
+  const html = renderToStaticMarkup(createElement(UserMessage, { text }));
+  expect(html).not.toContain(LOGO_GEOMETRIC_TAG);
+  expect(html).not.toContain("record_sha256");
 });
 
 test("Given a logo action with user prose When rendered Then the transport stays parseable but the bubble shows only the prose", () => {

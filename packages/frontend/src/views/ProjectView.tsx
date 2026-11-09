@@ -31,6 +31,7 @@ import type {
   DesignDirectionState,
   FileInfo,
   LogoActionV1,
+  LogoGeometricActionV1,
   LogoSetV1,
   NormalizedEvent,
   PatchFileRequest,
@@ -126,9 +127,10 @@ import {
   preferDirectionState,
 } from "@/lib/design-direction-state";
 import { parseProjectGraphicCanvas } from "@/lib/graphic-project";
-import { logoActionMessage, logoIdeationMessage, parseProjectLogoCanvas } from "@/lib/logo-project";
+import { logoActionMessage, logoGeometricActionMessage, logoGeometricMakeMessage, logoIdeationMessage, parseProjectLogoCanvas } from "@/lib/logo-project";
 import LogoCandidatePanel from "@/components/logo/LogoCandidatePanel";
 import LogoConstructionCard from "@/components/logo/LogoConstructionCard";
+import LogoGeometricPanel, { useLogoGeometricStatus } from "@/components/logo/LogoGeometricPanel";
 import LogoPipelinePanel, { type LogoPipelineStage } from "@/components/logo/LogoPipelinePanel";
 import {
   designAuditErrorCode,
@@ -829,6 +831,10 @@ export default function ProjectView() {
   const logoIdeasReady = isLogoProject && files.some((file) => file.rel_path === LOGO_IDEA_DIRECTIONS_FILE);
   const logoDesignReady = isLogoProject && files.some((file) => file.rel_path === LOGO_FILES.manifest || file.rel_path === LOGO_FILES.logo);
   const defaultLogoStage: LogoPipelineStage = logoDesignReady ? "design" : logoIdeasReady ? "idea" : "inspiration";
+  // The geometric method replaces the raster pipeline when the server says this project uses it (doc/31).
+  const logoGeometricQuery = useLogoGeometricStatus(id ?? "", isLogoProject && id !== undefined);
+  const logoGeometric = logoGeometricQuery.data?.method === "geometric" ? logoGeometricQuery.data : null;
+  const logoGeometricLoadFailed = logoGeometricQuery.isError && logoGeometricQuery.data === undefined;
   useEffect(() => {
     setLogoStage(defaultLogoStage);
   }, [id, defaultLogoStage]);
@@ -1181,7 +1187,7 @@ export default function ProjectView() {
 
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? tabs[0];
   const isLogoEntrypoint = isLogoProject && activeTab?.kind === "file" && activeTab.relPath === project.entrypoint;
-  const showLogoPipeline = isLogoEntrypoint && logoBrief !== null;
+  const showLogoPipeline = isLogoEntrypoint && logoBrief !== null && logoGeometric === null;
   const activeRelPath =
     activeTab?.kind === "file" && activeTab.relPath ? activeTab.relPath : null;
   const comments = commentsQuery.data ?? [];
@@ -1258,11 +1264,13 @@ export default function ProjectView() {
    * Regenerating or picking a logo concept is an ordinary user message carrying the
    * action sentinel, so the turn, its checkpoint and its history work like any other.
    */
-  const requestLogoAction = async (action: LogoActionV1) => {
+  const requestLogoAction = (action: LogoActionV1) => requestLogoMessage(logoActionMessage(action));
+
+  const requestLogoMessage = async (text: string) => {
     if (composerDisabled) return;
     try {
       const generation = (await loadComposerDraft(session.id).catch(() => null))?.generation;
-      await sendMessage(logoActionMessage(action), [], new AbortController().signal, generation);
+      await sendMessage(text, [], new AbortController().signal, generation);
       setChatFocusKey((value) => value + 1);
       setMobilePane("chat");
     } catch (error) {
@@ -1415,7 +1423,7 @@ export default function ProjectView() {
             onAction={handleLogoAction}
           />
         )}
-        {isLogoEntrypoint && (!showLogoPipeline || logoStage === "design") && (
+        {isLogoEntrypoint && logoGeometric === null && (!showLogoPipeline || logoStage === "design") && (
           <LogoCandidatePanel
             projectId={id!}
             disabled={composerDisabled}
@@ -1423,6 +1431,16 @@ export default function ProjectView() {
           />
         )}
         {isLogoEntrypoint && (!showLogoPipeline || logoStage === "design") && <LogoConstructionCard projectId={id!} />}
+        {isLogoEntrypoint && (logoGeometric !== null || logoGeometricLoadFailed) && (
+          <LogoGeometricPanel
+            status={logoGeometric}
+            loadFailed={logoGeometricLoadFailed}
+            disabled={composerDisabled}
+            onAction={(action: LogoGeometricActionV1) => void requestLogoMessage(logoGeometricActionMessage(action))}
+            onMake={() => void requestLogoMessage(logoGeometricMakeMessage())}
+            onRetry={() => void logoGeometricQuery.refetch()}
+          />
+        )}
         <div className={cn("flex min-h-0 min-w-0 flex-1", showLogoPipeline && logoStage !== "design" && "hidden")}>
 
         {activeTab?.kind === "design_system" && (

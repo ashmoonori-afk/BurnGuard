@@ -5,12 +5,15 @@ import {
   LOGO_PAGE,
   LOGO_TYPES,
   parseLogoAction,
+  parseLogoGeometricAction,
   type LogoManifestV1,
 } from "@bg/shared";
 import {
   LOGO_TYPE_CHOICES,
   latestLogoRound,
   logoActionMessage,
+  logoGeometricActionMessage,
+  logoGeometricMakeMessage,
   logoIdeationMessage,
   parseProjectLogoCanvas,
   parseProjectLogoManifest,
@@ -130,6 +133,27 @@ describe("logo action message", () => {
     } finally {
       useLocaleStore.setState({ locale: original });
     }
+  });
+});
+
+describe("geometric logo action message", () => {
+  test("Given each geometric choice When the message is built Then the backend reads the exact action back and a human line follows", () => {
+    const sha = "b".repeat(64);
+    const actions = [
+      { action: "answer", parts: { choice: "symbol" }, direction: { other: "Calm, round \"quiet\" shapes" } },
+      { action: "approve", step: "symbol", record_sha256: sha },
+      { action: "revise", step: "symbol", record_sha256: sha, note: "Open the lower counter\nand thin the stem" },
+    ] as const;
+    for (const action of actions) {
+      const message = logoGeometricActionMessage(action);
+      expect(parseLogoGeometricAction(message)).toEqual(action);
+      expect(message.split("\n").at(-1)?.trim().length).toBeGreaterThan(0);
+    }
+  });
+
+  test("Given a make request When the message is built Then it carries no sentinel, so the saved answers decide the step", () => {
+    expect(parseLogoGeometricAction(logoGeometricMakeMessage())).toBeNull();
+    expect(parseLogoAction(logoGeometricMakeMessage())).toBeNull();
   });
 });
 

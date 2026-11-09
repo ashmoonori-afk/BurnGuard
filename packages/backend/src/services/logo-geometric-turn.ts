@@ -3,11 +3,13 @@ import {
   LOGO_FILES,
   LOGO_GEOMETRIC_ANSWERS_FILE,
   LOGO_GEOMETRY_FILE,
+  logoGeometricPlan,
   logoMethodFor,
   parseLogoGeometricAction,
   resolveLogoGeometricTurn,
   serializeLogoGeometricAnswers,
   type LogoGeometricAnswersV1,
+  type LogoGeometricStatusV1,
   type LogoGeometricStep,
   type LogoSetV1,
 } from "@bg/shared";
@@ -20,6 +22,7 @@ import {
   LOGO_GEOMETRIC_SYMBOL_REVIEW_FILE,
   finishLogoGeometricSymbol,
   readLogoGeometricState,
+  readLogoGeometricSymbolReview,
   recordLogoGeometricApproval,
   renderLogoGeometricSymbol,
   type LogoGeometricSymbolReviewV1,
@@ -59,6 +62,25 @@ export type LogoGeometricCapture =
 
 /** The steps this build can make. The wordmark and the lockup arrive with phase 4. */
 const MADE_STEPS: readonly LogoGeometricStep[] = ["symbol"];
+
+/**
+ * What the app shows for this project (doc/31), read from the same files and with the same method
+ * decision as a turn, so the screen and the next turn cannot disagree.
+ */
+export async function readLogoGeometricStatus(dir: string, logoSet: LogoSetV1 | null, enabled: boolean): Promise<LogoGeometricStatusV1> {
+  if (!enabled || logoSet === null || logoMethodFor(logoSet.logo_type) !== "geometric") return { schema_version: 1, method: "raster" };
+  const state = await readLogoGeometricState(dir);
+  const symbol = state.steps.symbol.record_sha256;
+  return {
+    schema_version: 1,
+    method: "geometric",
+    answers: state.answers,
+    plan: logoGeometricPlan(state),
+    available_steps: MADE_STEPS,
+    records: { symbol, wordmark: state.steps.wordmark.record_sha256, lockup: state.steps.lockup.record_sha256 },
+    symbol_review: symbol === null ? null : await readLogoGeometricSymbolReview(dir, symbol),
+  };
+}
 
 /**
  * Returns null when the turn stays on the raster method: the switch is off, the brief asks for a
