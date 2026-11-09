@@ -151,8 +151,8 @@ function evaluate(node: LogoGeometryNode, inside: (id: string) => boolean): bool
   }
 }
 
-/** The infinite line through `from` and `to`, clipped to the artboard. */
-function clipToArtboard(from: Vec, to: Vec): [Vec, Vec] {
+/** The infinite line through `from` and `to`, clipped to the artboard: what a half-plane draws. */
+export function logoGeometryLineSegment(from: Vec, to: Vec): [Vec, Vec] {
   const d = sub(to, from);
   let lo = -Infinity;
   let hi = Infinity;
@@ -182,7 +182,7 @@ function curvesOf(geometry: LogoGeometryV1, radii: ReadonlyMap<string, number>):
         break;
       }
       case "line": {
-        const [a, b] = clipToArtboard({ x: primitive.from[0], y: primitive.from[1] }, { x: primitive.to[0], y: primitive.to[1] });
+        const [a, b] = logoGeometryLineSegment({ x: primitive.from[0], y: primitive.from[1] }, { x: primitive.to[0], y: primitive.to[1] });
         curves.push({ kind: "segment", a, b, owners: [primitive.id] });
         break;
       }
@@ -340,28 +340,30 @@ const formatNumber = (value: number): string => {
   return Object.is(rounded, -0) ? "0" : String(rounded === 0 ? 0 : rounded);
 };
 
-function pathOf(loops: readonly (readonly LogoGeometryEdge[])[]): string {
+/** One closed loop as `M ... Z`; the outline path is these loops in order. */
+export function logoGeometryLoopPath(loop: readonly LogoGeometryEdge[]): string {
   const f = formatNumber;
-  const parts: string[] = [];
-  for (const loop of loops) {
-    parts.push(`M${f(loop[0].from.x)} ${f(loop[0].from.y)}`);
-    for (const edge of loop) {
-      if (edge.kind === "line") {
-        parts.push(`L${f(edge.to.x)} ${f(edge.to.y)}`);
-        continue;
-      }
-      const flag = edge.sweep > 0 ? 1 : 0;
-      const arc = (to: Vec, large: number): string => `A${f(edge.r)} ${f(edge.r)} 0 ${large} ${flag} ${f(to.x)} ${f(to.y)}`;
-      if (Math.abs(edge.sweep) > TAU - 1e-9) {
-        // A whole circle cannot be one arc command; go through the opposite point.
-        parts.push(arc({ x: 2 * edge.center.x - edge.from.x, y: 2 * edge.center.y - edge.from.y }, 0), arc(edge.to, 0));
-      } else {
-        parts.push(arc(edge.to, Math.abs(edge.sweep) > Math.PI ? 1 : 0));
-      }
+  const parts: string[] = [`M${f(loop[0].from.x)} ${f(loop[0].from.y)}`];
+  for (const edge of loop) {
+    if (edge.kind === "line") {
+      parts.push(`L${f(edge.to.x)} ${f(edge.to.y)}`);
+      continue;
     }
-    parts.push("Z");
+    const flag = edge.sweep > 0 ? 1 : 0;
+    const arc = (to: Vec, large: number): string => `A${f(edge.r)} ${f(edge.r)} 0 ${large} ${flag} ${f(to.x)} ${f(to.y)}`;
+    if (Math.abs(edge.sweep) > TAU - 1e-9) {
+      // A whole circle cannot be one arc command; go through the opposite point.
+      parts.push(arc({ x: 2 * edge.center.x - edge.from.x, y: 2 * edge.center.y - edge.from.y }, 0), arc(edge.to, 0));
+    } else {
+      parts.push(arc(edge.to, Math.abs(edge.sweep) > Math.PI ? 1 : 0));
+    }
   }
+  parts.push("Z");
   return parts.join("");
+}
+
+function pathOf(loops: readonly (readonly LogoGeometryEdge[])[]): string {
+  return loops.map(logoGeometryLoopPath).join("");
 }
 
 /** The signed area an edge contributes under Green's theorem, exact for lines and circular arcs. */

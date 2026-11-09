@@ -128,6 +128,7 @@ import {
 import { parseProjectGraphicCanvas } from "@/lib/graphic-project";
 import { logoActionMessage, logoIdeationMessage, parseProjectLogoCanvas } from "@/lib/logo-project";
 import LogoCandidatePanel from "@/components/logo/LogoCandidatePanel";
+import LogoConstructionCard from "@/components/logo/LogoConstructionCard";
 import LogoPipelinePanel, { type LogoPipelineStage } from "@/components/logo/LogoPipelinePanel";
 import {
   designAuditErrorCode,
@@ -1421,6 +1422,7 @@ export default function ProjectView() {
             onAction={handleLogoAction}
           />
         )}
+        {isLogoEntrypoint && (!showLogoPipeline || logoStage === "design") && <LogoConstructionCard projectId={id!} />}
         <div className={cn("flex min-h-0 min-w-0 flex-1", showLogoPipeline && logoStage !== "design" && "hidden")}>
 
         {activeTab?.kind === "design_system" && (
