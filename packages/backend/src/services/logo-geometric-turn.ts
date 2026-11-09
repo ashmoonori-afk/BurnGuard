@@ -3,6 +3,7 @@ import {
   LOGO_FILES,
   LOGO_GEOMETRIC_ANSWERS_FILE,
   LOGO_GEOMETRY_FILE,
+  LOGO_GEOMETRIC_STEPS,
   logoGeometricPlan,
   logoMethodFor,
   parseLogoGeometricAction,
@@ -26,7 +27,9 @@ import {
   finishLogoGeometricSymbol,
   finishLogoGeometricWordmark,
   readLogoGeometricState,
+  readLogoGeometricPreviews,
   readLogoGeometricSymbolReview,
+  readLogoGeometricWordmarkReview,
   recordLogoGeometricApproval,
   renderLogoGeometricSymbol,
   type LogoGeometricSymbolReviewV1,
@@ -70,12 +73,6 @@ export type LogoGeometricCapture =
   | { readonly kind: "complete" };
 
 /**
- * The steps the app offers. A turn can make the wordmark and compose the lockup (doc/33), but the
- * panel offers them only once it can show a wordmark for review, so the questions keep to the symbol.
- */
-const OFFERED_STEPS: readonly LogoGeometricStep[] = ["symbol"];
-
-/**
  * What the app shows for this project (doc/31), read from the same files and with the same method
  * decision as a turn, so the screen and the next turn cannot disagree.
  */
@@ -83,14 +80,18 @@ export async function readLogoGeometricStatus(dir: string, logoSet: LogoSetV1 | 
   if (!enabled || logoSet === null || logoMethodFor(logoSet.logo_type) !== "geometric") return { schema_version: 1, method: "raster" };
   const state = await readLogoGeometricState(dir);
   const symbol = state.steps.symbol.record_sha256;
+  const wordmark = state.steps.wordmark.record_sha256;
+  const wordmarkReview = wordmark === null ? null : await readLogoGeometricWordmarkReview(dir, wordmark);
   return {
     schema_version: 1,
     method: "geometric",
     answers: state.answers,
     plan: logoGeometricPlan(state),
-    available_steps: OFFERED_STEPS,
-    records: { symbol, wordmark: state.steps.wordmark.record_sha256, lockup: state.steps.lockup.record_sha256 },
+    available_steps: LOGO_GEOMETRIC_STEPS,
+    records: { symbol, wordmark, lockup: state.steps.lockup.record_sha256 },
     symbol_review: symbol === null ? null : await readLogoGeometricSymbolReview(dir, symbol),
+    wordmark_review: wordmarkReview,
+    previews: await readLogoGeometricPreviews(dir, state, wordmarkReview !== null),
   };
 }
 

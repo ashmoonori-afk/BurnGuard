@@ -7,9 +7,11 @@ const geometric = {
   method: "geometric",
   answers: { schema_version: 1, parts: { choice: "symbol" }, direction: { other: "Calm and round" } },
   plan: [{ step: "symbol", status: "awaiting_review" }],
-  available_steps: ["symbol"],
+  available_steps: ["symbol", "wordmark", "lockup"],
   records: { symbol: SHA, wordmark: null, lockup: null },
   symbol_review: { passed: false, findings: ["near_touch", "sliver"] },
+  wordmark_review: { passed: false, findings: ["stem_off"] },
+  previews: { wordmark: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"></svg>', lockup: null },
 };
 
 function refusedAt(input: unknown): string {
@@ -51,5 +53,12 @@ describe("parseLogoGeometricStatusV1", () => {
     expect(refusedAt({ ...geometric, records: { symbol: SHA, wordmark: null } })).toBe("records");
     expect(refusedAt({ ...geometric, answers: { schema_version: 1, parts: { choice: "badge" }, direction: { choice: "auto" } } })).toBe("answers");
     expect(refusedAt({ ...geometric, symbol_review: { passed: "yes", findings: [] } })).toBe("symbol_review");
+    expect(refusedAt({ ...geometric, wordmark_review: { passed: false, findings: ["sliver"] } })).toBe("wordmark_review.findings.0");
+  });
+
+  test("Given a preview that is not a bounded server SVG When parsed Then it is refused", () => {
+    expect(refusedAt({ ...geometric, previews: { wordmark: "<script>alert(1)</script>", lockup: null } })).toBe("previews.wordmark");
+    expect(refusedAt({ ...geometric, previews: { wordmark: null, lockup: `<svg xmlns="http://www.w3.org/2000/svg" ${"x".repeat(256 * 1024)}` } })).toBe("previews.lockup");
+    expect(refusedAt({ ...geometric, previews: { wordmark: null } })).toBe("previews");
   });
 });

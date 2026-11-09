@@ -13,7 +13,8 @@ declare global {
     mount(options: { locale: Locale; dark: boolean; status: Geometric | null; disabled: boolean; loadFailed: boolean }): void;
     events: LogoGeometricFixtureEvent[];
     labels(): Record<
-      "start" | "symbolOnly" | "sharp" | "other" | "otherLabel" | "approve" | "revise" | "noteLabel" | "sendNote" | "cancel" | "make" | "retry" | "plan" | "later",
+      | "start" | "symbolOnly" | "symbolWordmark" | "sharp" | "other" | "otherLabel" | "partsOtherLabel" | "approve" | "approveWordmark" | "revise" | "noteLabel"
+      | "sendNote" | "cancel" | "make" | "makeLockup" | "retry" | "plan" | "later" | "wordmarkPreview" | "lockupPreview",
       string
     >;
   };
@@ -28,18 +29,24 @@ globalThis.logoGeometricTest = {
   labels: () => ({
     start: t("logo.geometric.start"),
     symbolOnly: t("logo.geometric.parts.symbol"),
+    symbolWordmark: t("logo.geometric.parts.symbol_wordmark"),
     sharp: t("logo.geometric.direction.sharp_geometric"),
     other: t("logo.geometric.other"),
     otherLabel: t("logo.geometric.otherLabel"),
-    approve: t("logo.geometric.approve"),
+    partsOtherLabel: t("logo.geometric.partsOtherLabel"),
+    approve: t("logo.geometric.approve.symbol"),
+    approveWordmark: t("logo.geometric.approve.wordmark"),
     revise: t("logo.geometric.revise"),
     noteLabel: t("logo.geometric.noteLabel"),
     sendNote: t("logo.geometric.sendNote"),
     cancel: t("logo.geometric.cancel"),
-    make: t("logo.geometric.make"),
+    make: t("logo.geometric.make.symbol"),
+    makeLockup: t("logo.geometric.make.lockup"),
     retry: t("logo.geometric.retry"),
     plan: t("logo.geometric.plan"),
     later: t("logo.geometric.later"),
+    wordmarkPreview: t("logo.geometric.preview.wordmark"),
+    lockupPreview: t("logo.geometric.preview.lockup"),
   }),
   mount({ locale, dark, status, disabled, loadFailed }) {
     useLocaleStore.setState({ locale });
