@@ -14,7 +14,14 @@ import { ArtifactCoordinator } from "../src/services/artifact-coordinator";
 import { broker } from "../src/services/broker";
 import { inspectCanonicalTree } from "../src/services/canonical-tree-manifest";
 import { LogoDeliverableError } from "../src/services/logo-deliverables";
-import { LOGO_GEOMETRIC_APPROVALS_FILE, LOGO_GEOMETRIC_SYMBOL_RENDERS, LOGO_GEOMETRIC_SYMBOL_REVIEW_FILE } from "../src/services/logo-geometric-step";
+import {
+  LOGO_GEOMETRIC_APPROVALS_FILE,
+  LOGO_GEOMETRIC_LOCKUP_SVG_FILE,
+  LOGO_GEOMETRIC_RECORD_FILES,
+  LOGO_GEOMETRIC_SYMBOL_RENDERS,
+  LOGO_GEOMETRIC_SYMBOL_REVIEW_FILE,
+  LOGO_GEOMETRIC_WORDMARK_FILES,
+} from "../src/services/logo-geometric-step";
 import {
   LOGO_GEOMETRIC_ENV,
   LOGO_GEOMETRIC_REVIEW_TAG,
@@ -55,7 +62,13 @@ const RECORD = JSON.stringify({
 });
 const ANSWER = `<${LOGO_GEOMETRIC_TAG}>${JSON.stringify({ action: "answer", parts: { choice: "symbol" }, direction: { choice: "sharp_geometric" } })}</${LOGO_GEOMETRIC_TAG}>`;
 const symbolAnswers = (choice: "symbol" | "symbol_wordmark") => serializeLogoGeometricAnswers({ schema_version: 1, parts: { choice }, direction: { choice: "auto" } });
-const approve = (recordSha256: string) => `<${LOGO_GEOMETRIC_TAG}>${JSON.stringify({ action: "approve", step: "symbol", record_sha256: recordSha256 })}</${LOGO_GEOMETRIC_TAG}>`;
+const approve = (recordSha256: string, step = "symbol") => `<${LOGO_GEOMETRIC_TAG}>${JSON.stringify({ action: "approve", step, record_sha256: recordSha256 })}</${LOGO_GEOMETRIC_TAG}>`;
+const WORDMARK_FILE = LOGO_GEOMETRIC_RECORD_FILES.wordmark;
+const LOCKUP_FILE = LOGO_GEOMETRIC_RECORD_FILES.lockup;
+// Geist's capital I measures 1.938 at cap 16, so a stem of 2 passes and a stem of 4 does not.
+const wordmarkRecord = (overrides: Record<string, unknown> = {}) => JSON.stringify({ schema_version: 1, text: BRAND, font: "Geist", cap_height: 16, stem: 2, tracking: 1, ...overrides });
+const WORDMARK = wordmarkRecord();
+const symbolApproved = JSON.stringify({ schema_version: 1, approvals: { symbol: sha(RECORD) } });
 
 const exists = (target: string): Promise<boolean> => stat(target).then(() => true, () => false);
 function taggedJson(text: string, tag: string): Record<string, unknown> {
@@ -110,12 +123,43 @@ describe("captureLogoGeometricTurn", () => {
     expect(JSON.parse(await readFile(path.join(dir, LOGO_GEOMETRIC_APPROVALS_FILE), "utf8"))).toEqual({ schema_version: 1, approvals: { symbol: sha(RECORD) } });
   });
 
+  test("Given the symbol and the wordmark are asked for When the symbol is approved Then the wordmark is made with the settable bundled families", async () => {
+    const dir = await project({ [LOGO_GEOMETRIC_ANSWERS_FILE]: symbolAnswers("symbol_wordmark"), [LOGO_GEOMETRY_FILE]: RECORD });
+    const capture = await captureLogoGeometricTurn(dir, approve(sha(RECORD)), abstractSet, true);
+    expect(capture).toMatchObject({ kind: "make", step: "wordmark", note: null, record_file: WORDMARK_FILE });
+    const families = capture?.kind === "make" ? capture.families ?? [] : [];
+    expect(families).toContain("Geist");
+    expect(families).not.toContain("Caveat");
+    expect(families).toEqual([...families].sort());
+    expect(JSON.parse(await readFile(path.join(dir, LOGO_GEOMETRIC_APPROVALS_FILE), "utf8"))).toEqual({ schema_version: 1, approvals: { symbol: sha(RECORD) } });
+  });
+
+  test("Given the shown wordmark When it is approved Then the server composes the lockup from both records and the flow completes", async () => {
+    const dir = await project({ [LOGO_GEOMETRIC_ANSWERS_FILE]: symbolAnswers("symbol_wordmark"), [LOGO_GEOMETRY_FILE]: RECORD, [WORDMARK_FILE]: WORDMARK, [LOGO_GEOMETRIC_APPROVALS_FILE]: symbolApproved });
+    expect(await captureLogoGeometricTurn(dir, approve(sha(WORDMARK), "wordmark"), abstractSet, true)).toEqual({ kind: "complete" });
+    expect(JSON.parse(await readFile(path.join(dir, LOCKUP_FILE), "utf8"))).toMatchObject({ schema_version: 1, gap: 8, clear_space: 16, records: { symbol: sha(RECORD), wordmark: sha(WORDMARK) } });
+    expect(await readFile(path.join(dir, LOGO_GEOMETRIC_LOCKUP_SVG_FILE), "utf8")).toContain(`aria-label="${BRAND}"`);
+    expect(JSON.parse(await readFile(path.join(dir, LOGO_GEOMETRIC_APPROVALS_FILE), "utf8"))).toEqual({ schema_version: 1, approvals: { symbol: sha(RECORD), wordmark: sha(WORDMARK) } });
+    const after = await captureLogoGeometricTurn(dir, "One more change", abstractSet, true).then(() => null, (thrown: unknown) => thrown);
+    expect((after as LogoDeliverableError).detail).toBe("geometric_flow_complete");
+  });
+
+  test("Given an approved wordmark that cannot be set When it is approved Then the turn is refused with no lockup and no new approval", async () => {
+    const unset = wordmarkRecord({ font: "Helvetica" });
+    const dir = await project({ [LOGO_GEOMETRIC_ANSWERS_FILE]: symbolAnswers("symbol_wordmark"), [LOGO_GEOMETRY_FILE]: RECORD, [WORDMARK_FILE]: unset, [LOGO_GEOMETRIC_APPROVALS_FILE]: symbolApproved });
+    const error = await captureLogoGeometricTurn(dir, approve(sha(unset), "wordmark"), abstractSet, true).then(() => null, (thrown: unknown) => thrown);
+    expect((error as LogoDeliverableError).detail).toBe("geometric_lockup_unavailable");
+    expect(turnRejectionReason(error)).toBe("logo_geometric_step_refused");
+    expect(await exists(path.join(dir, LOCKUP_FILE))).toBe(false);
+    expect(await readFile(path.join(dir, LOGO_GEOMETRIC_APPROVALS_FILE), "utf8")).toBe(symbolApproved);
+  });
+
   test("Given refusals When captured Then each throws a stable detail that maps to the step-refused reason and records nothing", async () => {
-    const wordmarkNext = await project({ [LOGO_GEOMETRIC_ANSWERS_FILE]: symbolAnswers("symbol_wordmark"), [LOGO_GEOMETRY_FILE]: RECORD });
+    const outOfOrder = await project({ [LOGO_GEOMETRIC_ANSWERS_FILE]: symbolAnswers("symbol_wordmark"), [LOGO_GEOMETRY_FILE]: RECORD });
     const stale = await project({ [LOGO_GEOMETRIC_ANSWERS_FILE]: symbolAnswers("symbol"), [LOGO_GEOMETRY_FILE]: RECORD });
     const unanswered = await project();
     const cases: [string, string, string][] = [
-      [wordmarkNext, approve(sha(RECORD)), "geometric_step_unavailable"],
+      [outOfOrder, approve(sha(RECORD), "wordmark"), "geometric_out_of_order"],
       [stale, approve("b".repeat(64)), "geometric_stale_record"],
       [unanswered, approve(sha(RECORD)), "geometric_unanswered"],
     ];
@@ -149,6 +193,16 @@ describe("assertLogoGeometricScope and the prompt block", () => {
     const text = lines.join("\n");
     expect(text.split(`</${LOGO_GEOMETRIC_STEP_TAG}>`)).toHaveLength(2);
     expect(taggedJson(text, LOGO_GEOMETRIC_STEP_TAG)).toMatchObject({ schema_version: 1, step: "symbol", record_file: LOGO_GEOMETRY_FILE, grid: 64, brand_name: BRAND, logo_type: "abstract", note });
+    expect(taggedJson(text, LOGO_GEOMETRIC_STEP_TAG)).not.toHaveProperty("families");
+  });
+
+  test("Given the wordmark step When the context is built Then the block names the wordmark record and carries the families", () => {
+    const lines: string[] = [];
+    appendLogoGeometricContext(lines, abstractSet, { ...make, step: "wordmark", record_file: WORDMARK_FILE, families: ["Geist", "Inter"] });
+    const text = lines.join("\n");
+    expect(taggedJson(text, LOGO_GEOMETRIC_STEP_TAG)).toMatchObject({ step: "wordmark", record_file: WORDMARK_FILE, families: ["Geist", "Inter"] });
+    expect(text).toContain("LOGO_GEOMETRIC_WORDMARK:");
+    expect(text).not.toContain("LOGO_GEOMETRIC_SYMBOL:");
   });
 });
 
@@ -250,6 +304,67 @@ describe("a geometric logo turn", () => {
       expect(JSON.parse(await readFile(path.join(projectDir, LOGO_GEOMETRIC_SYMBOL_REVIEW_FILE), "utf8"))).toMatchObject({ record_sha256: sha(RECORD), passed: true });
       for (const render of Object.values(LOGO_GEOMETRIC_SYMBOL_RENDERS)) expect(await exists(path.join(projectDir, render.file))).toBe(true);
       expect(await exists(path.join(projectDir, LOGO_GEOMETRIC_ANSWERS_FILE))).toBe(true);
+    } finally {
+      unsubscribe();
+    }
+  });
+
+  type WordmarkScenario = "set" | "stem-fixed" | "still-refused";
+  const wordmarkOutcomes: Readonly<Record<WordmarkScenario, { readonly first: string; readonly reason: string | null; readonly calls: number }>> = {
+    set: { first: WORDMARK, reason: null, calls: 1 },
+    "stem-fixed": { first: wordmarkRecord({ stem: 4 }), reason: null, calls: 2 },
+    "still-refused": { first: wordmarkRecord({ font: "Helvetica" }), reason: "logo_geometry_invalid", calls: 2 },
+  };
+
+  test.each(Object.keys(wordmarkOutcomes) as WordmarkScenario[])("Given an approved symbol and %s When the wordmark turn settles Then only a set wordmark that meets its stem is published", async (scenario) => {
+    await mkdir(path.join(projectDir, "geometric"), { recursive: true });
+    await writeFile(path.join(projectDir, LOGO_GEOMETRIC_ANSWERS_FILE), symbolAnswers("symbol_wordmark"));
+    await writeFile(path.join(projectDir, LOGO_GEOMETRY_FILE), RECORD);
+    await writeFile(path.join(projectDir, LOGO_GEOMETRIC_APPROVALS_FILE), symbolApproved);
+    const before = await new ArtifactCoordinator(getSqlite()).initialize(projectId, projectDir);
+    const events: NormalizedEvent[] = [];
+    const unsubscribe = broker.subscribe(sessionId, (event) => { events.push(event); });
+    const prompts: string[] = [];
+    const expected = wordmarkOutcomes[scenario];
+    try {
+      const turn = startUserTurn(sessionId, { type: "user.message", text: "Set the name." }, undefined, {
+        detectBackends: async () => ({ backends: [{ id: "codex", found: true, binary_path: "unused", version: "fixture", authenticated: true, image_generation: true }] }),
+        runAdapter: async (_backend, input) => {
+          prompts.push(input.prompt);
+          expect(input.imageGeneration).toBe("forbidden");
+          const record = path.join(input.projectDir, WORDMARK_FILE);
+          if (!input.turnId.endsWith("-geometric-review")) await writeFile(record, expected.first);
+          else if (scenario === "stem-fixed") await writeFile(record, WORDMARK);
+          await input.onEvent({ id: crypto.randomUUID(), ts: 4, type: "chat.message_end", turnId: input.turnId });
+          await input.onEvent({ id: crypto.randomUUID(), ts: 5, type: "status.idle", stopReason: "end_turn" });
+          return { exitCode: 0 };
+        },
+        reviewDesign: async () => ({ status: "checked", repairs: 0, result: null }),
+      });
+      if (turn === null) throw new Error("turn reservation unavailable");
+      ownedTurn = Promise.allSettled([turn.prepared, turn.promise]);
+      await Promise.allSettled([turn.prepared, turn.promise]);
+      expect(prompts).toHaveLength(expected.calls);
+      const reasons = events.filter((event) => event.type === "status.error").map((event) => event.reason);
+      expect(reasons).toEqual(expected.reason === null ? [] : [expected.reason]);
+      const block = taggedJson(prompts[0]!, LOGO_GEOMETRIC_STEP_TAG);
+      expect(block).toMatchObject({ step: "wordmark", record_file: WORDMARK_FILE });
+      expect(block.families).toContain("Geist");
+      if (expected.calls === 2) {
+        const review = taggedJson(prompts[1]!, LOGO_GEOMETRIC_REVIEW_TAG);
+        expect(prompts[1]).not.toContain("Set the name.");
+        if (scenario === "stem-fixed") expect(review).toMatchObject({ step: "wordmark", measured: { passed: false, findings: [{ kind: "stem_off", asked: 4 }] } });
+        else expect(review).toMatchObject({ step: "wordmark", refused: { code: "font_unknown", path: "$.font" } });
+      }
+      if (expected.reason !== null) {
+        expect(await inspectCanonicalTree(projectDir)).toEqual(before);
+        return;
+      }
+      expect(await readFile(path.join(projectDir, WORDMARK_FILE), "utf8")).toBe(WORDMARK);
+      expect(JSON.parse(await readFile(path.join(projectDir, LOGO_GEOMETRIC_WORDMARK_FILES.review), "utf8"))).toMatchObject({ record_sha256: sha(WORDMARK), passed: true, findings: [] });
+      expect(await readFile(path.join(projectDir, LOGO_GEOMETRIC_WORDMARK_FILES.svg), "utf8")).toContain(`aria-label="${BRAND}"`);
+      // The lockup waits for the person to approve the wordmark.
+      expect(await exists(path.join(projectDir, LOCKUP_FILE))).toBe(false);
     } finally {
       unsubscribe();
     }

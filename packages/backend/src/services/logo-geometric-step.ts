@@ -8,8 +8,13 @@ import {
   LOGO_GEOMETRY_FILE,
   LogoGeometryCompileError,
   LogoGeometryError,
+  LogoWordmarkError,
   UpgradeContractError,
   compileLogoGeometry,
+  composeLogoLockup,
+  logoLockupSvg,
+  parseLogoWordmarkV1,
+  reviewLogoWordmark,
   logoGeometrySvg,
   parseLogoGeometricAnswersV1,
   parseLogoGeometryV1,
@@ -22,8 +27,12 @@ import {
   type LogoGeometryCompiled,
   type LogoGeometryFinding,
   type LogoGeometryV1,
+  type LogoLockupLayout,
+  type LogoWordmarkCompiled,
+  type LogoWordmarkFinding,
 } from "@bg/shared";
 import { PathBoundaryError, resolveWithin } from "../security/path-boundary";
+import { compileLogoWordmark } from "./logo-wordmark-compile";
 
 /**
  * Server side of one step of the geometric logo flow (doc/29). The model writes a geometry record
@@ -42,6 +51,9 @@ export const LOGO_GEOMETRIC_RECORD_FILES: Readonly<Record<LogoGeometricStep, str
   lockup: "geometric/lockup.json",
 };
 export const LOGO_GEOMETRIC_SYMBOL_REVIEW_FILE = "geometric/symbol-review.json";
+/** Server-written outputs of the wordmark and lockup steps (doc/33). */
+export const LOGO_GEOMETRIC_WORDMARK_FILES = { svg: "geometric/wordmark.svg", review: "geometric/wordmark-review.json" } as const;
+export const LOGO_GEOMETRIC_LOCKUP_SVG_FILE = "geometric/lockup.svg";
 /** What the model looks at in its review pass: the mark large and at favicon size, and its construction. */
 export const LOGO_GEOMETRIC_SYMBOL_RENDERS = {
   mark: { file: "geometric/review/symbol-1024.png", size: 1024 },
@@ -219,6 +231,82 @@ export async function finishLogoGeometricSymbol(dir: string, label: string): Pro
   await writeOwned(dir, LOGO_FILES.logo, logoGeometrySvg(compiled, escapeAttribute(label)));
   await writeOwned(dir, LOGO_GEOMETRIC_SYMBOL_REVIEW_FILE, `${JSON.stringify(review, null, 2)}\n`);
   return { kind: "compiled", geometry: parsed.geometry, compiled, review };
+}
+
+export type LogoGeometricWordmarkReviewV1 = {
+  readonly schema_version: 1;
+  readonly record_sha256: string;
+  readonly passed: boolean;
+  readonly findings: readonly LogoWordmarkFinding[];
+  readonly snapped: readonly string[];
+};
+
+export type LogoGeometricWordmarkOutcome =
+  | { readonly kind: "compiled"; readonly compiled: LogoWordmarkCompiled; readonly review: LogoGeometricWordmarkReviewV1 }
+  | { readonly kind: "refused"; readonly code: string; readonly path: string };
+
+async function setWordmark(bytes: Buffer, repoRoot: string | undefined): Promise<{ compiled: LogoWordmarkCompiled; snapped: readonly string[] } | { code: string; path: string }> {
+  try {
+    const parsed = parseLogoWordmarkV1(bytes.toString("utf8").replace(/^\uFEFF/, ""));
+    return { compiled: await compileLogoWordmark(parsed.wordmark, repoRoot), snapped: parsed.snapped };
+  } catch (error) {
+    if (error instanceof LogoWordmarkError) return { code: error.code, path: error.path };
+    throw error;
+  }
+}
+
+/**
+ * Sets the wordmark record in its bundled font. Writes the wordmark alone as an SVG and the
+ * measured review bound to the record's hash. A refused record writes nothing.
+ */
+export async function finishLogoGeometricWordmark(dir: string, label: string, repoRoot?: string): Promise<LogoGeometricWordmarkOutcome> {
+  const bytes = await readBounded(dir, LOGO_GEOMETRIC_RECORD_FILES.wordmark, RECORD_MAX_BYTES);
+  if (bytes === null) return { kind: "refused", code: "record_missing", path: "" };
+  const set = await setWordmark(bytes, repoRoot);
+  if ("code" in set) return { kind: "refused", code: set.code, path: set.path };
+  const measured = reviewLogoWordmark(set.compiled);
+  const review: LogoGeometricWordmarkReviewV1 = {
+    schema_version: 1,
+    record_sha256: sha256Hex(bytes),
+    passed: measured.passed,
+    findings: measured.findings,
+    snapped: set.snapped,
+  };
+  const { minX, minY, maxX, maxY } = set.compiled.bounds;
+  const box = [minX, minY, maxX - minX, maxY - minY].map((value) => Math.round(value * 1000) / 1000).join(" ");
+  await writeOwned(dir, LOGO_GEOMETRIC_WORDMARK_FILES.svg, `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${box}" role="img" aria-label="${escapeAttribute(label)}"><path d="${set.compiled.path}" fill="#000000" fill-rule="nonzero"/></svg>`);
+  await writeOwned(dir, LOGO_GEOMETRIC_WORDMARK_FILES.review, `${JSON.stringify(review, null, 2)}\n`);
+  return { kind: "compiled", compiled: set.compiled, review };
+}
+
+export type LogoGeometricLockupRecordV1 = LogoLockupLayout & {
+  /** The record bytes the lockup was composed from; it is stale once either changes. */
+  readonly records: { readonly symbol: string; readonly wordmark: string };
+};
+
+/**
+ * Composes the lockup from the symbol and wordmark records on disk, with no model. Writes the
+ * layout (the lockup step's record) and the lockup SVG. Returns null, writing nothing, when either
+ * record is missing or no longer compiles.
+ */
+export async function composeLogoGeometricLockup(dir: string, label: string, repoRoot?: string): Promise<LogoGeometricLockupRecordV1 | null> {
+  const symbolBytes = await readBounded(dir, LOGO_GEOMETRY_FILE, RECORD_MAX_BYTES);
+  const wordmarkBytes = await readBounded(dir, LOGO_GEOMETRIC_RECORD_FILES.wordmark, RECORD_MAX_BYTES);
+  if (symbolBytes === null || wordmarkBytes === null) return null;
+  let symbol: LogoGeometryCompiled;
+  try {
+    symbol = compileLogoGeometry(parseLogoGeometryV1(symbolBytes.toString("utf8").replace(/^\uFEFF/, "")).geometry);
+  } catch (error) {
+    if (error instanceof LogoGeometryError || error instanceof LogoGeometryCompileError) return null;
+    throw error;
+  }
+  const set = await setWordmark(wordmarkBytes, repoRoot);
+  if ("code" in set) return null;
+  const layout = composeLogoLockup(symbol, set.compiled);
+  const record: LogoGeometricLockupRecordV1 = { ...layout, records: { symbol: sha256Hex(symbolBytes), wordmark: sha256Hex(wordmarkBytes) } };
+  await writeOwned(dir, LOGO_GEOMETRIC_LOCKUP_SVG_FILE, logoLockupSvg(symbol, set.compiled, layout, escapeAttribute(label)));
+  await writeOwned(dir, LOGO_GEOMETRIC_RECORD_FILES.lockup, `${JSON.stringify(record, null, 2)}\n`);
+  return record;
 }
 
 /**
