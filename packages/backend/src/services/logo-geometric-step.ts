@@ -4,7 +4,9 @@ import {
   LOGO_FILES,
   LOGO_GEOMETRIC_ANSWERS_FILE,
   LOGO_GEOMETRIC_FINDING_KINDS,
+  LOGO_GEOMETRIC_PREVIEW_MAX,
   LOGO_GEOMETRIC_STEPS,
+  LOGO_GEOMETRIC_WORDMARK_FINDING_KINDS,
   LOGO_GEOMETRY_FILE,
   LogoGeometryCompileError,
   LogoGeometryError,
@@ -23,6 +25,7 @@ import {
   type LogoGeometricFilesState,
   type LogoGeometricFindingKind,
   type LogoGeometricStep,
+  type LogoGeometricWordmarkFindingKind,
   type LogoGeometricStepFiles,
   type LogoGeometryCompiled,
   type LogoGeometryFinding,
@@ -161,18 +164,27 @@ async function readApprovals(dir: string): Promise<LogoGeometricApprovals> {
  * of finding the app explains. A missing, malformed or stale review (written for other bytes) is null.
  */
 export async function readLogoGeometricSymbolReview(dir: string, recordSha256: string): Promise<{ passed: boolean; findings: LogoGeometricFindingKind[] } | null> {
-  const bytes = await readBounded(dir, LOGO_GEOMETRIC_SYMBOL_REVIEW_FILE, RECORD_MAX_BYTES);
+  return await readReviewKinds(dir, LOGO_GEOMETRIC_SYMBOL_REVIEW_FILE, recordSha256, LOGO_GEOMETRIC_FINDING_KINDS);
+}
+
+/** The wordmark's measured review for the record whose bytes hash to `recordSha256`, as for the symbol. */
+export async function readLogoGeometricWordmarkReview(dir: string, recordSha256: string): Promise<{ passed: boolean; findings: LogoGeometricWordmarkFindingKind[] } | null> {
+  return await readReviewKinds(dir, LOGO_GEOMETRIC_WORDMARK_FILES.review, recordSha256, LOGO_GEOMETRIC_WORDMARK_FINDING_KINDS);
+}
+
+async function readReviewKinds<T extends string>(dir: string, file: string, recordSha256: string, known: readonly T[]): Promise<{ passed: boolean; findings: T[] } | null> {
+  const bytes = await readBounded(dir, file, RECORD_MAX_BYTES);
   if (bytes === null) return null;
   let value: unknown;
   try { value = JSON.parse(bytes.toString("utf8")); } catch { return null; }
   if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
   const review = value as Record<string, unknown>;
   if (review["record_sha256"] !== recordSha256 || typeof review["passed"] !== "boolean" || !Array.isArray(review["findings"])) return null;
-  const kinds: LogoGeometricFindingKind[] = [];
+  const kinds: T[] = [];
   for (const finding of review["findings"]) {
     const kind: unknown = typeof finding === "object" && finding !== null ? (finding as Record<string, unknown>)["kind"] : undefined;
-    if (!(LOGO_GEOMETRIC_FINDING_KINDS as readonly unknown[]).includes(kind)) return null;
-    if (!kinds.includes(kind as LogoGeometricFindingKind)) kinds.push(kind as LogoGeometricFindingKind);
+    if (!(known as readonly unknown[]).includes(kind)) return null;
+    if (!kinds.includes(kind as T)) kinds.push(kind as T);
   }
   return { passed: review["passed"], findings: kinds };
 }
@@ -193,7 +205,36 @@ export async function readLogoGeometricState(dir: string): Promise<LogoGeometric
     const record = await readBounded(dir, LOGO_GEOMETRIC_RECORD_FILES[step], RECORD_MAX_BYTES);
     steps[step] = { record_sha256: record === null ? null : sha256Hex(record), approved_sha256: approvals[step] ?? null };
   }
+  // A lockup composed from other symbol or wordmark bytes no longer describes them, so it is absent.
+  if (steps.lockup.record_sha256 !== null && !await lockupMatches(dir, steps.symbol.record_sha256, steps.wordmark.record_sha256)) {
+    steps.lockup = { ...steps.lockup, record_sha256: null };
+  }
   return { answers, steps };
+}
+
+async function lockupMatches(dir: string, symbol: string | null, wordmark: string | null): Promise<boolean> {
+  const bytes = await readBounded(dir, LOGO_GEOMETRIC_RECORD_FILES.lockup, RECORD_MAX_BYTES);
+  const value = bytes === null ? undefined : jsonOf(bytes);
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const records = (value as Record<string, unknown>)["records"];
+  if (typeof records !== "object" || records === null) return false;
+  return (records as Record<string, unknown>)["symbol"] === symbol && (records as Record<string, unknown>)["wordmark"] === wordmark;
+}
+
+/**
+ * The server-written wordmark and lockup SVGs the app shows, each only while it describes the
+ * records now on disk: the wordmark's with its review, the lockup's with a current lockup record.
+ */
+export async function readLogoGeometricPreviews(dir: string, state: LogoGeometricFilesState, wordmarkReviewed: boolean): Promise<{ wordmark: string | null; lockup: string | null }> {
+  const svg = async (file: string): Promise<string | null> => {
+    const bytes = await readBounded(dir, file, LOGO_GEOMETRIC_PREVIEW_MAX);
+    const text = bytes === null ? null : bytes.toString("utf8");
+    return text !== null && text.startsWith('<svg xmlns="http://www.w3.org/2000/svg" ') ? text : null;
+  };
+  return {
+    wordmark: wordmarkReviewed ? await svg(LOGO_GEOMETRIC_WORDMARK_FILES.svg) : null,
+    lockup: state.steps.lockup.record_sha256 === null ? null : await svg(LOGO_GEOMETRIC_LOCKUP_SVG_FILE),
+  };
 }
 
 /** Records the person's approval of a step's record. Other steps' approvals are kept. */

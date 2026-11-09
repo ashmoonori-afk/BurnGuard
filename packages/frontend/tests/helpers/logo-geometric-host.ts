@@ -36,10 +36,10 @@ export async function withLogoGeometricPage(
       const font = appFontResponse(pathname);
       if (font) return font;
       if (pathname === "/") return new Response(
-        `<!doctype html><html data-theme="${options.dark ? "dark" : "light"}"><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${options.css}</style></head><body><div id="root"></div><script src="/fixture.js"></script></body></html>`,
-        { headers: { "content-type": "text/html" } },
+        `<!doctype html><html data-theme="${options.dark ? "dark" : "light"}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>${options.css}</style></head><body><div id="root"></div><script src="/fixture.js"></script></body></html>`,
+        { headers: { "content-type": "text/html; charset=utf-8" } },
       );
-      if (pathname === "/fixture.js") return new Response(options.script, { headers: { "content-type": "text/javascript" } });
+      if (pathname === "/fixture.js") return new Response(options.script, { headers: { "content-type": "text/javascript; charset=utf-8" } });
       return new Response(null, { status: 404 });
     },
   });

@@ -9,7 +9,13 @@ import { getSqlite } from "../src/db/sqlite-client";
 import { projectsDir } from "../src/lib/paths";
 import { BURNGUARD_CAPABILITY_HEADER } from "../src/security/request-authority";
 import { createApp, classifyApiRoute } from "../src/server";
-import { LOGO_GEOMETRIC_APPROVALS_FILE, LOGO_GEOMETRIC_SYMBOL_REVIEW_FILE } from "../src/services/logo-geometric-step";
+import {
+  LOGO_GEOMETRIC_APPROVALS_FILE,
+  LOGO_GEOMETRIC_LOCKUP_SVG_FILE,
+  LOGO_GEOMETRIC_RECORD_FILES,
+  LOGO_GEOMETRIC_SYMBOL_REVIEW_FILE,
+  LOGO_GEOMETRIC_WORDMARK_FILES,
+} from "../src/services/logo-geometric-step";
 import { LOGO_GEOMETRIC_ENV, readLogoGeometricStatus } from "../src/services/logo-geometric-turn";
 
 const sha = (bytes: string): string => createHash("sha256").update(bytes).digest("hex");
@@ -19,6 +25,17 @@ const ANSWERS = serializeLogoGeometricAnswers({ schema_version: 1, parts: { choi
 const review = (recordSha256: string, kinds: readonly string[], passed = kinds.length === 0): string =>
   JSON.stringify({ record_sha256: recordSha256, passed, findings: kinds.map((kind) => ({ kind, primitives: ["a"] })) });
 const approvals = (symbol: string): string => JSON.stringify({ schema_version: 1, approvals: { symbol } });
+const WORDMARK = `${JSON.stringify({ schema_version: 1, text: "Northstar" })}\n`;
+const svg = (body: string): string => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">${body}</svg>`;
+const lockup = (symbol: string, wordmark: string): string => JSON.stringify({ schema_version: 1, records: { symbol, wordmark } });
+/** A symbol and a reviewed wordmark on disk, both with their server-written files. */
+const withWordmark = (kinds: readonly string[]): Record<string, string> => ({
+  [LOGO_GEOMETRIC_ANSWERS_FILE]: ANSWERS,
+  [LOGO_GEOMETRY_FILE]: RECORD,
+  [LOGO_GEOMETRIC_RECORD_FILES.wordmark]: WORDMARK,
+  [LOGO_GEOMETRIC_WORDMARK_FILES.review]: review(sha(WORDMARK), kinds),
+  [LOGO_GEOMETRIC_WORDMARK_FILES.svg]: svg("<path d=\"M0 0h1\"/>"),
+});
 
 async function writeFiles(dir: string, files: Record<string, string>): Promise<void> {
   for (const [relative, bytes] of Object.entries(files)) {
@@ -48,9 +65,41 @@ describe("readLogoGeometricStatus", () => {
     const status = parseLogoGeometricStatusV1(await readLogoGeometricStatus(await project(), abstractSet, true));
     if (status.method !== "geometric") throw new Error("expected geometric");
     expect(status.answers).toBeNull();
-    expect(status.available_steps).toEqual(["symbol"]);
+    expect(status.available_steps).toEqual(["symbol", "wordmark", "lockup"]);
     expect(status.records).toEqual({ symbol: null, wordmark: null, lockup: null });
     expect(status.symbol_review).toBeNull();
+    expect(status.wordmark_review).toBeNull();
+    expect(status.previews).toEqual({ wordmark: null, lockup: null });
+  });
+
+  test("Given a wordmark with its review for the bytes on disk When read Then the review kinds and its SVG are shown, and a stale review shows neither", async () => {
+    const status = parseLogoGeometricStatusV1(await readLogoGeometricStatus(await project(withWordmark(["stem_off"])), abstractSet, true));
+    if (status.method !== "geometric") throw new Error("expected geometric");
+    expect(status.records.wordmark).toBe(sha(WORDMARK));
+    expect(status.wordmark_review).toEqual({ passed: false, findings: ["stem_off"] });
+    expect(status.previews).toEqual({ wordmark: svg("<path d=\"M0 0h1\"/>"), lockup: null });
+    const stale = await project({ ...withWordmark([]), [LOGO_GEOMETRIC_WORDMARK_FILES.review]: review(sha("older bytes"), []) });
+    const read = await readLogoGeometricStatus(stale, abstractSet, true);
+    expect(read.method === "geometric" && [read.wordmark_review, read.previews.wordmark]).toEqual([null, null]);
+  });
+
+  test("Given a wordmark SVG that is not a server SVG When read Then it is not shown", async () => {
+    const dir = await project({ ...withWordmark([]), [LOGO_GEOMETRIC_WORDMARK_FILES.svg]: "<html><script>alert(1)</script></html>" });
+    const status = parseLogoGeometricStatusV1(await readLogoGeometricStatus(dir, abstractSet, true));
+    expect(status.method === "geometric" && status.wordmark_review !== null && status.previews.wordmark).toBeNull();
+  });
+
+  test("Given a lockup composed from the symbol and wordmark on disk When read Then it is recorded and previewed; once the symbol changes it is absent", async () => {
+    const files = { ...withWordmark([]), [LOGO_GEOMETRIC_LOCKUP_SVG_FILE]: svg("<g/>") };
+    const current = await project({ ...files, [LOGO_GEOMETRIC_RECORD_FILES.lockup]: lockup(sha(RECORD), sha(WORDMARK)) });
+    const status = parseLogoGeometricStatusV1(await readLogoGeometricStatus(current, abstractSet, true));
+    if (status.method !== "geometric") throw new Error("expected geometric");
+    expect(status.records.lockup).toBe(sha(lockup(sha(RECORD), sha(WORDMARK))));
+    expect(status.previews.lockup).toBe(svg("<g/>"));
+    const stale = await project({ ...files, [LOGO_GEOMETRIC_RECORD_FILES.lockup]: lockup(sha("older symbol"), sha(WORDMARK)) });
+    const read = parseLogoGeometricStatusV1(await readLogoGeometricStatus(stale, abstractSet, true));
+    if (read.method !== "geometric") throw new Error("expected geometric");
+    expect([read.records.lockup, read.previews.lockup]).toEqual([null, null]);
   });
 
   test("Given answers, a symbol record and its review When read Then the symbol awaits review and the findings are reduced to unique kinds", async () => {

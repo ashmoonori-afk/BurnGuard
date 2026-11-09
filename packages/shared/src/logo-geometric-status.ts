@@ -6,6 +6,7 @@ import {
   type LogoGeometricStep,
 } from "./logo-geometric-flow";
 import type { LogoGeometryFinding } from "./logo-geometry-review";
+import type { LogoWordmarkFinding } from "./logo-wordmark";
 
 /**
  * What the app shows for a geometric logo project (doc/31): the method the next turn takes, the
@@ -25,10 +26,23 @@ export type LogoGeometricStatusV1 =
     readonly records: Readonly<Record<LogoGeometricStep, string | null>>;
     /** The measured review of the symbol record now on disk; null when there is none for these bytes. */
     readonly symbol_review: { readonly passed: boolean; readonly findings: readonly LogoGeometricFindingKind[] } | null;
+    /** The measured review of the wordmark record now on disk; null when there is none for these bytes. */
+    readonly wordmark_review: { readonly passed: boolean; readonly findings: readonly LogoGeometricWordmarkFindingKind[] } | null;
+    /**
+     * The server-written SVGs of the wordmark and the lockup for the records now on disk, or null.
+     * Shown as images, never inlined, so their bytes cannot run anything in the app.
+     */
+    readonly previews: { readonly wordmark: string | null; readonly lockup: string | null };
   };
 
 export type LogoGeometricFindingKind = LogoGeometryFinding["kind"];
 export const LOGO_GEOMETRIC_FINDING_KINDS = ["sliver", "near_touch", "duplicate_guide", "closed_counter"] as const satisfies readonly LogoGeometricFindingKind[];
+
+export type LogoGeometricWordmarkFindingKind = LogoWordmarkFinding["kind"];
+export const LOGO_GEOMETRIC_WORDMARK_FINDING_KINDS = ["stem_off"] as const satisfies readonly LogoGeometricWordmarkFindingKind[];
+/** Bounds a preview: a set wordmark of 24 letters is far below it. */
+export const LOGO_GEOMETRIC_PREVIEW_MAX = 256 * 1024;
+const SVG_START = '<svg xmlns="http://www.w3.org/2000/svg" ';
 
 const PLAN_STATUSES = ["done", "awaiting_review", "next", "pending"] as const;
 const SHA256 = /^[0-9a-f]{64}$/;
@@ -56,7 +70,7 @@ export function parseLogoGeometricStatusV1(input: unknown): LogoGeometricStatusV
     if (Object.keys(input).length !== 2) throw new LogoGeometricStatusError("method");
     return { schema_version: 1, method: "raster" };
   }
-  if (input["method"] !== "geometric" || Object.keys(input).length !== 7) throw new LogoGeometricStatusError("method");
+  if (input["method"] !== "geometric" || Object.keys(input).length !== 9) throw new LogoGeometricStatusError("method");
   const answers = input["answers"] === null ? null : (() => {
     try { return parseLogoGeometricAnswersV1(input["answers"]); }
     catch { throw new LogoGeometricStatusError("answers"); }
@@ -79,15 +93,28 @@ export function parseLogoGeometricStatusV1(input: unknown): LogoGeometricStatusV
     if (value !== null && (typeof value !== "string" || !SHA256.test(value))) throw new LogoGeometricStatusError(`records.${step}`);
     return [step, value];
   })) as Record<LogoGeometricStep, string | null>;
-  const review = input["symbol_review"];
-  let symbolReview: { passed: boolean; findings: LogoGeometricFindingKind[] } | null = null;
-  if (review !== null) {
-    if (!isRecord(review) || Object.keys(review).length !== 2 || typeof review["passed"] !== "boolean" || !Array.isArray(review["findings"])) {
-      throw new LogoGeometricStatusError("symbol_review");
-    }
-    const findings = review["findings"].map((kind: unknown, index) => oneOf(LOGO_GEOMETRIC_FINDING_KINDS, kind, `symbol_review.findings.${index}`));
-    if (new Set(findings).size !== findings.length) throw new LogoGeometricStatusError("symbol_review.findings");
-    symbolReview = { passed: review["passed"], findings };
+  const previews = input["previews"];
+  if (!isRecord(previews) || Object.keys(previews).length !== 2) throw new LogoGeometricStatusError("previews");
+  const preview = (key: "wordmark" | "lockup"): string | null => {
+    const value = previews[key];
+    if (value === null) return null;
+    if (typeof value !== "string" || !value.startsWith(SVG_START) || value.length > LOGO_GEOMETRIC_PREVIEW_MAX) throw new LogoGeometricStatusError(`previews.${key}`);
+    return value;
+  };
+  return {
+    schema_version: 1, method: "geometric", answers, plan: items, available_steps: availableSteps, records: hashes,
+    symbol_review: reviewOf(input["symbol_review"], "symbol_review", LOGO_GEOMETRIC_FINDING_KINDS),
+    wordmark_review: reviewOf(input["wordmark_review"], "wordmark_review", LOGO_GEOMETRIC_WORDMARK_FINDING_KINDS),
+    previews: { wordmark: preview("wordmark"), lockup: preview("lockup") },
+  };
+}
+
+function reviewOf<T extends string>(review: unknown, path: string, kinds: readonly T[]): { passed: boolean; findings: T[] } | null {
+  if (review === null) return null;
+  if (!isRecord(review) || Object.keys(review).length !== 2 || typeof review["passed"] !== "boolean" || !Array.isArray(review["findings"])) {
+    throw new LogoGeometricStatusError(path);
   }
-  return { schema_version: 1, method: "geometric", answers, plan: items, available_steps: availableSteps, records: hashes, symbol_review: symbolReview };
+  const findings = review["findings"].map((kind: unknown, index) => oneOf(kinds, kind, `${path}.findings.${index}`));
+  if (new Set(findings).size !== findings.length) throw new LogoGeometricStatusError(`${path}.findings`);
+  return { passed: review["passed"], findings };
 }

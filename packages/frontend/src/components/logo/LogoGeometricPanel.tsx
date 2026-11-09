@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, Loader2 } from "lucide-react";
 import {
@@ -16,6 +16,7 @@ import {
   type LogoGeometricPlanItem,
   type LogoGeometricStatusV1,
   type LogoGeometricStep,
+  type LogoGeometricWordmarkFindingKind,
 } from "@bg/shared";
 import { getLogoGeometricStatus } from "@/api/logo-geometric";
 import { listProjectFiles } from "@/api/project";
@@ -52,6 +53,24 @@ const FINDING_LABELS: Readonly<Record<LogoGeometricFindingKind, MessageKey>> = {
   near_touch: "logo.geometric.finding.near_touch",
   duplicate_guide: "logo.geometric.finding.duplicate_guide",
   closed_counter: "logo.geometric.finding.closed_counter",
+};
+const WORDMARK_FINDING_LABELS: Readonly<Record<LogoGeometricWordmarkFindingKind, MessageKey>> = {
+  stem_off: "logo.geometric.finding.stem_off",
+};
+const APPROVE_LABELS: Readonly<Record<LogoGeometricStep, MessageKey>> = {
+  symbol: "logo.geometric.approve.symbol",
+  wordmark: "logo.geometric.approve.wordmark",
+  lockup: "logo.geometric.approve.lockup",
+};
+const NOT_MADE_LABELS: Readonly<Record<LogoGeometricStep, MessageKey>> = {
+  symbol: "logo.geometric.notMade.symbol",
+  wordmark: "logo.geometric.notMade.wordmark",
+  lockup: "logo.geometric.notMade.lockup",
+};
+const MAKE_LABELS: Readonly<Record<LogoGeometricStep, MessageKey>> = {
+  symbol: "logo.geometric.make.symbol",
+  wordmark: "logo.geometric.make.wordmark",
+  lockup: "logo.geometric.make.lockup",
 };
 
 /**
@@ -140,11 +159,13 @@ function Questions({ available, disabled, onSubmit }: {
   const id = useId();
   const offered = LOGO_GEOMETRIC_PARTS.filter((part) => partsAvailable({ choice: part }, available));
   // With a single option open there is nothing to decide, so it starts chosen.
-  const [parts, setParts] = useState<LogoGeometricParts | null>(offered.length === 1 ? offered[0] ?? null : null);
+  const [parts, setParts] = useState<LogoGeometricParts | "other" | null>(offered.length === 1 ? offered[0] ?? null : null);
+  const [partsOther, setPartsOther] = useState("");
   const [direction, setDirection] = useState<LogoGeometricDirection | "other" | null>(null);
   const [other, setOther] = useState("");
   const otherText = other.trim();
-  const ready = parts !== null && direction !== null && (direction !== "other" || otherText.length > 0);
+  const partsOtherText = partsOther.trim();
+  const ready = parts !== null && direction !== null && (direction !== "other" || otherText.length > 0) && (parts !== "other" || partsOtherText.length > 0);
   const otherPartsOpen = partsAvailable({ other: "x" }, available);
 
   return (
@@ -153,7 +174,10 @@ function Questions({ available, disabled, onSubmit }: {
       onSubmit={(event) => {
         event.preventDefault();
         if (!ready || disabled) return;
-        onSubmit({ parts: { choice: parts }, direction: direction === "other" ? { other: otherText } : { choice: direction } });
+        onSubmit({
+          parts: parts === "other" ? { other: partsOtherText } : { choice: parts },
+          direction: direction === "other" ? { other: otherText } : { choice: direction },
+        });
       }}
     >
       <div className="flex flex-col gap-1">
@@ -167,9 +191,12 @@ function Questions({ available, disabled, onSubmit }: {
             <Choice key={part} name={`${id}-parts`} label={t(PART_LABELS[part])} checked={parts === part} onSelect={() => setParts(part)}
               unavailable={offered.includes(part) ? null : t("logo.geometric.later")} />
           ))}
-          <Choice name={`${id}-parts`} label={t("logo.geometric.other")} checked={false} onSelect={() => undefined}
+          <Choice name={`${id}-parts`} label={t("logo.geometric.other")} checked={parts === "other"} onSelect={() => setParts("other")}
             unavailable={otherPartsOpen ? null : t("logo.geometric.later")} />
         </div>
+        {parts === "other" ? (
+          <OtherField id={`${id}-parts-other`} label={t("logo.geometric.partsOtherLabel")} value={partsOther} onChange={setPartsOther} />
+        ) : null}
       </fieldset>
       <fieldset className="flex flex-col gap-2" disabled={disabled}>
         <legend className="mb-2 text-sm font-medium text-foreground">{t("logo.geometric.directionLegend")}</legend>
@@ -180,12 +207,7 @@ function Questions({ available, disabled, onSubmit }: {
           <Choice name={`${id}-direction`} label={t("logo.geometric.other")} checked={direction === "other"} onSelect={() => setDirection("other")} unavailable={null} />
         </div>
         {direction === "other" ? (
-          <div className="flex max-w-md flex-col gap-1.5 pt-1">
-            <label htmlFor={`${id}-other`} className="text-sm font-medium text-foreground">{t("logo.geometric.otherLabel")}</label>
-            <Input id={`${id}-other`} value={other} maxLength={LOGO_GEOMETRIC_OTHER_MAX} autoFocus
-              aria-describedby={`${id}-other-hint`} className="min-h-11" onChange={(event) => setOther(event.target.value)} />
-            <p id={`${id}-other-hint`} className="text-xs text-muted-foreground">{t("logo.geometric.otherHint")}</p>
-          </div>
+          <OtherField id={`${id}-other`} label={t("logo.geometric.otherLabel")} value={other} onChange={setOther} />
         ) : null}
       </fieldset>
       <div className="flex flex-wrap items-center gap-3">
@@ -194,6 +216,37 @@ function Questions({ available, disabled, onSubmit }: {
       </div>
     </form>
   );
+}
+
+/** The words for a Something else answer; it takes focus when its choice is picked. */
+function OtherField({ id, label, value, onChange }: {
+  readonly id: string;
+  readonly label: string;
+  readonly value: string;
+  readonly onChange: (value: string) => void;
+}) {
+  const t = useT();
+  return (
+    <div className="flex max-w-md flex-col gap-1.5 pt-1">
+      <label htmlFor={id} className="text-sm font-medium text-foreground">{label}</label>
+      <Input id={id} value={value} maxLength={LOGO_GEOMETRIC_OTHER_MAX} autoFocus
+        aria-describedby={`${id}-hint`} className="min-h-11" onChange={(event) => onChange(event.target.value)} />
+      <p id={`${id}-hint`} className="text-xs text-muted-foreground">{t("logo.geometric.otherHint")}</p>
+    </div>
+  );
+}
+
+/**
+ * A server-written SVG shown as an image: an image document runs no script and loads nothing, so
+ * the bytes cannot act in the app. The light tile keeps the black artwork readable in both themes.
+ */
+function Preview({ svg, label }: { readonly svg: string; readonly label: string }) {
+  const src = useMemo(() => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`, [svg]);
+  // An SVG with only a viewBox has no width of its own, so the tile takes the artwork's proportions.
+  const box = /viewBox="[-\d.]+ [-\d.]+ ([\d.]+) ([\d.]+)"/.exec(svg);
+  const aspectRatio = box ? `${box[1]} / ${box[2]}` : undefined;
+  return <img src={src} alt={label} style={{ aspectRatio }}
+    className="box-content block h-14 w-auto self-start max-w-[calc(100%-2rem)] rounded-lg border border-border bg-white object-contain px-6 py-4" />;
 }
 
 function Choice({ name, label, checked, unavailable, onSelect }: {
@@ -277,32 +330,44 @@ function Current({ status, disabled, onAction, onMake }: {
   }, [revising, returnFocus]);
   const closeNote = () => { setRevising(false); setNote(""); setReturnFocus(true); };
   const current = status.plan.find((item) => item.status !== "done");
-  if (current === undefined) return <p role="status" className="text-sm text-foreground">{t("logo.geometric.complete")}</p>;
+  if (current === undefined) {
+    return (
+      <div className="flex flex-col gap-3">
+        <p role="status" className="text-sm text-foreground">{t("logo.geometric.complete")}</p>
+        {status.previews.lockup === null ? null : <Preview svg={status.previews.lockup} label={t("logo.geometric.preview.lockup")} />}
+      </div>
+    );
+  }
   const record = status.records[current.step];
   if (current.status !== "awaiting_review" || record === null) {
     return (
       <div className="flex flex-wrap items-center gap-3">
-        <p className="text-sm text-foreground">{t("logo.geometric.notMade")}</p>
+        <p className="text-sm text-foreground">{t(NOT_MADE_LABELS[current.step])}</p>
         {status.available_steps.includes(current.step) ? (
-          <Button type="button" className="min-h-11" disabled={disabled} onClick={onMake}>{t("logo.geometric.make")}</Button>
+          <Button type="button" className="min-h-11" disabled={disabled} onClick={onMake}>{t(MAKE_LABELS[current.step])}</Button>
         ) : null}
         {disabled ? <Working /> : null}
       </div>
     );
   }
-  const review = current.step === "symbol" ? status.symbol_review : null;
+  // Each step shows its own measured findings; the symbol's mark itself is the card above.
+  const findings: readonly MessageKey[] | null = current.step === "symbol"
+    ? status.symbol_review?.findings.map((kind) => FINDING_LABELS[kind]) ?? null
+    : current.step === "wordmark" ? status.wordmark_review?.findings.map((kind) => WORDMARK_FINDING_LABELS[kind]) ?? null : null;
+  const preview = current.step === "wordmark" ? status.previews.wordmark : null;
   const text = note.trim();
   return (
     <div className="flex max-w-3xl flex-col gap-3">
+      {preview === null ? null : <Preview svg={preview} label={t("logo.geometric.preview.wordmark")} />}
       <div className="flex flex-col gap-1">
         <h2 className="text-sm font-semibold text-foreground">{t("logo.geometric.checks")}</h2>
-        {review === null ? (
+        {findings === null ? (
           <p className="text-sm text-muted-foreground">{t("logo.geometric.checksMissing")}</p>
-        ) : review.findings.length === 0 ? (
+        ) : findings.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t("logo.geometric.checksPassed")}</p>
         ) : (
           <ul className="list-disc space-y-1 pl-5 text-sm leading-6 text-foreground">
-            {review.findings.map((kind) => <li key={kind}>{t(FINDING_LABELS[kind])}</li>)}
+            {findings.map((key) => <li key={key}>{t(key)}</li>)}
           </ul>
         )}
       </div>
@@ -327,7 +392,7 @@ function Current({ status, disabled, onAction, onMake }: {
         </form>
       ) : (
         <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" className="min-h-11" disabled={disabled} onClick={() => onAction({ action: "approve", step: current.step, record_sha256: record })}>{t("logo.geometric.approve")}</Button>
+          <Button type="button" className="min-h-11" disabled={disabled} onClick={() => onAction({ action: "approve", step: current.step, record_sha256: record })}>{t(APPROVE_LABELS[current.step])}</Button>
           <Button ref={reviseButton} type="button" variant="outline" className="min-h-11" disabled={disabled} onClick={() => setRevising(true)}>{t("logo.geometric.revise")}</Button>
           {disabled ? <Working /> : null}
         </div>
