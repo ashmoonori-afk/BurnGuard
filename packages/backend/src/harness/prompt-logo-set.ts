@@ -61,7 +61,7 @@ export const LOGO_IDEA_DIRECTIONS_FILE = "ideas/directions.json";
  * Stock marks the craft bar refuses, shared by ideate and explore so the bar cannot drift. The first
  * rejected idea set (a ring with a north wedge, a plain N, two bent lines) is named here on purpose.
  */
-const GENERIC_MARKS = "a circle or ring with an arrow, wedge or pointer; a check mark, swoosh, orbit, globe, gear, lightbulb, location pin, speech bubble, shield with a tick or stock leaf; a compass or star only because the name says north or star; a lone circle, square or triangle; one bent or doubled line; a letter dropped into a circle or square; any icon-library glyph (Lucide included); or an initial set in a stock typeface with no structural change, which is a font sample, not a lettermark";
+export const GENERIC_MARKS = "a circle or ring with an arrow, wedge or pointer; a check mark, swoosh, orbit, globe, gear, lightbulb, location pin, speech bubble, shield with a tick or stock leaf; a compass or star only because the name says north or star; a lone circle, square or triangle; one bent or doubled line; a letter dropped into a circle or square; any icon-library glyph (Lucide included); or an initial set in a stock typeface with no structural change, which is a font sample, not a lettermark";
 
 /** Finalize rule when the selection descends from adopted directions. */
 const ADOPTED_VECTOR_RULE = "The adopted_directions in the burnguard-logo-pipeline-v1 block record the construction intent behind this selection: use their stated grid, proportions and negative-space relation as the reconstruction basis wherever they match the selected candidate; the selected candidate wins any conflict.";

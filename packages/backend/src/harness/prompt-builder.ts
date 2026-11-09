@@ -28,7 +28,9 @@ import { appendDesignBriefContext } from "./prompt-design-brief";
 import { appendProjectInstructions } from "./prompt-project-instructions";
 import { appendDesignSystemContext, appendDesignSystemStarter, compactPinnedDesignSystemContext, renderPinnedDesignSystemContext } from "./prompt-design-system";
 import { appendGraphicOutputContext } from "./prompt-graphic-set";
+import { appendLogoGeometricContext } from "./prompt-logo-geometric";
 import { appendLogoOutputContext, readLogoManifestForPrompt, type LogoPromptPipelineState } from "./prompt-logo-set";
+import type { LogoGeometricCapture } from "../services/logo-geometric-turn";
 import { LOGO_SKILL_MD } from "./skills/logo-skill";
 import { appScreensSkill } from "./skills/app-screens-skill";
 import { DESIGN_CRAFT_RULES } from "./design-craft";
@@ -73,6 +75,8 @@ export interface PromptBuildOptions {
   readonly taskGuidance?: TaskGuidanceCondition;
   /** Ideate/adopt pipeline state staged by the turn for a real logo request; absent keeps the legacy prompt. */
   readonly logoPipeline?: LogoPromptPipelineState;
+  /** A logo turn on the geometric method; replaces the raster phase contract for this turn. */
+  readonly logoGeometric?: LogoGeometricCapture;
   /** The web asset MCP tools are registered for this run. */
   readonly webAssetTools?: boolean;
 }
@@ -148,7 +152,9 @@ export async function buildPrompt(
   if (project.project_type === "graphic" && projectOptions.graphic_canvas !== null) {
     appendGraphicOutputContext(lines, projectOptions.graphic_canvas, projectOptions.graphic_set);
   }
-  if (project.project_type === "logo" && projectOptions.logo_set !== null) {
+  if (project.project_type === "logo" && projectOptions.logo_set !== null && options.logoGeometric !== undefined) {
+    appendLogoGeometricContext(lines, projectOptions.logo_set, options.logoGeometric);
+  } else if (project.project_type === "logo" && projectOptions.logo_set !== null) {
     appendLogoOutputContext(
       lines,
       {

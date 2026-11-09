@@ -82,6 +82,7 @@ const REJECTION_REASONS: ReadonlySet<string> = new Set<TurnRejectionReason>([
   "logo_svg_source_mismatch", "logo_guidelines_invalid",
   "logo_directions_invalid", "logo_adoption_invalid", "logo_reference_copied",
   "logo_reference_similar", "logo_screening_failed", "logo_moodboard_changed",
+  "logo_geometry_invalid", "logo_geometric_step_refused",
 ]);
 
 /** Identifiers this server mints (ULIDs and fixture ids); never a path and never model-authored. */
@@ -97,6 +98,9 @@ function logoRejectionReason(detail: string): TurnRejectionReason | undefined {
   if (head.startsWith("adoption_")) return "logo_adoption_invalid";
   if (head.startsWith("candidate_")) return "logo_candidate_invalid";
   if (head.startsWith("guidelines_")) return "logo_guidelines_invalid";
+  // The geometric method: a record the compiler refuses or writes outside it, and a refused flow step.
+  if (head.startsWith("geometry_")) return "logo_geometry_invalid";
+  if (head.startsWith("geometric_")) return "logo_geometric_step_refused";
   // Everything the allowlist parser refuses about the document itself.
   return head.startsWith("svg_") ? "logo_svg_invalid" : undefined;
 }

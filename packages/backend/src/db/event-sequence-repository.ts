@@ -197,7 +197,8 @@ function rejectionReason(item: Readonly<Record<string, unknown>>, id: string): T
     case "logo_svg_missing": case "logo_svg_invalid": case "logo_svg_source_mismatch":
     case "logo_guidelines_invalid": case "logo_directions_invalid": case "logo_adoption_invalid":
     case "logo_reference_copied": case "logo_reference_similar":
-    case "logo_screening_failed": case "logo_moodboard_changed": return value;
+    case "logo_screening_failed": case "logo_moodboard_changed":
+    case "logo_geometry_invalid": case "logo_geometric_step_refused": return value;
     default: throw new PipelineRepositoryError("corrupt_json", id);
   }
 }

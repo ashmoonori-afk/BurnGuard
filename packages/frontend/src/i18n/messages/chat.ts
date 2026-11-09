@@ -267,6 +267,16 @@ export const chatMessages = defineMessages({
     en: "The final vector did not come from the selected candidate.",
     "zh-CN": "最终矢量并非来自所选候选。",
   },
+  "chat.reason.logo_geometry_invalid": {
+    ko: "로고 도형 기록을 만들 수 없거나, 허용되지 않은 파일이 바뀌었어요.",
+    en: "The logo geometry record could not be built, or a file outside it changed.",
+    "zh-CN": "无法生成标志几何记录，或有其外的文件被更改。",
+  },
+  "chat.reason.logo_geometric_step_refused": {
+    ko: "이 로고 단계는 지금 진행할 수 없어요. 화면의 최신 후보를 확인한 뒤 다시 시도해 주세요.",
+    en: "This logo step can't run right now. Check the latest candidate on screen and try again.",
+    "zh-CN": "此标志步骤暂时无法进行。请查看屏幕上的最新候选后重试。",
+  },
   "chat.reason.logo_guidelines_invalid": {
     ko: "사용 가이드 문서가 완성되지 않았어요.",
     en: "The usage guidelines document is incomplete.",
