@@ -87,6 +87,20 @@ competing vertical scrollports, and hidden metadata on narrow containers.
   geometry. Selected presets use a neutral wash and pressed state. The toolbar stays on
   a single row: when space is narrow, presets and history move into the More menu.
   Wide previews scroll inside the canvas.
+- **App screens Board**: the workspace's Board/Canvas controls retain the normal
+  single-file editor. Layout: sections run left to right in one board scrollport,
+  with 64px between sections and 40px between scaled, non-interactive screen
+  previews. The primary action selects a screen for editing; section and screen
+  Play buttons open the same dialog. Titles and resolved outgoing links stay
+  beside their screen. Empty, loading and retry states preserve the workspace.
+- **App screens Play**: Layout: one modal over the board, a fixed header and
+  footer, and a fitted frame in the remaining stage. Phone 390x844 is the
+  creation default; Desktop 1440x900 remains available. Both preserve their
+  aspect ratio. The header names the section and position; Previous/Next follows
+  section order, while links may cross sections. Escape closes and restores
+  focus to the opening control. Motion: opacity fade, 200ms ease-out on open
+  and 160ms ease-out on close, removed under reduced motion. App chrome is
+  checked only at desktop window sizes, 1440x900 and 1024x768.
 - **SelectorOverlay**: hover and selected bounds. Selection must preserve
   element identity, computed styles, and an authoring anchor when one exists.
 - **SelectorReadOnlyPanel**: selected identity and computed/token context. When

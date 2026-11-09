@@ -45,6 +45,7 @@ jobs:
         run: >-
           bun test --timeout 30000
           packages/backend/tests/prompt-builder.test.ts
+          packages/backend/tests/app-screens.test.ts
           packages/backend/tests/generation-options.test.ts
           packages/backend/tests/preset-observation.test.ts
           packages/backend/tests/task-preset-adoption.test.ts
@@ -205,6 +206,7 @@ jobs:
           packages/frontend/tests/side-input.test.ts
           packages/frontend/tests/i18n-messages.test.ts
           packages/frontend/tests/project-creation.test.ts
+          packages/frontend/tests/app-screens.test.ts
           packages/frontend/tests/new-project-panel.test.ts
           packages/frontend/tests/first-run-guide.test.ts
           packages/frontend/tests/design-token-contrast.test.ts
