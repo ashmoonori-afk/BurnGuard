@@ -10,7 +10,8 @@ export type ExportFormat =
   | "png_zip"
   | "cafe24_package"
   | "imweb_package"
-  | "svg";
+  | "svg"
+  | "construction_svg";
 export type ExportStatus = "pending" | "running" | "succeeded" | "failed";
 export type PdfPaper = "a4" | "letter" | "widescreen-16x9" | "artboard";
 export type PptxSize = "16x9" | "4x3";
@@ -40,6 +41,7 @@ export function parseExportOptions(format: ExportFormat, input: unknown): Export
     }
     case "handoff":
     case "svg":
+    case "construction_svg":
       requireKeys(record, []);
       return {};
     case "cafe24_package":

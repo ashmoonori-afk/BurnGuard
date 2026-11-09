@@ -53,7 +53,8 @@ export function parseExportValidation(format: ExportFormat, options: ExportOptio
     }
     case "handoff": exact(input, ["source_files", "nodes"]); return { source_files: positiveInt(input["source_files"]), nodes: nonnegativeInt(input["nodes"]) };
     case "pdf": return parsePdf(input, options);
-    case "svg": {
+    case "svg":
+    case "construction_svg": {
       exact(input, ["root", "bytes", "source"]);
       const root = input["root"]; const source = input["source"];
       if ((root !== "svg" && root !== "xml") || (source !== null && (typeof source !== "string" || source.length === 0))) fail();
