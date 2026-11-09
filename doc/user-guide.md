@@ -1,6 +1,6 @@
 # BurnGuard user guide
 
-Use this guide to build your first website, edit a single image, or move a project to another computer. In chat, select **Keep as rule** to save a recurring correction, and use **Project instructions** in the project top bar to store standing notes sent with every request. For installation and supported platforms, see the [README](../README.md#get-started). The steps below use English interface labels; you can change the language in Settings.
+Use this guide to build your first website, make a set of linked app screens, edit a single image, or move a project to another computer. In chat, select **Keep as rule** to save a recurring correction, and use **Project instructions** in the project top bar to store standing notes sent with every request. For installation and supported platforms, see the [README](../README.md#get-started). The steps below use English interface labels; you can change the language in Settings.
 
 ## First website in 10 minutes
 
@@ -15,6 +15,16 @@ Start with the app installed and a generation CLI authenticated. Generation time
 7. Use the export controls to download an HTML ZIP. Open the exported page and check its text, images and links before sharing it.
 
 If generation stops, check **Settings > Runtime diagnostics** and the conversation's recovery action. Keep the existing project while investigating. A recovered unverified draft is separate from the original and is not verified until its full design audit passes.
+
+## Make a set of app screens
+
+1. On Home, choose the **App screens** format and describe the app in one line, for example: "A habit tracker with a home tab, a habit detail screen and a weekly summary."
+2. Under **Frame**, keep **Phone 390 x 844** or choose **Desktop 1440 x 900**. BurnGuard's own window stays a desktop app; only the generated screens use this size.
+3. After generation, the **Board** shows the screens grouped in sections. Each screen card lists the screens it links to.
+4. Select **Play section** to tap through a section from its first screen, or **Play from here** on one screen. Use **Previous** and **Next**, or select a link inside the screen; Esc closes the overlay.
+5. Select a screen to open it in the canvas editor, then ask in chat for changes to that screen.
+
+Each screen is one HTML file under `screens/`, and `screens.json` records the sections and their order. If that file is missing or invalid, every screen is shown in one **Screens** section.
 
 ## Fix a bad image
 

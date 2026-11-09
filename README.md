@@ -58,6 +58,7 @@ These examples show each built-in theme's default layout. If a system already ha
 | Slide decks | Slide previews, typography, presentation mode, and comments | HTML, PDF, or PPTX |
 | Graphics | Custom artboard dimensions, posters, and multi-frame sets | PNG, PNG bundle, or PDF |
 | Logos | Multi-round concept exploration with one chosen master | Master SVG¹, brand guidelines PDF, or HTML archive |
+| App screens | Linked phone or desktop screens on a Board, grouped in sections, with a Play mode to tap through them | HTML ZIP or developer handoff ZIP |
 | Product detail pages | Long vertical pages with section images | Section-aligned PNG or JPEG slices |
 | Platform pages | Cafe24 Smart Design or Imweb code-widget packages | Packages with step-by-step manual installation guides |
 
@@ -172,6 +173,13 @@ The command opens the profile database at `BG_APP_ROOT` (default `~/.burnguard`)
 
 ## Changelog
 
+### 0.5.35
+
+- **App screens** is a new project format: describe an app in one line and get several linked screens, one HTML file per screen, in a **Phone 390 x 844** (default) or **Desktop 1440 x 900** frame. The **Board** groups the screens in sections and shows what each screen links to; **Play section** and **Play from here** open a full-window overlay where **Previous**, **Next** and taps on links move between screens, and Esc closes it. Selecting a screen opens it in the usual canvas editor.
+- Logo projects add three exports: **Construction sheet SVG**, **Construction draw-in GIF** and **Construction draw-in MP4** (the MP4 is made only when the bundled browser can encode H.264; otherwise BurnGuard points you to the GIF). They need a geometry record (`logo-geometry.json`) in the project and stay disabled, with the reason shown, until one exists.
+- **Experimental, off by default:** a geometry-first logo method builds a mark from circles, lines and boolean shapes on a 64-unit grid, checks it with measured rules (slivers, near touches, counters that close at 16 and 32 px), and goes through symbol, wordmark and lockup with your approval at each step. It runs only when BurnGuard is started with `BG_LOGO_GEOMETRIC=1`, and stays off until it has been measured against the current logo flow.
+- When the design review cannot measure a page's visual score, it now records the step that failed (`style`, `capture` or `decode`).
+
 ### 0.5.34
 
 - Saving a color token in a design system or uploading a role-assigned font on a system with a token stylesheet now refreshes an open project's baseline candidate check immediately, while the project's pinned baseline stays unchanged until you explicitly apply the new baseline.
@@ -183,6 +191,9 @@ The command opens the profile database at `BG_APP_ROOT` (default `~/.burnguard`)
 - On every start, BurnGuard replaces any built-in theme folder in your local profile that is byte-for-byte identical to an earlier shipped release (line endings ignored) with the current bundled version, so installs updated from v0.5.31 or earlier receive the v0.5.32 classic theme palettes while edited theme folders, user-added files in `fonts/`, and files already generated in existing projects stay untouched (an interrupted swap is restored on the next start, and a failed update keeps the previous copy).
 - **Northvale** and **Splash** no longer store an unloadable placeholder preview path (and existing profiles are fixed on start), design systems without their own preview image show a project rendered with them (chosen in a fixed format order starting with websites; within that format, the most recently updated project), and new-project format pickers (such as **Graphic** and **Logo design**) fall back to a system's general preview instead of a blank "No preview" card.
 - When a per-launch access key expires (for example after the app restarts in the background), BurnGuard keeps your open workspace and unsent draft on screen and shows **This app launch has expired** with instructions to reopen the app instead of showing an offline state or a reload action that cannot renew access, while distinguishing access denial, network outages, and other startup errors in Korean, English, and Simplified Chinese.
+
+<details>
+<summary>Earlier versions (0.5.17 to 0.5.32)</summary>
 
 ### 0.5.32
 
@@ -312,6 +323,8 @@ The command opens the profile database at `BG_APP_ROOT` (default `~/.burnguard`)
 - Show slide or website thumbnails for the selected project format.
 - Preserve generated HTML and assets when generation is stopped, and restore the previous entrypoint if it was removed mid-write.
 - Pin project design rules, audit rendered output and include review evidence in handoff exports.
+
+</details>
 
 [All releases](https://github.com/ashmoonori-afk/BurnGuard/releases)
 

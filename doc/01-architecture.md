@@ -2,7 +2,7 @@
 
 ## 1. Runtime Topology
 
-Reviewed for v0.5.34 on 2026-10-24. BurnGuard runs as one Bun backend process paired with a React frontend:
+Reviewed for v0.5.35 on 2026-11-09. BurnGuard runs as one Bun backend process paired with a React frontend:
 
 ```text
 burnguard-design.exe or bun run src/index.ts
@@ -85,6 +85,9 @@ Current export implementation:
 | `cafe24_package` | Implemented: Cafe24 (카페24) Smart Design layout, per-page fragments, rewritten assets, guide, and lint report |
 | `imweb_package` | Implemented: Imweb (아임웹) code-widget fragments plus shared header and footer code, guide, and lint report |
 | `svg` | Implemented: the validated master vector of a logo project, copied unchanged; refused for every other project type |
+| `construction_svg` | Implemented: a still construction sheet (guides, circles and the finished mark) rendered from a logo project's `logo-geometry.json`; logo projects only ([doc/35](35-logo-construction-export-2026-11-09.md)) |
+| `construction_gif` | Implemented: the construction draw-in as a looping 480 px GIF (at most 120 frames and 8 MiB); logo projects only ([doc/36](36-logo-construction-gif-2026-11-09.md)) |
+| `construction_mp4` | Implemented: the same draw-in frames as H.264 MP4 when the bundled Chromium's WebCodecs encoder supports `avc1.42001e`, otherwise refused with `construction_mp4_unsupported`; logo projects only ([doc/38](38-logo-construction-mp4-2026-11-09.md)) |
 
 PDF accepts an `artboard` paper for graphic projects: each page uses the artboard's own pixel size converted to points, so a graphic set prints one page per artboard. A set whose artboards differ in size has no single page geometry and is rejected. A logo project uses the same artboard paper for its 1920 x 1080 guideline pages; the download is named `<slug>-guidelines-r<revision>.pdf` (see [logo-design.md](logo-design.md)).
 

@@ -2,13 +2,14 @@
 
 ## OVERVIEW
 
-Feature-grouped React components and canvas integration; earned this guide at score 14 for 153 files, 16 feature folders, dense symbols, and shared UI primitives.
+Feature-grouped React components and canvas integration; earned this guide at score 14 for 153 files, 17 feature folders, dense symbols, and shared UI primitives.
 
 ## STRUCTURE
 
 ```text
 components/
 ├── alternatives/ # visual alternatives generation and side-by-side comparison
+├── app-screens/  # App screens Board (sections, links), Play overlay, screen preview
 ├── canvas/       # sandbox iframe, frame bridge (1,005 LOC), draw/edit/tweak overlays (3.1k LOC)
 ├── chat/         # composer, attachment intake, blocks/ event renderers
 ├── directions/   # generated direction choices and status
@@ -17,7 +18,7 @@ components/
 ├── files/        # file tree and bounded file preview
 ├── home/         # project/system landing widgets and dialogs
 ├── layout/       # AppShell (skip link, focus target), Sidebar, TopBar
-├── logo/         # logo workflow (moodboard, ideas, candidates)
+├── logo/         # logo workflow (moodboard, ideas, candidates), construction card and geometric panel
 ├── modes/        # ModePanel orchestrates comment/draw/edit/tweaks/quality/UX panels
 ├── present/      # fullscreen presentation overlay
 ├── project/      # workspace top bar and ResizeObserver artifact tabs

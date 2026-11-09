@@ -1,6 +1,6 @@
 # LLM Harness and Backend Adapters
 
-This document describes the **current** adapter implementation, reviewed for v0.5.34 on 2026-10-24.
+This document describes the **current** adapter implementation, reviewed for v0.5.35 on 2026-11-09.
 
 ## 1. Current Design Principles
 
@@ -196,4 +196,4 @@ The following contracts are stable enough to document as current behavior:
 - one turn at a time per session
 - Claude Code `stream-json` parsing path
 - project prompt building from indexed files and design system excerpts
-- every export format defined in `@bg/shared/export` (`html_zip`, `pdf`, `png`, `pptx`, `handoff`, `png_zip`, `cafe24_package`, `imweb_package`, `svg`)
+- every export format defined in `@bg/shared/export` (`html_zip`, `pdf`, `png`, `pptx`, `handoff`, `png_zip`, `cafe24_package`, `imweb_package`, `svg`, `construction_svg`, `construction_gif`, `construction_mp4`)
