@@ -23,7 +23,8 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import type { ExportStatus, ProjectType } from "@bg/shared";
+import { LOGO_GEOMETRY_FILE, type ExportStatus, type ProjectType } from "@bg/shared";
+import { listProjectFiles } from "@/api/project";
 import type { ExportQualityGate } from "@/lib/design-audit-state";
 import {
   createExport,
@@ -44,7 +45,9 @@ import { apiErrorCopy } from "@/lib/error-copy";
 import {
   buildExportMenuModel,
   classifyChromiumFailure,
+  classifyConstructionFailure,
   classifyRenderPhaseFailure,
+  CONSTRUCTION_FAILURE_MESSAGE,
   renderPhaseFailureMessage,
   CHROMIUM_FAILURE_MESSAGE,
   EXPORT_DISABLED_LABEL,
@@ -144,7 +147,10 @@ export default function ExportMenu({ projectId, projectType, projectOptionsJson,
   });
 
   const jobs = jobsQuery.data ?? [];
-  const menuModel = buildExportMenuModel(projectType, projectOptionsJson, optionValues);
+  // The shared project file listing (the construction card reads the same key), so nothing polls.
+  const filesQuery = useQuery({ queryKey: ["project", projectId, "files"], queryFn: () => listProjectFiles(projectId), enabled: projectType === "logo" });
+  const constructionReady = (filesQuery.data ?? []).some((file) => file.rel_path === LOGO_GEOMETRY_FILE);
+  const menuModel = buildExportMenuModel(projectType, projectOptionsJson, optionValues, constructionReady);
   const hasSettingsFields = menuModel.options.some((option) => option.disabledReason === undefined && (option.fields?.length ?? 0) > 0);
   const activeJobs = jobs.filter((job) => job.status === "pending" || job.status === "running").length;
 
@@ -171,17 +177,20 @@ export default function ExportMenu({ projectId, projectType, projectOptionsJson,
         continue;
       }
       const chromiumFailure = classifyChromiumFailure(job.error_message);
+      const constructionFailure = classifyConstructionFailure(job.error_message);
       const phaseFailure = classifyRenderPhaseFailure(job.error_message);
       const platformCopy = platformCheckFailureCopy(job);
       pushToast({
         title: t("export.failedFormat", { name: formatLabel(job.format) }),
         body: platformCopy !== null
           ? t(platformCopy)
-          : phaseFailure !== null
-            ? renderPhaseFailureMessage(phaseFailure)
-            : chromiumFailure !== null
-              ? CHROMIUM_FAILURE_MESSAGE[chromiumFailure]
-              : apiErrorCopy({ code: job.latest_attempt?.stop_reason }),
+          : constructionFailure !== null
+            ? CONSTRUCTION_FAILURE_MESSAGE[constructionFailure]
+            : phaseFailure !== null
+              ? renderPhaseFailureMessage(phaseFailure)
+              : chromiumFailure !== null
+                ? CHROMIUM_FAILURE_MESSAGE[chromiumFailure]
+                : apiErrorCopy({ code: job.latest_attempt?.stop_reason }),
         tone: "error",
       });
     }
