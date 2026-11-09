@@ -36,6 +36,7 @@ export * from "./file-patch";
 export * from "./figma-import";
 export * from "./graphic";
 export * from "./logo";
+export * from "./logo-geometry";
 export * from "./logo-moodboard";
 export * from "./photo-placement";
 export * from "./logo-originality";
