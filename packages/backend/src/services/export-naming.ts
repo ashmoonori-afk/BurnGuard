@@ -23,6 +23,8 @@ export function formatExtension(format: ExportFormat): string {
     case "svg":
     case "construction_svg":
       return "svg";
+    case "construction_gif":
+      return "gif";
     case "pptx":
       return "pptx";
     case "html_zip":
@@ -43,6 +45,8 @@ export function formatMime(format: ExportFormat): string {
     case "svg":
     case "construction_svg":
       return "image/svg+xml";
+    case "construction_gif":
+      return "image/gif";
     case "pptx":
       return "application/vnd.openxmlformats-officedocument.presentationml.presentation";
     case "html_zip":
@@ -68,6 +72,7 @@ export function formatFilenameTag(format: ExportFormat): string {
     case "svg":
       return "logo";
     case "construction_svg":
+    case "construction_gif":
       return "construction";
     case "pptx":
       return "deck";

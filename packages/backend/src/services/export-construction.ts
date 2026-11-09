@@ -14,7 +14,7 @@ import { LogoDeliverableError, validateLogoSvg } from "./logo-deliverables";
 
 export class LogoConstructionExportError extends Error {
   readonly name = "LogoConstructionExportError";
-  constructor(readonly code: "construction_missing" | "construction_invalid", readonly reason: string) {
+  constructor(readonly code: "construction_missing" | "construction_invalid" | "construction_too_large", readonly reason: string) {
     super(`${code}: ${reason}`);
   }
 }

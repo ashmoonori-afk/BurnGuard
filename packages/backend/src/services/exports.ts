@@ -30,6 +30,7 @@ import type { SliceFinding } from "./export-slice-plan";
 import { renderToPng } from "./export-png";
 import { renderLogoSvg } from "./export-svg";
 import { renderLogoConstructionSvg } from "./export-construction";
+import { renderLogoConstructionGif } from "./export-construction-gif";
 import { renderDeckToPptx } from "./export-pptx-render";
 import { canonicalJson, parseExportReceipt, receiptDigest, sha256, type ExportReceipt } from "./export-receipt";
 import type { ExportValidation } from "./export-receipt-validation";
@@ -219,6 +220,7 @@ async function renderOutput(input: RunInput, renderRoot: string, outputPath: str
       return only(validation, collector.pages());
     }
     case "svg": return only(await renderLogoSvg({ stagedDir: renderRoot, entrypointDir: path.dirname(context.project.entrypoint), outputPath }));
+    case "construction_gif": return only(await renderLogoConstructionGif({ stagedDir: renderRoot, entrypointDir: path.dirname(context.project.entrypoint), outputPath, label: parseStoredProjectOptions(context.project.options_json).logo_set?.brand_name ?? context.project.name }));
     case "construction_svg": return only(await renderLogoConstructionSvg({ stagedDir: renderRoot, entrypointDir: path.dirname(context.project.entrypoint), outputPath, label: parseStoredProjectOptions(context.project.options_json).logo_set?.brand_name ?? context.project.name }));
     case "pdf": {
       const collector = createParitySourceCollector(input.controller.signal);
@@ -253,7 +255,7 @@ async function renderOutput(input: RunInput, renderRoot: string, outputPath: str
 export async function assertExportAllowed(project: ProjectDetail, format: ExportFormat, options: ExportOptions): Promise<void> {
   const projectOptions = parseStoredProjectOptions(project.options_json);
   const logo = project.type === "logo";
-  if ((format === "svg" || format === "construction_svg") && !logo) throw new ExportServiceError("format_requires_logo", "SVG export requires a logo project");
+  if ((format === "svg" || format === "construction_svg" || format === "construction_gif") && !logo) throw new ExportServiceError("format_requires_logo", "SVG export requires a logo project");
   // A logo deliverable is the mark and its guidelines; a viewport screenshot or a source handoff of the guidelines page is neither.
   if (logo && (format === "png" || format === "handoff")) throw new ExportServiceError("format_requires_web", "Logo projects export the master SVG, the guidelines PDF, or the guidelines HTML archive");
   if (format === "pdf" && options.pdf_paper === "artboard" && project.type !== "graphic" && !logo) throw new ExportServiceError("invalid_graphic_export_options", "Artboard paper is only valid for graphic and logo projects");

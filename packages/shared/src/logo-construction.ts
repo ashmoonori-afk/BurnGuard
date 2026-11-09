@@ -48,6 +48,11 @@ const PALETTES: Record<LogoConstructionTheme, { readonly paper: string; readonly
   dark: { paper: "#0b0d10", ink: "#f2f2f2", line: "#8b98ad", accent: "#ff8a4c" },
 };
 
+/** The colours of a construction theme; the GIF export builds its fixed colour table from them. */
+export function logoConstructionPalette(theme: LogoConstructionTheme): { readonly paper: string; readonly ink: string; readonly line: string; readonly accent: string } {
+  return PALETTES[theme];
+}
+
 const G = LOGO_GEOMETRY_GRID;
 const CONSTRUCTION_WIDTH = 0.18;
 const OUTLINE_WIDTH = 0.3;
