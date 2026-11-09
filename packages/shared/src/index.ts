@@ -42,6 +42,8 @@ export * from "./logo-geometry-review";
 export * from "./logo-geometric-flow";
 export * from "./logo-geometric-status";
 export * from "./logo-construction";
+export * from "./logo-wordmark";
+export * from "./logo-lockup";
 export * from "./logo-moodboard";
 export * from "./photo-placement";
 export * from "./logo-originality";

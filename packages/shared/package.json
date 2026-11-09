@@ -41,6 +41,8 @@
     "./logo-geometric-flow": "./src/logo-geometric-flow.ts",
     "./logo-geometric-status": "./src/logo-geometric-status.ts",
     "./logo-construction": "./src/logo-construction.ts",
+    "./logo-wordmark": "./src/logo-wordmark.ts",
+    "./logo-lockup": "./src/logo-lockup.ts",
     "./logo-moodboard": "./src/logo-moodboard.ts",
     "./photo-placement": "./src/photo-placement.ts",
     "./extraction-domain": "./src/extraction-domain.ts",
