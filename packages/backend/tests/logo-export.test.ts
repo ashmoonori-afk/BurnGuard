@@ -19,6 +19,7 @@ import { LogoSvgExportError, renderLogoSvg } from "../src/services/export-svg";
 import { assertExportAllowed, enqueueProjectExport, ExportServiceError } from "../src/services/exports";
 import { LOGO_CONSTRUCTION_GIF } from "../src/services/export-construction-gif";
 import { decodeGif } from "./helpers/gif-decode";
+import { parseMp4 } from "./helpers/mp4-parse";
 
 const suite = `logo-export-${process.pid}`;
 const webProjectId = `${suite}-web`;
@@ -293,6 +294,48 @@ describe("construction draw-in GIF export", () => {
     const receipt = parseExportReceipt(JSON.parse(await readFile(path.join(path.dirname(job.output_path), "receipt.json"), "utf8")));
     expect(receipt.format).toBe("construction_gif");
     expect(receipt.validation).toEqual({ frames: gif.frames.length, width: LOGO_CONSTRUCTION_GIF.size, height: LOGO_CONSTRUCTION_GIF.size, bytes: bytes.byteLength });
+    expect(activeExportBrowserCount()).toBe(0);
+  }, 70_000);
+});
+
+describe("construction draw-in MP4 export", () => {
+  test("Given a prototype project When the draw-in MP4 is requested Then the service and the route refuse it before an authority exists", async () => {
+    // Given
+    const before = exportCount(webProjectId);
+
+    // When
+    const response = await postExport(webProjectId, { format: "construction_mp4", options: {} });
+
+    // Then
+    await expect(enqueueProjectExport(webProjectId, "construction_mp4", {})).rejects.toMatchObject({ code: "format_requires_logo" });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: { code: "format_requires_logo" } });
+    expect(exportCount(webProjectId)).toBe(before);
+  });
+
+  test("Given a logo project with a geometry record When the draw-in MP4 is exported Then the artifact is an H.264 MP4 and the receipt records it", async () => {
+    // Given
+    const terminal = nextTerminalExport();
+
+    // When
+    const started = await enqueueProjectExport(logoProjectId, "construction_mp4", {});
+    if (started === null || started.latest_attempt === null) throw new TypeError("construction MP4 export did not start");
+    await terminal;
+
+    // Then
+    const job = await getExportJob(started.id);
+    if (job?.status !== "succeeded") {
+      const attempt = await getExportAttemptDetail(started.latest_attempt.id);
+      throw new TypeError(`${job?.error_message ?? `unexpected construction MP4 export status: ${job?.status ?? "missing"}`} ${JSON.stringify(attempt?.findings ?? [])}`);
+    }
+    if (job.output_path === null) throw new TypeError("construction MP4 output unavailable");
+    expect(path.basename(job.output_path)).toBe("artifact.mp4");
+    const bytes = new Uint8Array(await readFile(job.output_path));
+    const mp4 = parseMp4(bytes);
+    expect(mp4.entry).toMatchObject({ type: "avc1", width: LOGO_CONSTRUCTION_GIF.size, height: LOGO_CONSTRUCTION_GIF.size });
+    const receipt = parseExportReceipt(JSON.parse(await readFile(path.join(path.dirname(job.output_path), "receipt.json"), "utf8")));
+    expect(receipt.format).toBe("construction_mp4");
+    expect(receipt.validation).toEqual({ frames: mp4.samples.length, width: LOGO_CONSTRUCTION_GIF.size, height: LOGO_CONSTRUCTION_GIF.size, bytes: bytes.byteLength });
     expect(activeExportBrowserCount()).toBe(0);
   }, 70_000);
 });

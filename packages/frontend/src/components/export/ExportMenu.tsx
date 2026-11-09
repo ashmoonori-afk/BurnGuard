@@ -12,6 +12,7 @@ import {
   Presentation,
   PackagePlus,
   Film,
+  Clapperboard,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -69,6 +70,7 @@ const OPTION_ICON: Record<ExportFormat, LucideIcon> = {
   svg: PenTool,
   construction_svg: PenTool,
   construction_gif: Film,
+  construction_mp4: Clapperboard,
 };
 
 export type { ExportQualityGate };

@@ -56,6 +56,52 @@ export function logoConstructionGifPalette(): Uint8Array {
   return palette;
 }
 
+export type ConstructionRecord = { readonly geometry: LogoGeometryV1; readonly compiled: LogoGeometryCompiled };
+
+/** The staged construction record, parsed and compiled; a missing or invalid record fails with the sheet's codes. */
+export async function readConstructionRecord(stagedDir: string, entrypointDir: string): Promise<ConstructionRecord> {
+  const relativeDir = entrypointDir === "" || entrypointDir === "." ? [] : [entrypointDir];
+  let source: string;
+  try {
+    source = await readFile(resolveWithin(stagedDir, ...relativeDir, LOGO_GEOMETRY_FILE), "utf8");
+  } catch (error) {
+    if (!(error instanceof Error && Reflect.get(error, "code") === "ENOENT")) throw error;
+    throw new LogoConstructionExportError("construction_missing", LOGO_GEOMETRY_FILE);
+  }
+  try {
+    const geometry = parseLogoGeometryV1(source.replace(/^\uFEFF/, "")).geometry;
+    return { geometry, compiled: compileLogoGeometry(geometry) };
+  } catch (error) {
+    if (!(error instanceof LogoGeometryError)) throw error;
+    throw new LogoConstructionExportError("construction_invalid", error.code);
+  }
+}
+
+/** One rasterised draw-in frame on white at `LOGO_CONSTRUCTION_GIF.size`, and how long it shows. */
+export type ConstructionFrame = { readonly data: Uint8ClampedArray; readonly png: () => Uint8Array; readonly delayCs: number };
+
+/** Rasterises the draw-in frame by frame; the GIF and the MP4 exports encode these same frames. */
+export async function forEachConstructionFrame(record: ConstructionRecord, label: string, visit: (frame: ConstructionFrame) => void | Promise<void>): Promise<void> {
+  const { createCanvas, loadImage } = await import("./export-native-modules");
+  const { size, frameMs, holdMs } = LOGO_CONSTRUCTION_GIF;
+  const timeline = logoConstructionTimeline(record.geometry, record.compiled);
+  const times = logoConstructionGifTimes(timeline.duration_ms);
+  const delayCs = Math.max(1, Math.round(timeline.duration_ms / (times.length - 1) / 10)) || frameMs / 10;
+  const canvas = createCanvas(size, size);
+  const context = canvas.getContext("2d");
+  for (const [index, t] of times.entries()) {
+    // A viewBox-only SVG rasterises at its intrinsic size, so the copy handed to the rasteriser
+    // carries the target pixel size.
+    const svg = renderLogoConstruction(record.geometry, record.compiled, t, { theme: "light", label })
+      .replace("<svg ", `<svg width="${size}" height="${size}" `);
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, size, size);
+    context.drawImage(await loadImage(Buffer.from(svg)), 0, 0, size, size);
+    const { data } = context.getImageData(0, 0, size, size);
+    await visit({ data, png: () => new Uint8Array(canvas.toBuffer("image/png")), delayCs: index === times.length - 1 ? holdMs / 10 : delayCs });
+  }
+}
+
 export async function renderLogoConstructionGif(input: {
   readonly stagedDir: string;
   readonly entrypointDir: string;
@@ -63,46 +109,16 @@ export async function renderLogoConstructionGif(input: {
   /** The accessible name of each frame's drawing; the same name the symbol step gives the mark. */
   readonly label: string;
 }): Promise<GifValidation> {
-  const relativeDir = input.entrypointDir === "" || input.entrypointDir === "." ? [] : [input.entrypointDir];
-  let source: string;
-  try {
-    source = await readFile(resolveWithin(input.stagedDir, ...relativeDir, LOGO_GEOMETRY_FILE), "utf8");
-  } catch (error) {
-    if (!(error instanceof Error && Reflect.get(error, "code") === "ENOENT")) throw error;
-    throw new LogoConstructionExportError("construction_missing", LOGO_GEOMETRY_FILE);
-  }
-  let geometry: LogoGeometryV1;
-  let compiled: LogoGeometryCompiled;
-  try {
-    geometry = parseLogoGeometryV1(source.replace(/^\uFEFF/, "")).geometry;
-    compiled = compileLogoGeometry(geometry);
-  } catch (error) {
-    if (!(error instanceof LogoGeometryError)) throw error;
-    throw new LogoConstructionExportError("construction_invalid", error.code);
-  }
-  const { createCanvas, loadImage } = await import("./export-native-modules");
-  const { size, frameMs, holdMs, maxBytes } = LOGO_CONSTRUCTION_GIF;
+  const record = await readConstructionRecord(input.stagedDir, input.entrypointDir);
+  const { size, maxBytes } = LOGO_CONSTRUCTION_GIF;
   const palette = logoConstructionGifPalette();
   const nearest = paletteMatcher(palette);
-  const timeline = logoConstructionTimeline(geometry, compiled);
-  const times = logoConstructionGifTimes(timeline.duration_ms);
-  const delayCs = Math.max(1, Math.round(timeline.duration_ms / (times.length - 1) / 10)) || frameMs / 10;
-  const canvas = createCanvas(size, size);
-  const context = canvas.getContext("2d");
   const frames: GifFrame[] = [];
-  for (const [index, t] of times.entries()) {
-    // A viewBox-only SVG rasterises at its intrinsic size, so the copy handed to the rasteriser
-    // carries the target pixel size.
-    const svg = renderLogoConstruction(geometry, compiled, t, { theme: "light", label: input.label })
-      .replace("<svg ", `<svg width="${size}" height="${size}" `);
-    context.fillStyle = "#ffffff";
-    context.fillRect(0, 0, size, size);
-    context.drawImage(await loadImage(Buffer.from(svg)), 0, 0, size, size);
-    const { data } = context.getImageData(0, 0, size, size);
+  await forEachConstructionFrame(record, input.label, ({ data, delayCs }) => {
     const indices = new Uint8Array(size * size);
     for (let pixel = 0; pixel < indices.length; pixel += 1) indices[pixel] = nearest(data[pixel * 4], data[pixel * 4 + 1], data[pixel * 4 + 2]);
-    frames.push({ indices, delayCs: index === times.length - 1 ? holdMs / 10 : delayCs });
-  }
+    frames.push({ indices, delayCs });
+  });
   const bytes = encodeGif({ width: size, height: size, palette, frames });
   if (bytes.byteLength > maxBytes) throw new LogoConstructionExportError("construction_too_large", String(bytes.byteLength));
   await writeFile(input.outputPath, bytes);
