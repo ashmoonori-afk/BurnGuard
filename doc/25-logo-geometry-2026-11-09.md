@@ -21,7 +21,7 @@ The raster method stays for pictorial and mascot marks.
 
 ## The compiler
 
-`packages/backend/src/services/logo-geometry-compile.ts`, with no new dependency.
+`packages/shared/src/logo-geometry-compile.ts`, pure and with no new dependency, so the app, the backend and the exports compile a record with the same code.
 
 ```text
 primitives + artboard edge  ->  curves (segments, circles)

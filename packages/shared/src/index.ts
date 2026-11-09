@@ -37,6 +37,7 @@ export * from "./figma-import";
 export * from "./graphic";
 export * from "./logo";
 export * from "./logo-geometry";
+export * from "./logo-geometry-compile";
 export * from "./logo-moodboard";
 export * from "./photo-placement";
 export * from "./logo-originality";

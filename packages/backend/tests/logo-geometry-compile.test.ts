@@ -1,11 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import { parseLogoGeometryV1, type LogoGeometryPrimitive, type LogoGeometryV1 } from "@bg/shared";
 import {
   LOGO_GEOMETRY_SLIVER_LENGTH,
   LogoGeometryCompileError,
   compileLogoGeometry,
   logoGeometrySvg,
-} from "../src/services/logo-geometry-compile";
+  parseLogoGeometryV1,
+  type LogoGeometryPrimitive,
+  type LogoGeometryV1,
+} from "@bg/shared";
 import { validateLogoSvg } from "../src/services/logo-svg-validation";
 
 /*

@@ -4,10 +4,11 @@ import {
   type LogoGeometryNode,
   type LogoGeometryPrimitive,
   type LogoGeometryV1,
-} from "@bg/shared";
+} from "./logo-geometry";
 
 /**
- * The geometric-mark compiler (doc/25-logo-geometry-2026-11-09.md).
+ * The geometric-mark compiler (doc/25-logo-geometry-2026-11-09.md). It is pure and lives in the shared
+ * package so the app, the backend and every export compile the same record with the same code.
  *
  * It turns a parsed `LogoGeometryV1` into one outline made only of straight `L` and circular `A`
  * segments, so every arc in the mark has exactly the radius of a construction circle. The method is
