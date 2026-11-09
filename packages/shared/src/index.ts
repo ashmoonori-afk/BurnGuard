@@ -39,6 +39,7 @@ export * from "./logo";
 export * from "./logo-geometry";
 export * from "./logo-geometry-compile";
 export * from "./logo-geometry-review";
+export * from "./logo-geometric-flow";
 export * from "./logo-construction";
 export * from "./logo-moodboard";
 export * from "./photo-placement";
