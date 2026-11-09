@@ -1,5 +1,7 @@
 import {
   DEFAULT_GRAPHIC_SET,
+  parseAppScreenFrame,
+  type AppScreenFrame,
   MAX_PROJECT_INSTRUCTIONS_CHARS,
   parseDesignBriefV1,
   parseGraphicCanvasV1,
@@ -15,6 +17,7 @@ import { isRecord } from "@bg/shared/contract-parser";
 import { isPromptPurpose, type PromptPurpose } from "./prompt-purpose";
 
 export type ProjectOptions = {
+  readonly app_screens_frame?: AppScreenFrame;
   readonly use_speaker_notes: boolean;
   readonly copy_as_is: boolean;
   readonly design_brief: DesignBriefV1 | null;
@@ -44,6 +47,7 @@ export function parseProjectOptions(input: unknown): ProjectOptions {
     throw new UpgradeContractError("expected_object", "options");
   }
   return {
+    ...(input["app_screens_frame"] === undefined ? {} : { app_screens_frame: parseAppScreenFrame(input["app_screens_frame"]) }),
     use_speaker_notes: optionalBoolean(input, "use_speaker_notes"),
     copy_as_is: optionalBoolean(input, "copy_as_is"),
     design_brief:

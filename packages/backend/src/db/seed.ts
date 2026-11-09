@@ -36,6 +36,7 @@ import { SEEDED_PROJECT_HTML, SPLASH_TEMPLATE_LANDING_HTML } from "./seeded-proj
 import { seedSplashDesignSystemFiles } from "./seed-sample-design-systems";
 import { PROMPT_SAMPLES, promptSampleDesignSystemId, renderPromptSampleHtml } from "./seed-tutorials";
 import { renderInitialArtifact } from "./templates";
+import { fallbackAppScreens } from "@bg/shared";
 import { parseStoredProjectOptions } from "../services/project-options";
 import { copyOriginalSample, findOriginalSample, originalSampleFormats, originalGraphicCanvas } from "../data/original-samples";
 import { preserveSystemFromSeed } from "../services/startup-system-seed-guard";
@@ -377,7 +378,12 @@ export async function createProjectRecord(input: {
       else if (original && originalFormat) await copyOriginalSample(original.slug, originalFormat.directory, stage);
       else {
         await copyBundledFonts(stage);
+        await mkdir(path.dirname(path.join(stage, input.entrypoint)), { recursive: true });
         await writeFile(path.join(stage, input.entrypoint), initialArtifact, "utf8");
+        if (input.type === "app_screens") {
+          const manifest = fallbackAppScreens([input.entrypoint], parseStoredProjectOptions(input.optionsJson).app_screens_frame);
+          await writeFile(path.join(stage, "screens.json"), JSON.stringify(manifest, null, 2), "utf8");
+        }
         if (input.type === "slide_deck") {
           await mkdir(path.join(stage, "runtime"), { recursive: true });
           await writeFile(path.join(stage, "runtime", "deck-stage.js"), DECK_STAGE_JS, "utf8");

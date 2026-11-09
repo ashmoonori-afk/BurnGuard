@@ -1,5 +1,7 @@
 import type { GraphicCanvasV1, GraphicSetV1, LogoSetV1, ProjectType } from "@bg/shared";
 import { renderGraphic } from "./graphic";
+import { renderAppScreen } from "./app-screens";
+import type { AppScreenFrame } from "@bg/shared";
 import { renderLogo } from "./logo";
 import { renderPrototype } from "./prototype";
 import { renderSlideDeck, type SlideDeckOptions } from "./slide-deck";
@@ -9,6 +11,7 @@ export interface TemplateContext {
   readonly type: ProjectType;
   readonly options?: SlideDeckOptions & {
     readonly graphic_canvas?: GraphicCanvasV1 | null;
+    readonly app_screens_frame?: AppScreenFrame;
     readonly graphic_set?: GraphicSetV1;
     readonly logo_set?: LogoSetV1 | null;
   };
@@ -16,6 +19,8 @@ export interface TemplateContext {
 
 export function renderInitialArtifact(ctx: TemplateContext): string {
   switch (ctx.type) {
+    case "app_screens":
+      return renderAppScreen(ctx.name, ctx.options?.app_screens_frame);
     case "slide_deck":
       return renderSlideDeck(ctx.name, ctx.options ?? {});
     case "graphic": {

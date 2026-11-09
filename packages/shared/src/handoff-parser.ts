@@ -18,6 +18,7 @@ import {
 
 const PROJECT_TYPES: readonly ProjectType[] = [
   "prototype",
+  "app_screens",
   "slide_deck",
   "graphic",
   "logo",
