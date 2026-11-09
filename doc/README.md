@@ -29,6 +29,7 @@ Start with the [product introduction and setup](../README.md), available in [Kor
 - [The server side of one geometric logo step](29-logo-geometric-step-2026-11-09.md)
 - [Wiring the geometric logo method into a turn](30-logo-geometric-turn-2026-11-09.md)
 - [The geometric logo panel](31-logo-geometric-panel-2026-11-09.md)
+- [The wordmark and the lockup of the geometric logo method](32-logo-wordmark-lockup-2026-11-09.md)
 - [Model capability profiles, CSS logos and web asset sourcing](model-profiles.md)
 - [Edit scope and revision comparison](edit-scope.md)
 - [Sample design system](<../design system sample/README.md>)
