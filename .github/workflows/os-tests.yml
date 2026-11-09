@@ -157,7 +157,9 @@ jobs:
           packages/shared/tests/logo-geometric-status.test.ts
           packages/shared/tests/logo-wordmark.test.ts
           packages/shared/tests/logo-lockup.test.ts
+          packages/backend/tests/gif-encoder.test.ts
           packages/backend/tests/logo-construction-export.test.ts
+          packages/backend/tests/logo-construction-gif.test.ts
           packages/backend/tests/logo-geometric-step.test.ts
           packages/backend/tests/logo-geometric-turn.test.ts
           packages/backend/tests/logo-geometric-status.test.ts

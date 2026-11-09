@@ -17,6 +17,8 @@ import { parseExportReceipt } from "../src/services/export-receipt";
 import { parseExportValidation } from "../src/services/export-receipt-validation";
 import { LogoSvgExportError, renderLogoSvg } from "../src/services/export-svg";
 import { assertExportAllowed, enqueueProjectExport, ExportServiceError } from "../src/services/exports";
+import { LOGO_CONSTRUCTION_GIF } from "../src/services/export-construction-gif";
+import { decodeGif } from "./helpers/gif-decode";
 
 const suite = `logo-export-${process.pid}`;
 const webProjectId = `${suite}-web`;
@@ -249,6 +251,48 @@ describe("construction sheet export", () => {
     const receipt = parseExportReceipt(JSON.parse(await readFile(path.join(path.dirname(job.output_path), "receipt.json"), "utf8")));
     expect(receipt.format).toBe("construction_svg");
     expect(receipt.validation).toEqual({ root: "svg", bytes: Buffer.byteLength(expected), source: null });
+    expect(activeExportBrowserCount()).toBe(0);
+  }, 70_000);
+});
+
+describe("construction draw-in GIF export", () => {
+  test("Given a prototype project When the draw-in GIF is requested Then the service and the route refuse it before an authority exists", async () => {
+    // Given
+    const before = exportCount(webProjectId);
+
+    // When
+    const response = await postExport(webProjectId, { format: "construction_gif", options: {} });
+
+    // Then
+    await expect(enqueueProjectExport(webProjectId, "construction_gif", {})).rejects.toMatchObject({ code: "format_requires_logo" });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: { code: "format_requires_logo" } });
+    expect(exportCount(webProjectId)).toBe(before);
+  });
+
+  test("Given a logo project with a geometry record When the draw-in GIF is exported Then the artifact is a looping GIF and the receipt records it", async () => {
+    // Given
+    const terminal = nextTerminalExport();
+
+    // When
+    const started = await enqueueProjectExport(logoProjectId, "construction_gif", {});
+    if (started === null || started.latest_attempt === null) throw new TypeError("construction GIF export did not start");
+    await terminal;
+
+    // Then
+    const job = await getExportJob(started.id);
+    if (job?.status !== "succeeded") {
+      const attempt = await getExportAttemptDetail(started.latest_attempt.id);
+      throw new TypeError(`${job?.error_message ?? `unexpected construction GIF export status: ${job?.status ?? "missing"}`} ${JSON.stringify(attempt?.findings ?? [])}`);
+    }
+    if (job.output_path === null) throw new TypeError("construction GIF output unavailable");
+    expect(path.basename(job.output_path)).toBe("artifact.gif");
+    const bytes = new Uint8Array(await readFile(job.output_path));
+    const gif = decodeGif(bytes);
+    expect(gif).toMatchObject({ width: LOGO_CONSTRUCTION_GIF.size, height: LOGO_CONSTRUCTION_GIF.size, loops: true });
+    const receipt = parseExportReceipt(JSON.parse(await readFile(path.join(path.dirname(job.output_path), "receipt.json"), "utf8")));
+    expect(receipt.format).toBe("construction_gif");
+    expect(receipt.validation).toEqual({ frames: gif.frames.length, width: LOGO_CONSTRUCTION_GIF.size, height: LOGO_CONSTRUCTION_GIF.size, bytes: bytes.byteLength });
     expect(activeExportBrowserCount()).toBe(0);
   }, 70_000);
 });

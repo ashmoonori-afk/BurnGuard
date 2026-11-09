@@ -188,7 +188,7 @@ function structuralFallback(
   sourcePageCount: number,
 ): ExportParitySummary {
   return buildStructuralParity({
-    sourcePageCount: sourcePageCount > 0 ? sourcePageCount : format === "svg" || format === "construction_svg" ? 1 : null,
+    sourcePageCount: sourcePageCount > 0 ? sourcePageCount : format === "svg" || format === "construction_svg" || format === "construction_gif" ? 1 : null,
     outputPageCount: validationPageCount(format, validation),
     comparisonUnavailable: true,
   });
@@ -208,7 +208,7 @@ function validationPageCount(
   format: ExportFormat,
   validation: ExportValidation,
 ): number | null {
-  if (format === "svg" || format === "construction_svg") return 1;
+  if (format === "svg" || format === "construction_svg" || format === "construction_gif") return 1;
   if ("pages" in validation && typeof validation.pages === "number") {
     return validation.pages;
   }

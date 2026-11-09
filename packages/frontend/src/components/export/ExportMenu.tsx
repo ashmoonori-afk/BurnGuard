@@ -11,6 +11,7 @@ import {
   PenTool,
   Presentation,
   PackagePlus,
+  Film,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -64,6 +65,7 @@ const OPTION_ICON: Record<ExportFormat, LucideIcon> = {
   imweb_package: PackagePlus,
   svg: PenTool,
   construction_svg: PenTool,
+  construction_gif: Film,
 };
 
 export type { ExportQualityGate };

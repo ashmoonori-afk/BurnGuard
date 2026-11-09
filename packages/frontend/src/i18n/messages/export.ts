@@ -93,6 +93,7 @@ export const exportMessages = defineMessages({
   "export.format.handoff": { ko: "개발자 전달용", en: "Developer handoff", "zh-CN": "开发交付" },
   "export.format.png_zip": { ko: "프레임 ZIP", en: "Frame ZIP", "zh-CN": "画帧 ZIP" },
   "export.format.construction_svg": { ko: "작도 시트 SVG", en: "Construction sheet SVG", "zh-CN": "构造图 SVG" },
+  "export.format.construction_gif": { ko: "작도 과정 GIF", en: "Construction draw-in GIF", "zh-CN": "构造过程 GIF" },
   "export.format.cafe24_package": { ko: "카페24 패키지", en: "Cafe24 package", "zh-CN": "Cafe24 包" },
   "export.format.imweb_package": { ko: "아임웹 패키지", en: "Imweb package", "zh-CN": "Imweb 包" },
   "export.option.cafe24": { ko: "카페24 스마트디자인 패키지", en: "Cafe24 Smart Design package", "zh-CN": "Cafe24 Smart Design 包" },
