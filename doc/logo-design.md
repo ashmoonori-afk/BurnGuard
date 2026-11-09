@@ -27,8 +27,15 @@ Only an invalid `logo.svg` with a finite validator violation receives one bounde
 | `svg` | The validated `logo.svg`, copied unchanged, `image/svg+xml` | `<slug>-logo-r<revision>.svg` |
 | `pdf` (`pdf_paper: "artboard"`) | One 1920 x 1080 page per guideline artboard | `<slug>-guidelines-r<revision>.pdf` |
 | `html_zip` | The guidelines HTML before PDF conversion | `<slug>-guidelines-html-r<revision>.zip` |
+| `construction_svg` | A still construction sheet rendered from `logo-geometry.json`, checked against the same SVG allowlist | `<slug>-construction-r<revision>.svg` |
+| `construction_gif` | The construction draw-in as a looping 480 px GIF (at most 120 frames and 8 MiB) | `<slug>-construction-r<revision>.gif` |
+| `construction_mp4` | The same frames as H.264 MP4, only when the bundled Chromium can encode `avc1.42001e`; otherwise refused with `construction_mp4_unsupported` | `<slug>-construction-r<revision>.mp4` |
 
-`svg` is refused for every other project type (`format_requires_logo`); `png`, `png_zip`, `pptx`, `handoff` and the platform packages are refused for logo projects with their existing reasons. The filename keeps the repository's `-` separator and `r<revision>` suffix.
+`svg` is refused for every other project type (`format_requires_logo`); `png`, `png_zip`, `pptx`, `handoff` and the platform packages are refused for logo projects with their existing reasons. The filename keeps the repository's `-` separator and `r<revision>` suffix. The three construction formats need a geometry record (`logo-geometry.json`); without one the export menu lists them as disabled with `construction_missing`.
+
+## Geometric method (experimental, off by default)
+
+Since v0.5.35 a second, geometry-first method can replace the raster flow above for every logo type except pictorial and mascot: the agent writes a `LogoGeometryV1` record (circles, half-planes, rectangles and polygons on a 64-unit artboard with a boolean tree), the server compiles it into `logo.svg`, runs measured checks, and the panel walks through symbol, wordmark and lockup with a hash-bound approval at each step. It runs only when the backend starts with `BG_LOGO_GEOMETRIC=1`; with the switch off every logo turn runs as described above. The records are [25](25-logo-geometry-2026-11-09.md) through [34](34-logo-wordmark-panel-2026-11-09.md); the construction exports are [35](35-logo-construction-export-2026-11-09.md) through [38](38-logo-construction-mp4-2026-11-09.md).
 
 ## Guidelines into the design system
 

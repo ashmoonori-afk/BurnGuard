@@ -2,7 +2,7 @@
 
 ## 1. Filesystem Layout
 
-Reviewed for v0.5.34 on 2026-10-24; `packages/backend/src/lib/app-paths.ts` and the SQL migrations in `packages/backend/src/db/migrations/` are authoritative.
+Reviewed for v0.5.35 on 2026-11-09; `packages/backend/src/lib/app-paths.ts` and the SQL migrations in `packages/backend/src/db/migrations/` are authoritative.
 
 The root directory is `BG_APP_ROOT` when set (must be an absolute path), and otherwise `~/.burnguard/` (`%USERPROFILE%\.burnguard\` on Windows), which resolves to `os.homedir() + "/.burnguard"`.
 
@@ -95,7 +95,7 @@ CREATE INDEX idx_ds_status ON design_systems(status);
 CREATE TABLE projects (
   id                TEXT PRIMARY KEY,
   name              TEXT NOT NULL,
-  type              TEXT NOT NULL CHECK(type IN ('prototype','slide_deck','graphic','logo','from_template','other')),
+  type              TEXT NOT NULL CHECK(type IN ('prototype','app_screens','slide_deck','graphic','logo','from_template','other')),
   design_system_id  TEXT REFERENCES design_systems(id),
   dir_path          TEXT NOT NULL,
   entrypoint        TEXT NOT NULL DEFAULT 'index.html',
@@ -113,7 +113,7 @@ CREATE INDEX idx_projects_ds ON projects(design_system_id);
 
 `options_json` stores snake-case project options. The current object may contain
 `use_speaker_notes` for slide decks, `copy_as_is` for template-based projects,
-`graphic_canvas` and `graphic_set` for graphic projects, `standing_instructions` (up to 4,000 characters) on any project, `logo_set` for logo
+`graphic_canvas` and `graphic_set` for graphic projects, `app_screens_frame` (screen width and height, Phone 390 x 844 by default or Desktop 1440 x 900) for app screens projects, `standing_instructions` (up to 4,000 characters) on any project, `logo_set` for logo
 projects (brand name, niche, character, logo type, symbol keywords), and a versioned `design_brief` with output type, audience, objective, content
 source, locale, brand mode, visual mood, density, and output size. The HTTP
 boundary rejects unknown keys and malformed brief fields before persistence;
@@ -261,7 +261,7 @@ CREATE INDEX idx_tweaks_turn ON tweaks(turn_id);
 CREATE TABLE exports (
   id            TEXT PRIMARY KEY,
   project_id    TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-  format        TEXT NOT NULL CHECK(format IN ('html_zip','pdf','png','pptx','handoff','cafe24_package','imweb_package','png_zip','svg')),
+  format        TEXT NOT NULL CHECK(format IN ('html_zip','pdf','png','pptx','handoff','cafe24_package','imweb_package','png_zip','svg','construction_svg','construction_gif','construction_mp4')),
   status        TEXT NOT NULL CHECK(status IN ('pending','running','succeeded','failed')),
   output_path   TEXT,
   error_message TEXT,
