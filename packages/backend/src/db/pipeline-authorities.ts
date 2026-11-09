@@ -115,7 +115,7 @@ export const exportsTable = sqliteTable(
   {
     id: text("id").primaryKey(),
     projectId: text("project_id").notNull().references(() => projectsTable.id, { onDelete: "cascade" }),
-    format: text("format", { enum: ["html_zip", "pdf", "png", "pptx", "handoff", "cafe24_package", "imweb_package", "png_zip", "svg"] }).notNull(),
+    format: text("format", { enum: ["html_zip", "pdf", "png", "pptx", "handoff", "cafe24_package", "imweb_package", "png_zip", "svg", "construction_svg"] }).notNull(),
     status: text("status", { enum: ["pending", "running", "succeeded", "failed"] }).notNull(),
     outputPath: text("output_path"),
     errorMessage: text("error_message"),
@@ -125,7 +125,7 @@ export const exportsTable = sqliteTable(
     completedAt: integer("completed_at"),
   },
   (table) => [
-    check("ck_exports_format", sql`${table.format} IN ('html_zip','pdf','png','pptx','handoff','cafe24_package','imweb_package','png_zip','svg')`),
+    check("ck_exports_format", sql`${table.format} IN ('html_zip','pdf','png','pptx','handoff','cafe24_package','imweb_package','png_zip','svg','construction_svg')`),
     check("ck_exports_status", sql`${table.status} IN ('pending','running','succeeded','failed')`),
     index("idx_exports_project").on(table.projectId, table.createdAt),
   ],

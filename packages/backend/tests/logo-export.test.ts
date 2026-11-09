@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { ExportFormat, ExportOptions, ProjectDetail, SequencedEventEnvelope } from "@bg/shared";
-import { LOGO_FILES, LOGO_PAGE, LOGO_SOURCE_ATTRIBUTE } from "@bg/shared";
+import { compileLogoGeometry, LOGO_FILES, LOGO_GEOMETRY_FILE, LOGO_PAGE, LOGO_SOURCE_ATTRIBUTE, parseLogoGeometryV1, renderLogoConstructionSheet } from "@bg/shared";
 import { getExportAttemptDetail, getExportJob } from "../src/db/exports";
 import { runMigrations } from "../src/db/migrate-local";
 import { getSqlite } from "../src/db/sqlite-client";
@@ -29,6 +29,14 @@ const logoProject = projectFixture("logo", logoDir);
 const oversizedLogoProject = projectFixture("logo", oversizedDir);
 
 const VALID_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" ${LOGO_SOURCE_ATTRIBUTE}="explorations/round-1/candidate-2.png"><path d="M64 64H448V448H64Z" fill="#101828"/></svg>\n`;
+// A ring drawn for this suite: a circle minus a smaller concentric one.
+const RING_RECORD = JSON.stringify({
+  schema_version: 1,
+  grid: 64,
+  radii: [{ id: "outer", value: 20 }, { id: "inner", value: 12 }],
+  primitives: [{ kind: "circle", id: "o", cx: 32, cy: 32, r: "outer" }, { kind: "circle", id: "i", cx: 32, cy: 32, r: "inner" }],
+  tree: { op: "subtract", args: [{ ref: "o" }, { ref: "i" }] },
+});
 const RASTER_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><image href="candidate-2.png" width="512" height="512"/></svg>\n`;
 
 beforeAll(async () => {
@@ -37,6 +45,7 @@ beforeAll(async () => {
   await writeFile(path.join(webDir, "index.html"), "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>Landing</title></head><body><main>Landing</main></body></html>");
   await writeFile(path.join(logoDir, "index.html"), guidelines(8));
   await writeFile(path.join(logoDir, LOGO_FILES.logo), VALID_SVG);
+  await writeFile(path.join(logoDir, LOGO_GEOMETRY_FILE), RING_RECORD);
   await copyBundledFonts(logoDir);
   await writeFile(path.join(oversizedDir, "index.html"), guidelines(20));
   getSqlite().prepare("INSERT INTO projects(id,name,type,dir_path,entrypoint,backend_id,options_json,created_at,updated_at) VALUES (?,?,'prototype',?,'index.html','codex',NULL,1,1)").run(webProjectId, "Acme Landing", webDir);
@@ -189,6 +198,57 @@ describe("logo SVG export pipeline", () => {
     const receipt = parseExportReceipt(JSON.parse(await readFile(path.join(path.dirname(job.output_path), "receipt.json"), "utf8")));
     expect(receipt.format).toBe("svg");
     expect(receipt.validation).toEqual({ root: "svg", bytes: Buffer.byteLength(VALID_SVG), source: "explorations/round-1/candidate-2.png" });
+    expect(activeExportBrowserCount()).toBe(0);
+  }, 70_000);
+});
+
+describe("construction sheet export", () => {
+  test("Given a prototype project When the construction sheet is requested Then the service and the route refuse it before an authority exists", async () => {
+    // Given
+    const before = exportCount(webProjectId);
+
+    // When
+    const response = await postExport(webProjectId, { format: "construction_svg", options: {} });
+
+    // Then
+    await expect(enqueueProjectExport(webProjectId, "construction_svg", {})).rejects.toMatchObject({ code: "format_requires_logo" });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: { code: "format_requires_logo" } });
+    expect(exportCount(webProjectId)).toBe(before);
+  });
+
+  test("Given a logo project with options When the construction sheet is requested Then the options are refused", async () => {
+    // Given / When
+    const response = await postExport(logoProjectId, { format: "construction_svg", options: { pdf_paper: "artboard" } as ExportOptions });
+
+    // Then
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: { code: "invalid_export_options" } });
+  });
+
+  test("Given a logo project with a geometry record When the construction sheet is exported Then the artifact is the still sheet", async () => {
+    // Given
+    const terminal = nextTerminalExport();
+    const { geometry } = parseLogoGeometryV1(RING_RECORD);
+    const expected = renderLogoConstructionSheet(geometry, compileLogoGeometry(geometry), "Acme");
+
+    // When
+    const started = await enqueueProjectExport(logoProjectId, "construction_svg", {});
+    if (started === null || started.latest_attempt === null) throw new TypeError("construction export did not start");
+    await terminal;
+
+    // Then
+    const job = await getExportJob(started.id);
+    if (job?.status !== "succeeded") {
+      const attempt = await getExportAttemptDetail(started.latest_attempt.id);
+      throw new TypeError(`${job?.error_message ?? `unexpected construction export status: ${job?.status ?? "missing"}`} ${JSON.stringify(attempt?.findings ?? [])}`);
+    }
+    if (job.output_path === null) throw new TypeError("construction output unavailable");
+    expect(path.basename(job.output_path)).toBe("artifact.svg");
+    expect(await readFile(job.output_path, "utf8")).toBe(expected);
+    const receipt = parseExportReceipt(JSON.parse(await readFile(path.join(path.dirname(job.output_path), "receipt.json"), "utf8")));
+    expect(receipt.format).toBe("construction_svg");
+    expect(receipt.validation).toEqual({ root: "svg", bytes: Buffer.byteLength(expected), source: null });
     expect(activeExportBrowserCount()).toBe(0);
   }, 70_000);
 });

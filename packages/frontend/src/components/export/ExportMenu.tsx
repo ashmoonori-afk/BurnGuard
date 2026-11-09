@@ -63,6 +63,7 @@ const OPTION_ICON: Record<ExportFormat, LucideIcon> = {
   cafe24_package: PackagePlus,
   imweb_package: PackagePlus,
   svg: PenTool,
+  construction_svg: PenTool,
 };
 
 export type { ExportQualityGate };

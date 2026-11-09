@@ -18,6 +18,8 @@ export function formatLabel(format: ExportFormat): string {
       return "PNG";
     case "svg":
       return "SVG";
+    case "construction_svg":
+      return t("export.format.construction_svg");
     case "pptx":
       return t("export.format.pptx");
     case "html_zip":

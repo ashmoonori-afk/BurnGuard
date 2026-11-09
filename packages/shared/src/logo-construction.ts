@@ -66,14 +66,18 @@ const escapeText = (text: string): string => text.replace(/&/g, "&amp;").replace
 interface Stroke {
   readonly step: LogoConstructionStep;
   readonly key: string;
-  readonly draw: (progress: number, palette: (typeof PALETTES)[LogoConstructionTheme]) => string;
+  readonly draw: (progress: number, palette: (typeof PALETTES)[LogoConstructionTheme], still: boolean) => string;
 }
 
-/** A stroke `d` of length `length` drawn in to `progress` with a dash. */
-function dashed(d: string, length: number, progress: number, colour: string, width: number): string {
+/**
+ * A stroke `d` of length `length` drawn in to `progress` with a dash. A still sheet draws the whole
+ * stroke with no dash, so it stays inside the master vector allowlist.
+ */
+function dashed(d: string, length: number, progress: number, colour: string, width: number, still: boolean): string {
+  const base = `<path d="${d}" fill="none" stroke="${colour}" stroke-width="${f(width)}" stroke-linecap="round"`;
+  if (still) return `${base}/>`;
   const offset = length * (1 - progress);
-  return `<path d="${d}" fill="none" stroke="${colour}" stroke-width="${f(width)}" stroke-linecap="round" `
-    + `stroke-dasharray="${f(length)} ${f(length)}" stroke-dashoffset="${f(offset)}"/>`;
+  return `${base} stroke-dasharray="${f(length)} ${f(length)}" stroke-dashoffset="${f(offset)}"/>`;
 }
 
 function segment(a: LogoGeometryVec, b: LogoGeometryVec): { d: string; length: number } {
@@ -97,11 +101,11 @@ function strokesOf(geometry: LogoGeometryV1, compiled: LogoGeometryCompiled): St
 
   compiled.guides.x.forEach((x) => {
     const line = segment({ x, y: 0 }, { x, y: G });
-    strokes.push({ step: "guides", key: `guide-x-${f(x)}`, draw: (p, c) => dashed(line.d, line.length, p, c.line, CONSTRUCTION_WIDTH / 2) });
+    strokes.push({ step: "guides", key: `guide-x-${f(x)}`, draw: (p, c, still) => dashed(line.d, line.length, p, c.line, CONSTRUCTION_WIDTH / 2, still) });
   });
   compiled.guides.y.forEach((y) => {
     const line = segment({ x: 0, y }, { x: G, y });
-    strokes.push({ step: "guides", key: `guide-y-${f(y)}`, draw: (p, c) => dashed(line.d, line.length, p, c.line, CONSTRUCTION_WIDTH / 2) });
+    strokes.push({ step: "guides", key: `guide-y-${f(y)}`, draw: (p, c, still) => dashed(line.d, line.length, p, c.line, CONSTRUCTION_WIDTH / 2, still) });
   });
 
   for (const primitive of geometry.primitives) {
@@ -117,11 +121,11 @@ function strokesOf(geometry: LogoGeometryV1, compiled: LogoGeometryCompiled): St
         strokes.push({
           step: "circles",
           key: `circle-${primitive.id}`,
-          draw: (p, c) => {
+          draw: (p, c, still) => {
             const cross = `M${f(cx - 0.8)} ${f(cy)}L${f(cx + 0.8)} ${f(cy)}M${f(cx)} ${f(cy - 0.8)}L${f(cx)} ${f(cy + 0.8)}`;
             return `<path d="${cross}" fill="none" stroke="${colour(c)}" stroke-width="${f(CONSTRUCTION_WIDTH)}" opacity="${f(p)}"/>`
-              + dashed(radius.d, radius.length, p, colour(c), CONSTRUCTION_WIDTH)
-              + dashed(ring, Math.PI * 2 * r, p, colour(c), CONSTRUCTION_WIDTH);
+              + dashed(radius.d, radius.length, p, colour(c), CONSTRUCTION_WIDTH, still)
+              + dashed(ring, Math.PI * 2 * r, p, colour(c), CONSTRUCTION_WIDTH, still);
           },
         });
         break;
@@ -129,18 +133,18 @@ function strokesOf(geometry: LogoGeometryV1, compiled: LogoGeometryCompiled): St
       case "line": {
         const [a, b] = logoGeometryLineSegment({ x: primitive.from[0], y: primitive.from[1] }, { x: primitive.to[0], y: primitive.to[1] });
         const line = segment(a, b);
-        strokes.push({ step: "lines", key: `line-${primitive.id}`, draw: (p, c) => dashed(line.d, line.length, p, colour(c), CONSTRUCTION_WIDTH) });
+        strokes.push({ step: "lines", key: `line-${primitive.id}`, draw: (p, c, still) => dashed(line.d, line.length, p, colour(c), CONSTRUCTION_WIDTH, still) });
         break;
       }
       case "rect": {
         const { x, y, width: w, height: h } = primitive;
         const box = polyline([{ x, y }, { x: x + w, y }, { x: x + w, y: y + h }, { x, y: y + h }]);
-        strokes.push({ step: "lines", key: `rect-${primitive.id}`, draw: (p, c) => dashed(box.d, box.length, p, colour(c), CONSTRUCTION_WIDTH) });
+        strokes.push({ step: "lines", key: `rect-${primitive.id}`, draw: (p, c, still) => dashed(box.d, box.length, p, colour(c), CONSTRUCTION_WIDTH, still) });
         break;
       }
       case "polygon": {
         const shape = polyline(primitive.points.map(([x, y]) => ({ x, y })));
-        strokes.push({ step: "lines", key: `polygon-${primitive.id}`, draw: (p, c) => dashed(shape.d, shape.length, p, colour(c), CONSTRUCTION_WIDTH) });
+        strokes.push({ step: "lines", key: `polygon-${primitive.id}`, draw: (p, c, still) => dashed(shape.d, shape.length, p, colour(c), CONSTRUCTION_WIDTH, still) });
         break;
       }
     }
@@ -160,7 +164,7 @@ function strokesOf(geometry: LogoGeometryV1, compiled: LogoGeometryCompiled): St
   compiled.loops.forEach((loop, index) => {
     const d = logoGeometryLoopPath(loop);
     const length = loop.reduce((total, edge) => total + edge.length, 0);
-    strokes.push({ step: "outline", key: `outline-${index}`, draw: (p, c) => dashed(d, length, p, c.ink, OUTLINE_WIDTH) });
+    strokes.push({ step: "outline", key: `outline-${index}`, draw: (p, c, still) => dashed(d, length, p, c.ink, OUTLINE_WIDTH, still) });
   });
   return strokes;
 }
@@ -224,11 +228,27 @@ export function renderLogoConstruction(
   const layers = strokes.map((stroke) => {
     const item = byKey.get(stroke.key);
     const p = item === undefined ? 1 : progress(item);
-    return p <= 0 ? "" : stroke.draw(p, palette);
+    return p <= 0 ? "" : stroke.draw(p, palette, false);
   });
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${G} ${G}" role="img" aria-label="${escapeText(options.label)}">`
     + `<rect x="0" y="0" width="${G}" height="${G}" fill="${palette.paper}"/>`
     + `<path d="${compiled.path}" fill="${palette.ink}" fill-rule="nonzero" fill-opacity="${f(fillOpacity)}"/>`
     + layers.join("")
     + "</svg>";
+}
+
+/**
+ * The construction sheet as a still drawing (doc/35): the finished construction on a white artboard,
+ * every stroke whole and undashed, the fill solid. Its markup is a fixed template filled only from
+ * the record and its compiled outline, so it is byte-stable for the same record and passes the same
+ * master vector allowlist as `logo.svg`. The construction export publishes exactly these bytes.
+ */
+export function renderLogoConstructionSheet(geometry: LogoGeometryV1, compiled: LogoGeometryCompiled, label: string): string {
+  const palette = PALETTES.light;
+  const layers = strokesOf(geometry, compiled).map((stroke) => stroke.draw(1, palette, true));
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${G} ${G}" role="img" aria-label="${escapeText(label)}">`
+    + `<rect x="0" y="0" width="${G}" height="${G}" fill="${palette.paper}"/>`
+    + `<path d="${compiled.path}" fill="${palette.ink}" fill-rule="nonzero"/>`
+    + layers.join("")
+    + "</svg>\n";
 }

@@ -32,6 +32,7 @@ Start with the [product introduction and setup](../README.md), available in [Kor
 - [The wordmark and the lockup of the geometric logo method](32-logo-wordmark-lockup-2026-11-09.md)
 - [Wordmark and lockup turns of the geometric logo method](33-logo-wordmark-turns-2026-11-09.md)
 - [The wordmark and lockup in the geometric logo panel](34-logo-wordmark-panel-2026-11-09.md)
+- [The construction sheet export](35-logo-construction-export-2026-11-09.md)
 - [Model capability profiles, CSS logos and web asset sourcing](model-profiles.md)
 - [Edit scope and revision comparison](edit-scope.md)
 - [Sample design system](<../design system sample/README.md>)

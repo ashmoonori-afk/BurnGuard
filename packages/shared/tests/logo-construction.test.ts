@@ -8,6 +8,7 @@ import {
   logoConstructionTimeline,
   parseLogoGeometryV1,
   renderLogoConstruction,
+  renderLogoConstructionSheet,
 } from "../src/index";
 
 // A two-bowl B drawn for this test: a stem, two bowls cut by the stem edge, two counters.
@@ -109,5 +110,24 @@ describe("renderLogoConstruction", () => {
     expect(dark).not.toBe(renderLogoConstruction(B, compiled, 1, light));
     expect(shape(dark)).toBe(shape(renderLogoConstruction(B, compiled, 1, light)));
     expect(renderLogoConstruction(B, compiled, 1, { theme: "light", label: 'A "<b>" & c' })).toContain('aria-label="A &quot;&lt;b&gt;&quot; &amp; c"');
+  });
+});
+
+describe("logo construction sheet", () => {
+  test("Given the B, when the still sheet is rendered, then it is the finished frame with every dash and the fill opacity taken out", () => {
+    const frame = renderLogoConstruction(B, compiled, 1, light);
+    const sheet = renderLogoConstructionSheet(B, compiled, light.label);
+
+    expect(sheet).not.toContain("stroke-dash");
+    expect(sheet).not.toContain("fill-opacity");
+    expect(sheet).toBe(frame.replace(/ stroke-dasharray="[^"]*" stroke-dashoffset="[^"]*"/g, "").replace(' fill-opacity="1"', "") + "\n");
+  });
+
+  test("Given the same record twice, when sheets are rendered, then the bytes are identical and only the label differs between names", () => {
+    const first = renderLogoConstructionSheet(B, compileLogoGeometry(B), "Northstar");
+    const second = renderLogoConstructionSheet(B, compileLogoGeometry(B), "Northstar");
+
+    expect(sha(first)).toBe(sha(second));
+    expect(renderLogoConstructionSheet(B, compiled, "Other").replace('aria-label="Other"', 'aria-label="Northstar"')).toBe(first);
   });
 });
