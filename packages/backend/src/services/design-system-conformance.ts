@@ -5,7 +5,7 @@ import { resolveWithin } from "../security/path-boundary";
 import { collectLayout, REFERENCE_MEDIA_CSS, REFERENCE_VIEWPORT_HEIGHTS } from "./extraction-rendered-layout";
 import { readManagedFile } from "./artifact-tree-storage";
 import { layoutReferenceFromPinnedContext, stagedReferencePath } from "./design-system-layout-reference";
-import { compareVisualViewport, cropSectionJpeg, VISUAL_CROP_DIR, visualRepairTargets, type VisualSectionScore, type VisualViewportReport } from "./design-system-visual-diff";
+import { compareVisualViewport, cropSectionJpeg, VISUAL_CROP_DIR, visualRepairTargets, type VisualSectionScore, type VisualUnavailableReason, type VisualViewportReport } from "./design-system-visual-diff";
 import { launchChromium, openRenderSession } from "./export-render-session";
 import { registerExportBrowser } from "./export-browser-registry";
 
@@ -182,16 +182,18 @@ export async function reviewDesignSystemConformance(input: { readonly projectDir
         findings.push(...compareMeasuredViewport(expected.viewports[name], actual, name));
         const reference = await stagedReference(input.projectDir, input.pinnedContext, expected.path, name);
         if (reference !== null) {
+          let step: VisualUnavailableReason = "style";
           try {
             await session.page.addStyleTag({ content: REFERENCE_MEDIA_CSS });
+            step = "capture";
             const height = Math.max(size.height, Math.min(actual.page_height, size.height * REFERENCE_VIEWPORT_HEIGHTS));
             const generated = await session.page.screenshot({ type: "png", fullPage: true, animations: "disabled", timeout: VISUAL_CAPTURE_TIMEOUT_MS, clip: { x: 0, y: 0, width: size.width, height } });
             const generatedBytes = new Uint8Array(generated);
             visual.push(await compareVisualViewport({ viewport: name, reference, generated: generatedBytes, expected: expected.viewports[name], actual }));
             images.set(name, { reference, generated: generatedBytes, expected: expected.viewports[name] });
-          } catch (error) {
+          } catch {
             input.signal.throwIfAborted();
-            visual.push({ viewport: name, unavailable: true, sections: [] });
+            visual.push({ viewport: name, unavailable: true, unavailable_reason: step, sections: [] });
           }
         }
       } finally { await session.close(); }

@@ -14,7 +14,9 @@ export type VisualSectionScore = {
   /** Project-relative crops of this section from the source screenshot and from the current render; the render crop is absent when the page ends before the section. */
   readonly crop?: { readonly reference: string; readonly generated?: string };
 };
-export type VisualViewportReport = { readonly viewport: MeasuredViewportName; readonly unavailable: boolean; readonly sections: readonly VisualSectionScore[] };
+/** The step that left a viewport without a score: injecting the reference media CSS, capturing the render, or decoding either image. */
+export type VisualUnavailableReason = "style" | "capture" | "decode";
+export type VisualViewportReport = { readonly viewport: MeasuredViewportName; readonly unavailable: boolean; readonly unavailable_reason?: VisualUnavailableReason; readonly sections: readonly VisualSectionScore[] };
 
 /** Where a review stages section crops; inside the unpublished inputs directory, never part of the artifact. */
 export const VISUAL_CROP_DIR = ".burnguard-inputs/design-system-starter/crops";
@@ -128,7 +130,7 @@ export async function compareVisualViewport(input: {
   try {
     [reference, generated] = await Promise.all([decodeGrayImage(input.reference), decodeGrayImage(input.generated)]);
   } catch {
-    return { viewport: input.viewport, unavailable: true, sections: [] };
+    return { viewport: input.viewport, unavailable: true, unavailable_reason: "decode", sections: [] };
   }
   const overlaps = sectionOverlap(input.expected, input.actual);
   return {
