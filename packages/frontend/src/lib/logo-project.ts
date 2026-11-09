@@ -6,6 +6,7 @@
  */
 import {
   LOGO_ACTION_TAG,
+  LOGO_GEOMETRIC_TAG,
   LOGO_PAGE,
   LOGO_TYPES,
   UpgradeContractError,
@@ -13,6 +14,7 @@ import {
   parseLogoAction,
   type GraphicCanvasV1,
   type LogoActionV1,
+  type LogoGeometricActionV1,
   type LogoManifestV1,
   type LogoRoundV1,
   type LogoType,
@@ -77,6 +79,30 @@ export function logoActionMessage(action: LogoActionV1): string {
     }
   }
   return `${sentinel}\n${line}`;
+}
+
+/**
+ * A geometric-method action on the same send path (doc/31). The revision note rides in the sentinel
+ * and is repeated in the visible line, so the transcript shows what the person asked for.
+ */
+export function logoGeometricActionMessage(action: LogoGeometricActionV1): string {
+  const sentinel = `<${LOGO_GEOMETRIC_TAG}>${JSON.stringify(action)}</${LOGO_GEOMETRIC_TAG}>`;
+  let line: string;
+  switch (action.action) {
+    case "answer": line = t("logo.geometric.answerLine"); break;
+    case "approve": line = t("logo.geometric.approveLine"); break;
+    case "revise": line = t("logo.geometric.reviseLine", { note: action.note }); break;
+    default: {
+      const unreachable: never = action;
+      throw new TypeError(`Unknown geometric logo action: ${unreachable}`);
+    }
+  }
+  return `${sentinel}\n${line}`;
+}
+
+/** Makes the current step again from the saved answers: a plain message, no sentinel. */
+export function logoGeometricMakeMessage(): string {
+  return t("logo.geometric.makeLine");
 }
 
 export function logoIdeationMessage(text: string): string {

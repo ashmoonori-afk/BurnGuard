@@ -3,6 +3,7 @@ import { lstat, mkdir, readFile, writeFile } from "node:fs/promises";
 import {
   LOGO_FILES,
   LOGO_GEOMETRIC_ANSWERS_FILE,
+  LOGO_GEOMETRIC_FINDING_KINDS,
   LOGO_GEOMETRIC_STEPS,
   LOGO_GEOMETRY_FILE,
   LogoGeometryCompileError,
@@ -15,6 +16,7 @@ import {
   renderLogoConstruction,
   reviewLogoGeometry,
   type LogoGeometricFilesState,
+  type LogoGeometricFindingKind,
   type LogoGeometricStep,
   type LogoGeometricStepFiles,
   type LogoGeometryCompiled,
@@ -142,6 +144,27 @@ async function readApprovals(dir: string): Promise<LogoGeometricApprovals> {
 }
 
 /** Reads what the flow's position is derived from. Missing or malformed files are absent. */
+/**
+ * The measured review of the symbol record whose bytes hash to `recordSha256`, reduced to the kinds
+ * of finding the app explains. A missing, malformed or stale review (written for other bytes) is null.
+ */
+export async function readLogoGeometricSymbolReview(dir: string, recordSha256: string): Promise<{ passed: boolean; findings: LogoGeometricFindingKind[] } | null> {
+  const bytes = await readBounded(dir, LOGO_GEOMETRIC_SYMBOL_REVIEW_FILE, RECORD_MAX_BYTES);
+  if (bytes === null) return null;
+  let value: unknown;
+  try { value = JSON.parse(bytes.toString("utf8")); } catch { return null; }
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+  const review = value as Record<string, unknown>;
+  if (review["record_sha256"] !== recordSha256 || typeof review["passed"] !== "boolean" || !Array.isArray(review["findings"])) return null;
+  const kinds: LogoGeometricFindingKind[] = [];
+  for (const finding of review["findings"]) {
+    const kind: unknown = typeof finding === "object" && finding !== null ? (finding as Record<string, unknown>)["kind"] : undefined;
+    if (!(LOGO_GEOMETRIC_FINDING_KINDS as readonly unknown[]).includes(kind)) return null;
+    if (!kinds.includes(kind as LogoGeometricFindingKind)) kinds.push(kind as LogoGeometricFindingKind);
+  }
+  return { passed: review["passed"], findings: kinds };
+}
+
 export async function readLogoGeometricState(dir: string): Promise<LogoGeometricFilesState> {
   const answersBytes = await readBounded(dir, LOGO_GEOMETRIC_ANSWERS_FILE, RECORD_MAX_BYTES);
   let answers: LogoGeometricFilesState["answers"] = null;

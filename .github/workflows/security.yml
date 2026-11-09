@@ -238,8 +238,10 @@ jobs:
           packages/shared/tests/logo-construction.test.ts
           packages/shared/tests/logo-geometry-review.test.ts
           packages/shared/tests/logo-geometric-flow.test.ts
+          packages/shared/tests/logo-geometric-status.test.ts
           packages/backend/tests/logo-geometric-step.test.ts
           packages/backend/tests/logo-geometric-turn.test.ts
+          packages/backend/tests/logo-geometric-status.test.ts
           packages/backend/tests/pipeline-repositories.test.ts
           packages/backend/tests/catalog.test.ts
           packages/backend/tests/migration-pipeline-upgrade.test.ts
@@ -290,6 +292,7 @@ jobs:
           packages/frontend/tests/northvale-previews.browser.test.ts
           packages/frontend/tests/workspace-controls.browser.test.ts
           packages/frontend/tests/logo-construction.browser.test.ts
+          packages/frontend/tests/logo-geometric.browser.test.ts
           packages/backend/tests/palette-editor.browser.test.ts
           packages/backend/tests/design-direction-content-access.test.ts
           packages/frontend/tests/app-font.browser.test.ts
