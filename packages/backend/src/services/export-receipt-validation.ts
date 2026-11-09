@@ -24,7 +24,7 @@ export type PngZipValidation = {
 /** A logo SVG is published verbatim, so the receipt records the published bytes, not a render. */
 export type SvgValidation = { readonly root: "svg" | "xml"; readonly bytes: number; readonly source: string | null };
 
-/** The construction draw-in GIF is rendered here, so the receipt records its frame count, size and bytes. */
+/** The construction draw-in GIF and MP4 are rendered here, so the receipt records their frame count, size and bytes. */
 export type GifValidation = { readonly frames: number; readonly width: number; readonly height: number; readonly bytes: number };
 
 export type ExportValidation =
@@ -57,7 +57,8 @@ export function parseExportValidation(format: ExportFormat, options: ExportOptio
     }
     case "handoff": exact(input, ["source_files", "nodes"]); return { source_files: positiveInt(input["source_files"]), nodes: nonnegativeInt(input["nodes"]) };
     case "pdf": return parsePdf(input, options);
-    case "construction_gif": exact(input, ["frames", "width", "height", "bytes"]); return { frames: positiveInt(input["frames"]), width: positiveInt(input["width"]), height: positiveInt(input["height"]), bytes: positiveInt(input["bytes"]) };
+    case "construction_gif":
+    case "construction_mp4": exact(input, ["frames", "width", "height", "bytes"]); return { frames: positiveInt(input["frames"]), width: positiveInt(input["width"]), height: positiveInt(input["height"]), bytes: positiveInt(input["bytes"]) };
     case "svg":
     case "construction_svg": {
       exact(input, ["root", "bytes", "source"]);

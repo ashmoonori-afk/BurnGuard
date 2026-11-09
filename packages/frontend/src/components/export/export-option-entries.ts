@@ -109,8 +109,8 @@ function framesAreUniform(set: GraphicSetV1): boolean {
 /**
  * A logo ships the validated master SVG, the guidelines as a print-ready PDF at the artboard page,
  * and the same guidelines as the HTML the PDF was made from (doc/23 D7). A geometric logo also
- * ships its construction as a sheet and as a draw-in GIF (doc/37); until its construction record
- * exists those two stay listed but disabled, so the reason is visible instead of a later failure.
+ * ships its construction as a sheet, a draw-in GIF (doc/37) and a draw-in MP4 (doc/38); until its
+ * construction record exists those stay listed but disabled, so the reason is visible instead of a later failure.
  */
 export function logoExportOptions(constructionReady: boolean): readonly ExportMenuOption[] {
   const construction = constructionReady ? {} : { disabledReason: "construction_missing" as const };
@@ -120,6 +120,7 @@ export function logoExportOptions(constructionReady: boolean): readonly ExportMe
     { key: "guidelines-html", format: "html_zip", options: {}, label: t("export.option.guidelinesHtml") },
     { key: "construction-svg", format: "construction_svg", options: {}, label: t("export.format.construction_svg"), ...construction },
     { key: "construction-gif", format: "construction_gif", options: {}, label: t("export.format.construction_gif"), ...construction },
+    { key: "construction-mp4", format: "construction_mp4", options: {}, label: t("export.format.construction_mp4"), ...construction },
   ];
 }
 

@@ -22,6 +22,8 @@ export function formatLabel(format: ExportFormat): string {
       return t("export.format.construction_svg");
     case "construction_gif":
       return t("export.format.construction_gif");
+    case "construction_mp4":
+      return t("export.format.construction_mp4");
     case "pptx":
       return t("export.format.pptx");
     case "html_zip":

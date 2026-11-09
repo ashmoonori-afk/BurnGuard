@@ -242,6 +242,7 @@ jobs:
           packages/shared/tests/logo-wordmark.test.ts
           packages/shared/tests/logo-lockup.test.ts
           packages/backend/tests/gif-encoder.test.ts
+          packages/backend/tests/mp4-writer.test.ts
           packages/backend/tests/logo-construction-export.test.ts
           packages/backend/tests/logo-construction-gif.test.ts
           packages/backend/tests/logo-geometric-step.test.ts
@@ -283,6 +284,7 @@ jobs:
           bun test --timeout 60000
           packages/backend/tests/design-system-layout-reference.test.ts
           packages/backend/tests/design-system-conformance.test.ts
+          packages/backend/tests/logo-construction-mp4.test.ts
           packages/backend/tests/design-workflow.test.ts
           packages/backend/tests/python-runtime.test.ts
           packages/backend/tests/owned-process-windows.test.ts

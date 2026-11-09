@@ -115,14 +115,15 @@ export function renderPhaseFailureMessage(failure: RenderPhaseFailure): string {
   return t(failure.kind === "timeout" ? "export.phase.timeout" : "export.phase.failed", { phase: phaseName });
 }
 
-export type ConstructionFailure = "missing" | "invalid" | "too_large";
+export type ConstructionFailure = "missing" | "invalid" | "too_large" | "mp4_unsupported";
 
-/** Construction exports fail with a typed code (`construction_too_large`) kept in the failure message. */
+/** Construction exports fail with a typed code (`construction_too_large`, `construction_mp4_unsupported`) kept in the failure message. */
 export function classifyConstructionFailure(errorMessage: string | null): ConstructionFailure | null {
   if (errorMessage === null) return null;
   if (errorMessage.includes("construction_missing")) return "missing";
   if (errorMessage.includes("construction_invalid")) return "invalid";
   if (errorMessage.includes("construction_too_large")) return "too_large";
+  if (errorMessage.includes("construction_mp4_unsupported")) return "mp4_unsupported";
   return null;
 }
 
@@ -130,6 +131,7 @@ export const CONSTRUCTION_FAILURE_MESSAGE: Record<ConstructionFailure, string> =
   get missing() { return t("export.construction.missing"); },
   get invalid() { return t("export.construction.invalid"); },
   get too_large() { return t("export.construction.too_large"); },
+  get mp4_unsupported() { return t("export.construction.mp4_unsupported"); },
 };
 
 export const CHROMIUM_FAILURE_MESSAGE: Record<ChromiumFailure, string> = {

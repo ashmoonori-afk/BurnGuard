@@ -28,6 +28,8 @@ describe("formatExtension / formatMime", () => {
     expect(formatMime("construction_svg")).toBe("image/svg+xml");
     expect(formatExtension("construction_gif")).toBe("gif");
     expect(formatMime("construction_gif")).toBe("image/gif");
+    expect(formatExtension("construction_mp4")).toBe("mp4");
+    expect(formatMime("construction_mp4")).toBe("video/mp4");
   });
 
   test("Given archive formats When named Then extension and MIME remain ZIP", () => {
@@ -132,6 +134,7 @@ describe("buildDownloadFilename", () => {
     expect(buildDownloadFilename({ projectName: "Acme", revision: 3, format: "svg", projectType: "logo" })).toBe("Acme-logo-r3.svg");
     expect(buildDownloadFilename({ projectName: "Acme", revision: 3, format: "construction_svg", projectType: "logo" })).toBe("Acme-construction-r3.svg");
     expect(buildDownloadFilename({ projectName: "Acme", revision: 3, format: "construction_gif", projectType: "logo" })).toBe("Acme-construction-r3.gif");
+    expect(buildDownloadFilename({ projectName: "Acme", revision: 3, format: "construction_mp4", projectType: "logo" })).toBe("Acme-construction-r3.mp4");
     expect(buildDownloadFilename({ projectName: "Acme", revision: 3, format: "pdf", projectType: "logo" })).toBe("Acme-guidelines-r3.pdf");
     expect(buildDownloadFilename({ projectName: "Acme", revision: 3, format: "html_zip", projectType: "logo" })).toBe("Acme-guidelines-html-r3.zip");
     expect(buildDownloadFilename({ projectName: "Acme", job: { format: "pdf", completed_at: APR23, created_at: APR23 }, projectType: "logo" })).toBe("Acme-guidelines-2025-04-23.pdf");
