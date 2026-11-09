@@ -30,9 +30,17 @@ const fixed = (value: number): number => {
   return Object.is(rounded, -0) ? 0 : rounded;
 };
 
+async function readManifest(repoRoot: string): Promise<readonly ManifestFamily[]> {
+  return (JSON.parse(await readFile(path.join(repoRoot, "assets/fonts/manifest.json"), "utf8")) as { families: readonly ManifestFamily[] }).families;
+}
+
+/** The bundled families a wordmark may be set in, sorted, as the step prompt offers them. */
+export async function listLogoWordmarkFamilies(repoRoot = resolveRepoRoot()): Promise<readonly string[]> {
+  return [...new Set((await readManifest(repoRoot)).filter((entry) => SET_CATEGORIES.has(entry.category)).map((entry) => entry.family))].sort();
+}
+
 async function manifestFamily(family: string, repoRoot: string): Promise<ManifestFamily> {
-  const manifest = JSON.parse(await readFile(path.join(repoRoot, "assets/fonts/manifest.json"), "utf8")) as { families: readonly ManifestFamily[] };
-  const entry = manifest.families.find((candidate) => candidate.family === family);
+  const entry = (await readManifest(repoRoot)).find((candidate) => candidate.family === family);
   if (entry === undefined || !SET_CATEGORIES.has(entry.category)) throw new LogoWordmarkError("font_unknown", "$.font");
   return entry;
 }

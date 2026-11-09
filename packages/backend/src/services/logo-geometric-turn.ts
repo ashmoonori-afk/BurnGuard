@@ -18,15 +18,22 @@ import { inspectCanonicalTree, type CanonicalTreeManifest } from "./canonical-tr
 import { LogoDeliverableError } from "./logo-deliverables";
 import {
   LOGO_GEOMETRIC_APPROVALS_FILE,
+  LOGO_GEOMETRIC_RECORD_FILES,
   LOGO_GEOMETRIC_SYMBOL_RENDERS,
   LOGO_GEOMETRIC_SYMBOL_REVIEW_FILE,
+  LOGO_GEOMETRIC_WORDMARK_FILES,
+  composeLogoGeometricLockup,
   finishLogoGeometricSymbol,
+  finishLogoGeometricWordmark,
   readLogoGeometricState,
   readLogoGeometricSymbolReview,
   recordLogoGeometricApproval,
   renderLogoGeometricSymbol,
   type LogoGeometricSymbolReviewV1,
+  type LogoGeometricWordmarkOutcome,
+  type LogoGeometricWordmarkReviewV1,
 } from "./logo-geometric-step";
+import { listLogoWordmarkFamilies } from "./logo-wordmark-compile";
 
 /**
  * One turn of the geometric logo method (doc/30). Before the agent runs, `captureLogoGeometricTurn`
@@ -56,12 +63,17 @@ export type LogoGeometricCapture =
     readonly note: string | null;
     /** The only file the model may write this turn. */
     readonly record_file: string;
+    /** The bundled families the wordmark may be set in; only on the wordmark step. */
+    readonly families?: readonly string[];
   }
   /** The last step was approved: the model only replies, and writes nothing. */
   | { readonly kind: "complete" };
 
-/** The steps this build can make. The wordmark and the lockup arrive with phase 4. */
-const MADE_STEPS: readonly LogoGeometricStep[] = ["symbol"];
+/**
+ * The steps the app offers. A turn can make the wordmark and compose the lockup (doc/33), but the
+ * panel offers them only once it can show a wordmark for review, so the questions keep to the symbol.
+ */
+const OFFERED_STEPS: readonly LogoGeometricStep[] = ["symbol"];
 
 /**
  * What the app shows for this project (doc/31), read from the same files and with the same method
@@ -76,7 +88,7 @@ export async function readLogoGeometricStatus(dir: string, logoSet: LogoSetV1 | 
     method: "geometric",
     answers: state.answers,
     plan: logoGeometricPlan(state),
-    available_steps: MADE_STEPS,
+    available_steps: OFFERED_STEPS,
     records: { symbol, wordmark: state.steps.wordmark.record_sha256, lockup: state.steps.lockup.record_sha256 },
     symbol_review: symbol === null ? null : await readLogoGeometricSymbolReview(dir, symbol),
   };
@@ -94,16 +106,23 @@ export async function captureLogoGeometricTurn(dir: string, requestText: string,
   if (action === null && state.answers === null) return null;
   const turn = resolveLogoGeometricTurn(state, action);
   if (turn.kind === "refused") throw new LogoDeliverableError(`geometric_${turn.code}`);
-  if (turn.kind === "make" && !MADE_STEPS.includes(turn.step)) throw new LogoDeliverableError("geometric_step_unavailable");
   if (action?.action === "answer" && turn.kind === "make") {
     // New answers start the flow over: earlier approvals no longer describe what the person asked for.
     await rm(resolveWithin(dir, ...LOGO_GEOMETRIC_APPROVALS_FILE.split("/")), { force: true });
     await mkdir(resolveWithin(dir, "geometric"), { recursive: true });
     await writeFile(resolveWithin(dir, ...LOGO_GEOMETRIC_ANSWERS_FILE.split("/")), serializeLogoGeometricAnswers(turn.answers), "utf8");
   }
+  // The lockup is computed, not authored: the server composes it before the approval that leads to
+  // it is recorded, so a lockup that cannot be composed refuses the turn with nothing recorded.
+  if (turn.kind === "make" && turn.step === "lockup" && await composeLogoGeometricLockup(dir, logoSet.brand_name) === null) {
+    throw new LogoDeliverableError("geometric_lockup_unavailable");
+  }
   if (turn.approve !== null) await recordLogoGeometricApproval(dir, turn.approve.step, turn.approve.record_sha256);
-  if (turn.kind === "complete") return { kind: "complete" };
-  return { kind: "make", step: turn.step, answers: turn.answers, note: turn.note, record_file: LOGO_GEOMETRY_FILE };
+  // With the lockup composed the flow is done; the model only replies.
+  if (turn.kind === "complete" || turn.step === "lockup") return { kind: "complete" };
+  const record_file = LOGO_GEOMETRIC_RECORD_FILES[turn.step];
+  const base = { kind: "make", step: turn.step, answers: turn.answers, note: turn.note, record_file } as const;
+  return turn.step === "wordmark" ? { ...base, families: await listLogoWordmarkFamilies() } : base;
 }
 
 /** The files the model's own writes may touch this turn. */
@@ -118,7 +137,7 @@ export function assertLogoGeometricScope(capture: LogoGeometricCapture, changedP
 }
 
 export type LogoGeometricCompletion = {
-  readonly review: LogoGeometricSymbolReviewV1;
+  readonly review: LogoGeometricSymbolReviewV1 | LogoGeometricWordmarkReviewV1;
   /** Whether the review pass rewrote the record. */
   readonly revised: boolean;
 };
@@ -135,21 +154,61 @@ export async function completeLogoGeometricTurn(input: {
   readonly review: (prompt: string) => Promise<void>;
   readonly signal: AbortSignal;
 }): Promise<LogoGeometricCompletion> {
+  if (input.capture.step === "wordmark") return await completeWordmark(input);
   const first = await finishLogoGeometricSymbol(input.dir, input.label);
   if (first.kind === "compiled") await renderLogoGeometricSymbol(input.dir, first.geometry, first.compiled, input.label);
-  input.signal.throwIfAborted();
-  const before = await inspectCanonicalTree(input.dir);
-  await input.review(logoGeometricReviewPrompt(first.kind === "compiled"
+  const revised = await reviewPass(input, logoGeometricReviewPrompt(first.kind === "compiled"
     ? { kind: "compiled", review: first.review }
     : { kind: "refused", code: first.code, path: first.path }));
-  input.signal.throwIfAborted();
-  const changed = changedPaths(before, await inspectCanonicalTree(input.dir));
-  if (changed.some((path) => path !== input.capture.record_file)) throw new LogoDeliverableError("geometry_scope");
-  const revised = changed.includes(input.capture.record_file);
   const final = revised || first.kind !== "compiled" ? await finishLogoGeometricSymbol(input.dir, input.label) : first;
   if (final.kind === "refused") throw new LogoDeliverableError(`geometry_${final.code}`);
   if (final !== first) await renderLogoGeometricSymbol(input.dir, final.geometry, final.compiled, input.label);
   return { review: final.review, revised };
+}
+
+type CompletionInput = Parameters<typeof completeLogoGeometricTurn>[0];
+
+/** Runs the review pass and returns whether it rewrote the record; any other write refuses the turn. */
+async function reviewPass(input: CompletionInput, prompt: string): Promise<boolean> {
+  input.signal.throwIfAborted();
+  const before = await inspectCanonicalTree(input.dir);
+  await input.review(prompt);
+  input.signal.throwIfAborted();
+  const changed = changedPaths(before, await inspectCanonicalTree(input.dir));
+  if (changed.some((path) => path !== input.capture.record_file)) throw new LogoDeliverableError("geometry_scope");
+  return changed.includes(input.capture.record_file);
+}
+
+/**
+ * The wordmark is set from the font, so its flaws are measured ones. The review pass runs only when
+ * there is something to fix: a refused record or a stem the font does not meet.
+ */
+async function completeWordmark(input: CompletionInput): Promise<LogoGeometricCompletion> {
+  const first = await finishLogoGeometricWordmark(input.dir, input.label);
+  if (first.kind === "compiled" && first.review.passed) return { review: first.review, revised: false };
+  const revised = await reviewPass(input, logoGeometricWordmarkReviewPrompt(first));
+  const final = revised || first.kind !== "compiled" ? await finishLogoGeometricWordmark(input.dir, input.label) : first;
+  if (final.kind === "refused") throw new LogoDeliverableError(`geometry_${final.code}`);
+  return { review: final.review, revised };
+}
+
+/** The wordmark review pass's whole prompt, a bounded context like the symbol's. */
+export function logoGeometricWordmarkReviewPrompt(first: LogoGeometricWordmarkOutcome): string {
+  const record_file = LOGO_GEOMETRIC_RECORD_FILES.wordmark;
+  const payload = first.kind === "compiled"
+    ? { schema_version: 1, step: "wordmark", record_file, wordmark_file: LOGO_GEOMETRIC_WORDMARK_FILES.svg, review_file: LOGO_GEOMETRIC_WORDMARK_FILES.review, measured: { passed: first.review.passed, findings: first.review.findings, snapped: first.review.snapped } }
+    : { schema_version: 1, step: "wordmark", record_file, refused: { code: first.code, path: first.path } };
+  return [
+    `<${LOGO_GEOMETRIC_REVIEW_TAG}>`,
+    JSON.stringify(payload).replace(/</g, "\\u003c"),
+    `</${LOGO_GEOMETRIC_REVIEW_TAG}>`,
+    "",
+    first.kind === "compiled"
+      ? "The server set your wordmark, and the font's measured stem is too far from the stem you asked for (stem_off gives both). Pick a family whose weight is closer, or change cap_height or stem so they agree, keeping the stem tied to the symbol."
+      : "The server could not set your wordmark record; the refusal names the rule and the JSON path. Fix the record so it can be set.",
+    `Rewrite ${record_file} once with the fix. Write no other file: the server sets the wordmark and writes its review from the record.`,
+    "End with one short sentence that names what you changed.",
+  ].join("\n");
 }
 
 function changedPaths(before: CanonicalTreeManifest, after: CanonicalTreeManifest): readonly string[] {

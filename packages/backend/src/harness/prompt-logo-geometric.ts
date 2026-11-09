@@ -6,7 +6,10 @@ import {
   LOGO_GEOMETRY_MAX_POLYGON_POINTS,
   LOGO_GEOMETRY_MAX_PRIMITIVES,
   LOGO_GEOMETRY_MAX_RADII,
+  LOGO_GEOMETRY_FILE,
   LOGO_GEOMETRY_SNAP,
+  LOGO_WORDMARK_MAX_TEXT,
+  LOGO_WORDMARK_RANGES,
   type LogoSetV1,
 } from "@bg/shared";
 import { LOGO_GEOMETRIC_STEP_TAG, type LogoGeometricCapture } from "../services/logo-geometric-turn";
@@ -22,11 +25,14 @@ export function appendLogoGeometricContext(lines: string[], logoSet: LogoSetV1, 
   const { schema_version: _version, ...brief } = logoSet;
   lines.push(`<${LOGO_GEOMETRIC_STEP_TAG}>`);
   lines.push(JSON.stringify(capture.kind === "make"
-    ? { schema_version: 1, step: capture.step, record_file: capture.record_file, grid: LOGO_GEOMETRY_GRID, ...brief, answers: capture.answers, note: capture.note }
+    ? { schema_version: 1, step: capture.step, record_file: capture.record_file, grid: LOGO_GEOMETRY_GRID, ...brief, answers: capture.answers, note: capture.note, ...(capture.families === undefined ? {} : { families: capture.families }) }
     : { schema_version: 1, step: null, complete: true }).replace(/</g, "\\u003c"));
   lines.push(`</${LOGO_GEOMETRIC_STEP_TAG}>`);
   lines.push(`<burnguard-logo-rules-v1 method="geometric">`);
-  for (const rule of capture.kind === "make" ? symbolRules(capture.record_file, capture.note !== null) : completeRules()) lines.push(`- ${rule}`);
+  const rules = capture.kind !== "make" ? completeRules()
+    : capture.step === "wordmark" ? wordmarkRules(capture.record_file, capture.note !== null)
+    : symbolRules(capture.record_file, capture.note !== null);
+  for (const rule of rules) lines.push(`- ${rule}`);
   lines.push("</burnguard-logo-rules-v1>");
   lines.push("");
 }
@@ -35,6 +41,19 @@ function completeRules(): readonly string[] {
   return [
     "The person approved the last step, so the geometric logo is complete. Write, change or delete no file this turn.",
     "Reply with one or two sentences that say what was approved and what the person can do next.",
+  ];
+}
+
+function wordmarkRules(recordFile: string, revising: boolean): readonly string[] {
+  const range = (key: keyof typeof LOGO_WORDMARK_RANGES) => `${LOGO_WORDMARK_RANGES[key][0]} to ${LOGO_WORDMARK_RANGES[key][1]}`;
+  return [
+    `LOGO_GEOMETRIC_WORDMARK: choose how the brand name is set. Write exactly one file, ${recordFile}, and nothing else: no SVG, no image, no HTML. Do not call the image-generation tool. The server sets the letters from the font, measures them and composes the lockup with the symbol itself.`,
+    `The record is one JSON object: {"schema_version":1,"text":..,"font":..,"cap_height":..,"stem":..,"tracking":..}. text is the brand name in plain Latin letters, digits and & . ' - with single spaces, at most ${LOGO_WORDMARK_MAX_TEXT} characters. font is exactly one name from families in the machine block.`,
+    `cap_height (${range("cap_height")}), stem (${range("stem")}) and tracking (${range("tracking")}) are in the symbol's units on its ${LOGO_GEOMETRY_GRID}-unit canvas, on the ${LOGO_GEOMETRY_SNAP}-unit grid. If ${LOGO_GEOMETRY_FILE} exists, read it: take stem from the symbol's stem weight and size cap_height so the words hold their own beside the mark.`,
+    "The server sets each font at its default weight, so the stem you get is the font's own. Choose a family whose capital I is close to the stem you ask for: a light face for a thin stem, a heavy one for a thick stem. Match the direction in the answers and the brand's character; avoid a family that fights the symbol's geometry.",
+    revising
+      ? `REVISE: the note in the machine block is the person's request about the wordmark they are looking at. Change ${recordFile} to answer it and keep everything the note does not ask to change.`
+      : `If ${recordFile} already exists, it is a candidate the person has not approved; the message is their guidance, so rework it rather than starting from nothing unless they ask for something new.`,
   ];
 }
 
