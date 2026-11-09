@@ -22,6 +22,7 @@ Start with the [product introduction and setup](../README.md), available in [Kor
 - [Brand identity](brand-identity.md)
 - [Logo design deliverable](logo-design.md)
 - [Deterministic PNG logo tracing: design and measured results](24-logo-tracer-2026-10-23.md)
+- [Geometry-first logo marks: the source record and its compiler](25-logo-geometry-2026-11-09.md)
 - [Model capability profiles, CSS logos and web asset sourcing](model-profiles.md)
 - [Edit scope and revision comparison](edit-scope.md)
 - [Sample design system](<../design system sample/README.md>)

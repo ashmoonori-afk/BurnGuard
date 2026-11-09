@@ -146,6 +146,8 @@ jobs:
           packages/backend/tests/logo-completion-gate.test.ts
           packages/backend/tests/logo-deliverables.test.ts
           packages/backend/tests/prompt-logo-set.test.ts
+          packages/shared/tests/logo-geometry.test.ts
+          packages/backend/tests/logo-geometry-compile.test.ts
           packages/backend/tests/pipeline-repositories.test.ts
           packages/backend/tests/catalog.test.ts
           packages/backend/tests/migration-pipeline-upgrade.test.ts

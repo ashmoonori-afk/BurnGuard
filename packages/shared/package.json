@@ -35,6 +35,8 @@
     "./export-parity": "./src/export-parity.ts",
     "./figma-import": "./src/figma-import.ts",
     "./logo": "./src/logo.ts",
+    "./logo-geometry": "./src/logo-geometry.ts",
+    "./logo-geometry-compile": "./src/logo-geometry-compile.ts",
     "./logo-moodboard": "./src/logo-moodboard.ts",
     "./photo-placement": "./src/photo-placement.ts",
     "./extraction-domain": "./src/extraction-domain.ts",
