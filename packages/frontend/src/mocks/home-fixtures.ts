@@ -111,7 +111,7 @@ export const mockBackendDetection: BackendDetectionResult = {
       id: "claude-code",
       found: true,
       version: "1.0.23",
-      binary_path: "C:/Users/lg/AppData/Roaming/npm/claude.cmd",
+      binary_path: "C:/Users/user/AppData/Roaming/npm/claude.cmd",
     },
     {
       id: "codex",

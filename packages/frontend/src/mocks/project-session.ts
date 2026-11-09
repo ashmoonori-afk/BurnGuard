@@ -129,7 +129,7 @@ export const mockProject: ProjectDetail = {
   thumbnail_path: null,
   updated_at: 1713747600000,
   archived_at: null,
-  dir_path: "C:/Users/lg/.burnguard/data/projects/01J8F9H1A0RECENTPROJ000002",
+  dir_path: "C:/Users/user/.burnguard/data/projects/01J8F9H1A0RECENTPROJ000002",
   entrypoint: "deck.html",
   backend_id: "claude-code",
   options_json: JSON.stringify({ use_speaker_notes: false }),
