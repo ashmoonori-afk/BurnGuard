@@ -116,7 +116,8 @@ describe("Design-system conformance", () => {
       await appendDesignSystemContext(lines, { id: "visual", name: "Visual", status: "draft", source_type: "website", is_template: false, dir_path: system, skill_md_path: null, tokens_css_path: null, readme_md_path: null, thumbnail_path: null, created_at: 1, updated_at: 1, archived_at: null }, "full", "website", true);
       await writeFile(path.join(project, "index.html"), '<!doctype html><html><head><meta name="bg-measured-page" content="/"><style>body{margin:0;background:#fff;min-height:3000px} h1{font-size:64px;text-align:center}</style></head><body><h1>Own your AI.</h1></body></html>');
       const result = await reviewDesignSystemConformance({ projectDir: project, entrypoint: "index.html", pinnedContext: lines.join("\n"), changedPaths: ["index.html"], signal: AbortSignal.timeout(60_000) });
-      expect(result?.visual?.map(report => [report.viewport, report.unavailable])).toEqual([["desktop", false], ["mobile", false]]);
+      // The reason names the failing step if a viewport ever comes back unscored.
+      expect(result?.visual?.map(report => [report.viewport, report.unavailable, report.unavailable_reason ?? null])).toEqual([["desktop", false, null], ["mobile", false, null]]);
       expect(result?.visual?.[0]?.sections).toHaveLength(2);
       expect(result?.repair_targets?.length).toBeGreaterThan(0);
       expect(result!.repair_targets!.length).toBeLessThanOrEqual(3);

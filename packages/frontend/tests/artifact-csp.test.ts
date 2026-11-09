@@ -6,6 +6,34 @@ import path from "node:path";
 import { Script } from "node:vm";
 import { launchChromiumViaNode } from "../../backend/src/services/chromium-node-launch";
 
+type ChromePage = Awaited<ReturnType<Awaited<ReturnType<typeof launchChromiumViaNode>>["newPage"]>>;
+type ChromeLocator = ReturnType<ChromePage["locator"]>;
+
+/** Frame-side half of {@link frameTakesInput}: acknowledges each trusted pointer move the frame itself receives. */
+const FRAME_INPUT_PROBE = "<script>addEventListener('pointermove',event=>{if(event.isTrusted)parent.postMessage({event:'input-probe'},'*')})</script>";
+
+/**
+ * Moves the real mouse onto `target` until the sandboxed frame itself reports a trusted pointer move.
+ * Until Chrome has the out-of-process frame's hit-test data it routes input to the parent's <iframe>
+ * element, so a click sent right after the frame loads can be dropped (macOS runners, about 200 ms
+ * after load). The parent page logs `INPUT_PROBE:frame` for the frame's acknowledgement and
+ * `INPUT_PROBE:parent` for a trusted move that landed on the <iframe> element; each move waits
+ * for whichever side received it, and the whole wait is bounded by one deadline.
+ */
+async function frameTakesInput(page: ChromePage, target: ChromeLocator, deadlineMs = 10_000): Promise<number> {
+  const deadline = performance.now() + deadlineMs;
+  for (let move = 0; ; move += 1) {
+    const remaining = Math.round(deadline - performance.now());
+    if (remaining <= 0) throw new Error(`frame_input_timeout after ${move} moves`);
+    const seen = page.waitForEvent("console", { predicate: message => message.text().startsWith("INPUT_PROBE:"), timeout: remaining });
+    seen.catch(() => {});
+    // hover waits until the target is visible and stable (a cold first run can lay the frame out late),
+    // then moves the real mouse; alternating two points inside it makes every move a position change.
+    await target.hover({ position: { x: 2 + (move % 2), y: 2 }, timeout: remaining });
+    if ((await seen).text() === "INPUT_PROBE:frame") return move + 1;
+  }
+}
+
 const BASE_HREF = "http://127.0.0.1:14070/api/projects/p/fs/index.html";
 const pendingCanvasPolicies = new Set<() => void>();
 afterEach(() => { for (const report of pendingCanvasPolicies) report(); });
@@ -73,10 +101,15 @@ async function assertCanvasPolicy(
     markPhase("page_navigation");
     await page.goto(server.url.origin);
     markPhase("navigation_listener");
-    await page.evaluate(() => window.addEventListener("message", event => {
-      if (event.source === document.querySelector("iframe")?.contentWindow && event.data?.event === "navigate") console.log(`NAVIGATE:${event.data.payload.href}`);
-    }));
-    const html = buildSandboxedArtifactSrcDoc(`<html><head></head><body><button id="open" onclick="document.querySelector('output').textContent = window.open('${server.url.origin}/unexpected') === null ? 'blocked' : 'opened'">Open</button><output></output><a href="next.html">Normal link</a><a target="_blank" href="other.html">Blank link</a></body></html>`, base);
+    await page.evaluate(() => {
+      window.addEventListener("message", event => {
+        if (event.source !== document.querySelector("iframe")?.contentWindow) return;
+        if (event.data?.event === "navigate") console.log(`NAVIGATE:${event.data.payload.href}`);
+        if (event.data?.event === "input-probe") console.log("INPUT_PROBE:frame");
+      });
+      window.addEventListener("pointermove", event => { if (event.isTrusted && event.target instanceof HTMLIFrameElement) console.log("INPUT_PROBE:parent"); });
+    });
+    const html = buildSandboxedArtifactSrcDoc(`<html><head></head><body><button id="open" onclick="document.querySelector('output').textContent = window.open('${server.url.origin}/unexpected') === null ? 'blocked' : 'opened'">Open</button><output></output><a href="next.html">Normal link</a><a target="_blank" href="other.html">Blank link</a>${FRAME_INPUT_PROBE}</body></html>`, base);
     markPhase("iframe_creation");
     await page.evaluate(({ html, sandbox, traceBase }) => new Promise<void>((resolve, reject) => {
       void fetch(`${traceBase}/_bg-csp-phase/start`).catch(() => {});
@@ -96,6 +129,9 @@ async function assertCanvasPolicy(
     }), { html, sandbox, traceBase: server.url.origin });
     markPhase("policy_action");
     const frame = page.frameLocator("iframe");
+    markPhase("frame_input");
+    await frameTakesInput(page, frame.locator(action === "popup" ? "#open" : "a").first());
+    markPhase("policy_click");
     if (action === "popup") {
       await frame.locator("#open").click();
       expect(await frame.locator("output").textContent()).toBe("blocked");
@@ -160,7 +196,7 @@ test.skipIf(!systemChromeAvailable)("system Chrome routes trusted external click
     const page = await context.newPage();
     const external = `http://localhost:${server.port}/external`;
     page.setDefaultTimeout(5000);
-    const html = buildSandboxedArtifactSrcDoc(`<html><head></head><body><a target="_blank" href="${external}">External link</a><a target="_blank" href="next.html">Internal link</a><a href="#target">Fragment</a><p id="target">Target</p><button onclick="document.querySelector('output').textContent = window.open('${external}') === null ? 'blocked' : 'opened'">Script popup</button><output></output><script>parent.postMessage({__bgFrameBridge:true,type:'event',event:'navigate-external',payload:{href:'${external}'}},'*');window.addEventListener('click',event=>{if(event.isTrusted)parent.postMessage({event:'click-ack',link:event.target.closest('a')?.textContent,modifiers:{alt:event.altKey,ctrl:event.ctrlKey,meta:event.metaKey,shift:event.shiftKey}},'*')});window.addEventListener('contextmenu',event=>{if(event.isTrusted)parent.postMessage({event:'context-ack'},'*')});</script></body></html>`, `${server.url.origin}/api/projects/p/fs/index.html`);
+    const html = buildSandboxedArtifactSrcDoc(`<html><head></head><body><a target="_blank" href="${external}">External link</a><a target="_blank" href="next.html">Internal link</a><a href="#target">Fragment</a><p id="target">Target</p><button onclick="document.querySelector('output').textContent = window.open('${external}') === null ? 'blocked' : 'opened'">Script popup</button><output></output><script>parent.postMessage({__bgFrameBridge:true,type:'event',event:'navigate-external',payload:{href:'${external}'}},'*');window.addEventListener('click',event=>{if(event.isTrusted)parent.postMessage({event:'click-ack',link:event.target.closest('a')?.textContent,modifiers:{alt:event.altKey,ctrl:event.ctrlKey,meta:event.metaKey,shift:event.shiftKey}},'*')});window.addEventListener('contextmenu',event=>{if(event.isTrusted)parent.postMessage({event:'context-ack'},'*')});</script>${FRAME_INPUT_PROBE}</body></html>`, `${server.url.origin}/api/projects/p/fs/index.html`);
     // page.evaluate grants test-only user activation. Mount from real page startup
     // instead, so only the native mouse clicks below can activate the parent.
     await page.addInitScript(html => window.addEventListener("DOMContentLoaded", () => {
@@ -186,8 +222,10 @@ test.skipIf(!systemChromeAvailable)("system Chrome routes trusted external click
         if (!forgedMessageReceived && event.data?.event === "navigate-external") { forgedMessageReceived = true; finish(); }
         if (event.data?.event === "click-ack") console.log(`CLICK_ACK:${JSON.stringify({ link: event.data.link, modifiers: event.data.modifiers, opened, internal })}`);
         if (event.data?.event === "context-ack") console.log(`CONTEXT_ACK:${JSON.stringify({ opened, internal })}`);
+        if (event.data?.event === "input-probe") console.log("INPUT_PROBE:frame");
       };
       window.addEventListener("message", received);
+      window.addEventListener("pointermove", event => { if (event.isTrusted && event.target === frame) console.log("INPUT_PROBE:parent"); });
       frame.addEventListener("load", () => { loaded = true; finish(); }, { once: true });
       frame.srcdoc = html;
       document.body.append(frame);
@@ -199,6 +237,7 @@ test.skipIf(!systemChromeAvailable)("system Chrome routes trusted external click
     await page.goto(server.url.origin);
     expect(JSON.parse((await ready).text().slice("EXTERNAL_READY:".length))).toEqual({ opened: [], active: false });
     const frame = page.frameLocator("iframe");
+    await frameTakesInput(page, frame.getByRole("link", { name: "External link" }));
     // macOS Ctrl-left-click is an OS context-menu gesture, not link activation.
     const actions: Array<Array<"Control" | "Meta" | "Shift" | "Alt">> =
       process.platform === "darwin"

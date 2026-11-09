@@ -126,5 +126,6 @@ describe("Design-system visual diff", () => {
     const report = await compareVisualViewport({ viewport: "mobile", reference: new Uint8Array([1, 2, 3]), generated: new Uint8Array([4]), expected, actual: expected });
     expect(report.sections).toEqual([]);
     expect(report.unavailable).toBe(true);
+    expect(report.unavailable_reason).toBe("decode");
   });
 });
