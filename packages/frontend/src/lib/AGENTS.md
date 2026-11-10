@@ -17,6 +17,7 @@
 | Workflow state | `design-audit-state.ts`, `design-direction-state.ts`, `session-event-state.ts`, `app-update-state.ts` | Pure reducers over query + SSE inputs |
 | Draft persistence | `creation-draft.ts` | localStorage draft lifecycle for the creation panel |
 | Graphic projects | `graphic-project.ts`, `graphic-preview.ts`, `graphic-set-form.ts` | Canvas parsing, preview selection, form models |
+| Canvas magnet | `snap-engine.ts` | `collectCandidates`, `resolveSnap`, `snapThreshold`: which line a moved or resized box locks to, in iframe client px; no DOM |
 | Canvas/header layout | `canvas-device-width.ts`, `toolbar-overflow.ts`, `project-header-actions.ts`, `settings-sections.ts` | Viewport width presets, responsive toolbar/header overflow, Settings section state |
 | Home copy and dates | `date-format.ts`, `example-briefs.ts`, `first-run.ts`, `system-display.ts` | Localized dates, sample briefs, first-run card state |
 | Chat rule capture | `correction-rule.ts`, `design-system-rules.ts` | Build a Do or Don't rule draft from a chat correction |
