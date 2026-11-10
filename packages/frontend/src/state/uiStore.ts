@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { CANVAS_MAGNET_PREF, readCanvasPref, writeCanvasPref } from "@/lib/canvas-prefs";
 import { claimStarPrompt, type StarPromptStorage } from "@/lib/star-prompt";
 
 export type ToastTone = "info" | "success" | "warn" | "error";
@@ -27,6 +28,10 @@ interface UIState {
   oweStarPrompt: () => void;
   revealStarPrompt: (storage: () => StarPromptStorage, modalOpen: boolean) => void;
   dismissStarPrompt: () => void;
+
+  /** Whether moving and resizing on the canvas lock to nearby lines. On until switched off; remembered on this computer. */
+  canvasMagnet: boolean;
+  setCanvasMagnet: (on: boolean) => void;
 }
 
 const TOAST_AUTO_DISMISS_MS = 3000;
@@ -72,4 +77,10 @@ export const useUIStore = create<UIState>((set, get) => ({
     if (claimStarPrompt(storage)) set({ starPromptOpen: true });
   },
   dismissStarPrompt: () => set({ starPromptOpen: false }),
+
+  canvasMagnet: readCanvasPref(CANVAS_MAGNET_PREF),
+  setCanvasMagnet: (canvasMagnet) => {
+    writeCanvasPref(CANVAS_MAGNET_PREF, canvasMagnet);
+    set({ canvasMagnet });
+  },
 }));

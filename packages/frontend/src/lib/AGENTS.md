@@ -16,6 +16,7 @@
 | Canvas media | `canvas-images.ts` | 193 LOC: inline/embedded image handling under the artifact CSP |
 | Workflow state | `design-audit-state.ts`, `design-direction-state.ts`, `session-event-state.ts`, `app-update-state.ts` | Pure reducers over query + SSE inputs |
 | Draft persistence | `creation-draft.ts` | localStorage draft lifecycle for the creation panel |
+| Canvas aids | `canvas-prefs.ts` | `readCanvasPref`, `writeCanvasPref`: on/off choices such as the magnet, kept in localStorage and on by default |
 | Graphic projects | `graphic-project.ts`, `graphic-preview.ts`, `graphic-set-form.ts` | Canvas parsing, preview selection, form models |
 | Canvas magnet | `snap-engine.ts` | `collectCandidates`, `resolveSnap`, `snapThreshold`: which line a moved or resized box locks to, in iframe client px; no DOM |
 | Canvas/header layout | `canvas-device-width.ts`, `toolbar-overflow.ts`, `project-header-actions.ts`, `settings-sections.ts` | Viewport width presets, responsive toolbar/header overflow, Settings section state |
