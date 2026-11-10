@@ -88,6 +88,7 @@ jobs:
           packages/backend/tests/northvale-preview-repair.test.ts
           packages/backend/tests/design-system-starter.test.ts
           packages/frontend/tests/canvas-edit-review.test.ts
+          packages/frontend/tests/edit-target.test.ts
           packages/frontend/tests/revision-thumbnails.test.ts
           packages/frontend/tests/settings-sections.test.ts
           packages/frontend/tests/layout-notes.test.ts

@@ -6,8 +6,11 @@ import {
   type RefObject,
 } from "react";
 import {
+  frameHitImage,
   requestFrameBgAtPoint,
   requestFrameRectForBgId,
+  type FrameBgHit,
+  type FrameHitImage,
   type FrameRect,
 } from "./frame-bridge";
 import { useFrameElementRect } from "@/hooks/useFrameElementRect";
@@ -19,6 +22,14 @@ export interface EditTarget {
   attributes: Record<string, string>;
   /** Mirrors the server's leaf rule: text edits are refused when a non-inline child exists. */
   hasBlockChildren: boolean;
+  /** Only for a picture: its intrinsic size and the URL the browser loaded. */
+  image?: FrameHitImage | null;
+}
+
+/** Builds the Edit target from a bridge hit; null when the hit has no node id. */
+export function editTargetFromHit(hit: FrameBgHit | null): EditTarget | null {
+  if (!hit?.bgId) return null;
+  return { bg_id: hit.bgId, tag: hit.tag ?? "div", text: hit.text ?? "", attributes: hit.attributes, hasBlockChildren: hit.hasBlockChildren === true, image: frameHitImage(hit) };
 }
 
 export default function EditLayer({
@@ -67,19 +78,7 @@ export default function EditLayer({
     if (e.target !== overlayRef.current) return;
 
     const [relX, relY] = canvasPoint(overlayRef.current, e.clientX, e.clientY);
-    void requestFrameBgAtPoint(iframeRef.current, relX, relY).then((hit) => {
-      if (!hit?.bgId) {
-        onSelect(null);
-        return;
-      }
-      onSelect({
-        bg_id: hit.bgId,
-        tag: hit.tag ?? "div",
-        text: hit.text ?? "",
-        attributes: hit.attributes,
-        hasBlockChildren: hit.hasBlockChildren === true,
-      });
-    });
+    void requestFrameBgAtPoint(iframeRef.current, relX, relY).then((hit) => onSelect(editTargetFromHit(hit)));
   };
 
   return (

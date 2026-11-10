@@ -9,8 +9,11 @@ import {
   type PointerEvent,
 } from "react";
 import {
+  frameHitLayout,
   requestFrameBgAtPoint,
   requestFrameRectForBgId,
+  type FrameBgHit,
+  type FrameHitLayout,
   type FrameRect,
 } from "./frame-bridge";
 import { useFrameElementRect } from "@/hooks/useFrameElementRect";
@@ -28,6 +31,9 @@ export const TWEAKS_STYLE_KEYS = [
   "padding",
   "margin",
   "border-radius",
+  "translate", "position",
+  "grid-template-columns", "grid-auto-rows", "gap", "grid-column", "grid-row",
+  "min-width", "object-fit", "object-position",
 ] as const;
 
 export type TweaksStyleKey = (typeof TWEAKS_STYLE_KEYS)[number];
@@ -40,6 +46,24 @@ export interface TweaksTarget {
   inSlide?: boolean;
   computed: Partial<Record<TweaksStyleKey, string>>;
   inline: Partial<Record<TweaksStyleKey, string>>;
+  /** Element children of the selected node; a node with children can become a layout container. */
+  childCount?: number;
+  /** Other element children of its parent. */
+  siblingCount?: number;
+  /** The parent element and how it lays out its children; null for the page's root elements. */
+  parent?: FrameHitLayout["parent"];
+}
+
+/** Builds the Style target from a bridge hit; null when the hit has no node id. */
+export function tweaksTargetFromHit(hit: FrameBgHit | null): TweaksTarget | null {
+  if (!hit?.bgId) return null;
+  const computed: Partial<Record<TweaksStyleKey, string>> = {};
+  const inline: Partial<Record<TweaksStyleKey, string>> = {};
+  for (const key of TWEAKS_STYLE_KEYS) {
+    if (hit.computed[key]) computed[key] = hit.computed[key];
+    if (hit.inline[key]) inline[key] = hit.inline[key];
+  }
+  return { bg_id: hit.bgId, tag: hit.tag ?? "div", inSlide: hit.inSlide === true, computed, inline, geometry: hit.geometry, ...frameHitLayout(hit) };
 }
 
 export default function TweaksLayer({
@@ -114,28 +138,7 @@ export default function TweaksLayer({
     if (e.target !== overlayRef.current) return;
 
     const [relX, relY] = canvasPoint(overlayRef.current, e.clientX, e.clientY);
-    void requestFrameBgAtPoint(iframeRef.current, relX, relY).then((hit) => {
-      if (!hit?.bgId) {
-        onSelect(null);
-        return;
-      }
-
-      const computed: Partial<Record<TweaksStyleKey, string>> = {};
-      const inline: Partial<Record<TweaksStyleKey, string>> = {};
-      for (const key of TWEAKS_STYLE_KEYS) {
-        if (hit.computed[key]) computed[key] = hit.computed[key];
-        if (hit.inline[key]) inline[key] = hit.inline[key];
-      }
-
-      onSelect({
-        bg_id: hit.bgId,
-        tag: hit.tag ?? "div",
-        inSlide: hit.inSlide === true,
-        computed,
-        inline,
-        geometry: hit.geometry,
-      });
-    });
+    void requestFrameBgAtPoint(iframeRef.current, relX, relY).then((hit) => onSelect(tweaksTargetFromHit(hit)));
   };
 
   const start = (event: PointerEvent<HTMLButtonElement>, kind: string) => {
