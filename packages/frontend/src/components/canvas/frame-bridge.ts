@@ -76,6 +76,39 @@ export interface FrameBgHit {
   attributes: Record<string, string>;
   computed: Record<string, string>;
   inline: Record<string, string>;
+  /** Element children of the hit node. */
+  childCount?: number;
+  /** Other element children of its parent. */
+  siblingCount?: number;
+  /** The parent element; null for the page's root elements. `bgId` is null when the parent carries no node id. */
+  parent?: { bgId: string | null; display: string } | null;
+  /** Only for `<img>`: the intrinsic size and the URL the browser actually loaded. */
+  image?: { naturalWidth: number; naturalHeight: number; currentSrc: string } | null;
+}
+
+export interface FrameHitLayout { childCount: number; siblingCount: number; parent: { bgId: string | null; display: string } | null }
+export interface FrameHitImage { naturalWidth: number; naturalHeight: number; currentSrc: string }
+
+const hitCount = (value: unknown): number => typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : 0;
+
+/** Layout facts of a hit, read defensively: the answer comes from the sandboxed document. Unknown values count as none. */
+export function frameHitLayout(hit: Pick<FrameBgHit, "childCount" | "siblingCount" | "parent">): FrameHitLayout {
+  const parent: unknown = hit.parent;
+  const raw = parent !== null && typeof parent === "object" ? parent as Record<string, unknown> : null;
+  return {
+    childCount: hitCount(hit.childCount),
+    siblingCount: hitCount(hit.siblingCount),
+    parent: raw && typeof raw.display === "string" ? { bgId: typeof raw.bgId === "string" && raw.bgId ? raw.bgId : null, display: raw.display.slice(0, 40) } : null,
+  };
+}
+
+/** Picture facts of a hit, or null when it is not a picture or the answer is malformed. A broken picture reports 0 by 0. */
+export function frameHitImage(hit: Pick<FrameBgHit, "image">): FrameHitImage | null {
+  const image: unknown = hit.image;
+  if (image === null || typeof image !== "object") return null;
+  const raw = image as Record<string, unknown>;
+  if (typeof raw.currentSrc !== "string") return null;
+  return { naturalWidth: hitCount(raw.naturalWidth), naturalHeight: hitCount(raw.naturalHeight), currentSrc: raw.currentSrc.slice(0, 4096) };
 }
 
 /** An axis-aligned box in the iframe's client pixels. */
@@ -786,6 +819,15 @@ const BRIDGE_SCRIPT = String.raw`(function () {
     return { self: elementRect(node), parent: parentInfo, artboard: board ? plainRect(board) : null, siblings: siblings };
   }
 
+  // The parent as the layout panels need it; the page's root elements have none.
+  function parentFacts(node) {
+    var parent = node.parentElement;
+    if (!parent || parent === document.documentElement || !parent.getAttribute) return null;
+    var display = "";
+    try { display = String(window.getComputedStyle(parent).getPropertyValue("display") || ""); } catch (e) { display = ""; }
+    return { bgId: parent.getAttribute("data-bg-node-id") || null, display: display };
+  }
+
   function readComputed(node) {
     var out = {};
     if (!node || !window.getComputedStyle) return out;
@@ -934,7 +976,11 @@ const BRIDGE_SCRIPT = String.raw`(function () {
         inSlide: !!bgNode.closest("[data-slide]"),
         attributes: readAttributes(bgNode),
         computed: readComputed(bgNode),
-        inline: readInline(bgNode)
+        inline: readInline(bgNode),
+        childCount: bgNode.children ? bgNode.children.length : 0,
+        siblingCount: bgNode.parentElement && bgNode.parentElement.children ? Math.max(0, bgNode.parentElement.children.length - 1) : 0,
+        parent: parentFacts(bgNode),
+        image: String(bgNode.tagName || "").toLowerCase() === "img" ? { naturalWidth: bgNode.naturalWidth || 0, naturalHeight: bgNode.naturalHeight || 0, currentSrc: String(bgNode.currentSrc || "") } : null
       } : null;
     } else if (data.action === "rect-selector") {
       try {

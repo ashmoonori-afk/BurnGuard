@@ -86,6 +86,7 @@ jobs:
           packages/backend/tests/bundled-fonts.test.ts
           packages/backend/tests/bundled-font-reference.test.ts
           packages/frontend/tests/canvas-edit-review.test.ts
+          packages/frontend/tests/edit-target.test.ts
           packages/frontend/tests/revision-thumbnails.test.ts
           packages/frontend/tests/settings-sections.test.ts
           packages/frontend/tests/canvas-prefs.test.ts
