@@ -59,6 +59,11 @@ const AXES: readonly SnapAxis[] = ["x", "y"];
 const TIE = 1e-6;
 /** How close two lines must be to count as the same line once the box has locked. */
 const COINCIDENT = 0.01;
+/**
+ * A box this close to a line already sits on it. The lock is still shown, but the box is not shifted: moving it a
+ * few hundredths of a pixel would only write an offset like 0.01px on an axis the person never touched.
+ */
+const SETTLED = 0.05;
 
 function span(rect: SnapRect, axis: SnapAxis): [number, number] {
   return axis === "x" ? [rect.left, rect.left + rect.width] : [rect.top, rect.top + rect.height];
@@ -141,13 +146,16 @@ function gapOptions(axis: SnapAxis, moving: SnapRect, siblings: readonly SnapSib
     const value = existing.to - existing.from;
     if (value <= 0) continue;
     const guide = (from: number, to: number): SnapGuide => ({ kind: "gap", axis, value, cross: (crossStart + crossEnd) / 2, segments: [existing, { from, to }] });
+    // A slot that a neighbour already occupies mirrors that neighbour, it is not equal spacing: one gap after
+    // `first` is where `second` sits, and in an evenly spaced row every such slot is taken.
+    const taken = (from: number) => row.some((rect) => span(rect, axis)[0] < from + (end - start) - COINCIDENT && from < span(rect, axis)[1] - COINCIDENT);
     if (before) {
       const edge = span(before, axis)[1];
-      options.push({ delta: edge + value - start, rank: GAP_RANK, guide: guide(edge, edge + value) });
+      if (!taken(edge + value)) options.push({ delta: edge + value - start, rank: GAP_RANK, guide: guide(edge, edge + value) });
     }
     if (after) {
       const edge = span(after, axis)[0];
-      options.push({ delta: edge - value - end, rank: GAP_RANK, guide: guide(edge - value, edge) });
+      if (!taken(edge - value - (end - start))) options.push({ delta: edge - value - end, rank: GAP_RANK, guide: guide(edge - value, edge) });
     }
   }
   return options;
@@ -199,7 +207,7 @@ function resolveAxis(axis: SnapAxis, input: { moving: SnapRect; kind: SnapKind; 
     seen.add(key);
     guides.push(guide.kind === "line" ? { ...guide, from: Math.min(guide.from, crossStart), to: Math.max(guide.to, crossEnd) } : guide);
   }
-  return { delta: best.delta, guides };
+  return { delta: Math.abs(best.delta) < SETTLED ? 0 : best.delta, guides };
 }
 
 /**
