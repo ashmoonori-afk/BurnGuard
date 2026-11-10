@@ -225,6 +225,8 @@ export default function ProjectView() {
   const drawSavesRef = useRef(new Map<string, Promise<unknown>>());
   const drawLayerRef = useRef<DrawLayerHandle | null>(null);
   const tweaksActionsRef = useRef<TweaksLayerActions | null>(null);
+  // The revision the last direct canvas edit (a Style or Edit save, undo or redo) produced; the history dialog stays closed for it.
+  const [directEditRevision, setDirectEditRevision] = useState<number | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
   const [sendPending, setSendPending] = useState(false);
   const [autoFixPending, setAutoFixPending] = useState(false);
@@ -503,7 +505,8 @@ export default function ProjectView() {
         ...(await identityForPatch(identity, () => readFileIdentity(id!, relPath, patch.node_bg_id))),
         ...patch,
       }),
-    onSuccess: (_data, variables) => {
+    onSuccess: (saved, variables) => {
+      setDirectEditRevision(saved.result_revision);
       applyTweaksHistory(variables.history, tweaksUndoRef, tweaksRedoRef);
       const bgId = variables.patch.node_bg_id;
       setTweaksTarget((current) =>
@@ -532,7 +535,8 @@ export default function ProjectView() {
         ...(await readFileIdentity(id!, relPath, patch.node_bg_id)),
         ...patch,
       }),
-    onSuccess: async (_updated, variables) => {
+    onSuccess: async (updated, variables) => {
+      setDirectEditRevision(updated.result_revision);
       setEditTarget((current) =>
         current && current.bg_id === variables.patch.node_bg_id
           ? applyEditPatch(current, variables.patch)
@@ -1087,6 +1091,7 @@ export default function ProjectView() {
       return input.reapplyExternal ? reapplyExternalCapture(id, operationId, history) : restoreArtifactHistory(id, operationId, history);
     },
     onSuccess: async (result, input) => {
+      setDirectEditRevision(result.result_revision);
       if (input.fromHistory || artifactRedo.current.revision !== undoInfoQuery.data?.current_revision) artifactRedo.current.operations = [];
       if (input.redo) artifactRedo.current.operations.pop();
       else if (!input.fromHistory) artifactRedo.current.operations.push(result.operation_id);
@@ -1571,7 +1576,7 @@ export default function ProjectView() {
                   onCancel={async () => { await cancelAlternativesMutation.mutateAsync(); }}
                 />
                 <UnverifiedDraftBadge state={unverifiedDraftQuery.data} />
-                <ArtifactHistory projectId={project.id} history={undoInfoQuery.data} onRecoverDraft={async operationId => { await recoverDraftMutation.mutateAsync(operationId); }} disabled={composerDisabled || recoverDraftMutation.isPending || undoMutation.isPending || tweaksMutation.isPending || patchFileMutation.isPending} onRestore={async operationId => { await undoMutation.mutateAsync({ operationId, fromHistory: true }); }} onReapply={async operationId => { await undoMutation.mutateAsync({ operationId, fromHistory: true, reapplyExternal: true }); }} />
+                <ArtifactHistory projectId={project.id} history={undoInfoQuery.data} quiet={tweaksMutation.isPending || patchFileMutation.isPending || undoMutation.isPending || (directEditRevision !== null && undoInfoQuery.data?.current_revision === directEditRevision)} onRecoverDraft={async operationId => { await recoverDraftMutation.mutateAsync(operationId); }} disabled={composerDisabled || recoverDraftMutation.isPending || undoMutation.isPending || tweaksMutation.isPending || patchFileMutation.isPending} onRestore={async operationId => { await undoMutation.mutateAsync({ operationId, fromHistory: true }); }} onReapply={async operationId => { await undoMutation.mutateAsync({ operationId, fromHistory: true, reapplyExternal: true }); }} />
               </div>}
               canUndo={Boolean(undoInfoQuery.data?.undo_operation_id)}
               undoPending={composerDisabled || undoMutation.isPending || tweaksMutation.isPending || patchFileMutation.isPending}
