@@ -50,7 +50,7 @@ import {
   refreshArtifacts,
 } from "@/api/project";
 import { ApiError, isAuthorityDenied } from "@/api/client";
-import { isStaleIdentityError, readFileIdentity } from "@/lib/artifact-identity";
+import { identityForPatch, isStaleIdentityError, readFileIdentity, type FileArtifactIdentity } from "@/lib/artifact-identity";
 import { getProjectDesignAudit, retryProjectDesignAudit } from "@/api/design-audit";
 import { restoreCheckpoint } from "@/api/checkpoints";
 import { getArtifactHistory, getUnverifiedDraft, reapplyExternalCapture, recoverReviewFailedDraft, restoreArtifactHistory, patchProjectFile } from "@/api/files";
@@ -104,6 +104,7 @@ import {
 } from "@/components/canvas/DrawLayer";
 import type { EditTarget } from "@/components/canvas/EditLayer";
 import type {
+  TweakApplyOptions,
   TweaksStyleKey,
   TweaksTarget,
 } from "@/components/canvas/TweaksLayer";
@@ -489,13 +490,15 @@ export default function ProjectView() {
     mutationFn: async ({
       relPath,
       patch,
+      identity,
     }: {
       relPath: string;
       patch: PatchFileRequest;
       history?: TweaksHistoryIntent;
+      identity?: Promise<FileArtifactIdentity>;
     }) =>
       patchProjectFile(id!, relPath, {
-        ...(await readFileIdentity(id!, relPath, patch.node_bg_id)),
+        ...(await identityForPatch(identity, () => readFileIdentity(id!, relPath, patch.node_bg_id))),
         ...patch,
       }),
     onSuccess: (_data, variables) => {
@@ -1296,11 +1299,12 @@ export default function ProjectView() {
     }
   };
 
-  const handleApplyTweak = (patch: Partial<Record<TweaksStyleKey, string | null>>) => {
+  const handleApplyTweak = (patch: Partial<Record<TweaksStyleKey, string | null>>, options?: TweakApplyOptions) => {
     if (!activeRelPath || !tweaksTarget || tweaksMutation.isPending) return;
     setTweakReview(buildTweakChangePreview(tweaksTarget, patch));
     tweaksMutation.mutate({
       relPath: activeRelPath,
+      identity: options?.identity,
       patch: { node_bg_id: tweaksTarget.bg_id, styles: patch },
       history: {
         kind: "apply",
@@ -1611,6 +1615,7 @@ export default function ProjectView() {
               tweaksTarget={tweaksTarget}
               tweaksSaving={tweaksMutation.isPending}
               onApplyTweak={handleApplyTweak}
+              readTweakIdentity={activeRelPath ? (bgId) => readFileIdentity(id!, activeRelPath, bgId) : undefined}
               onSelectTweaksTarget={setTweaksTarget}
               drawTool={drawTool}
               drawColor={drawColor}

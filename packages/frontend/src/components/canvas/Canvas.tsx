@@ -15,7 +15,8 @@ import DrawLayer, {
   type DrawTool,
 } from "./DrawLayer";
 import EditLayer, { type EditTarget } from "./EditLayer";
-import TweaksLayer, { type TweaksStyleKey, type TweaksTarget } from "./TweaksLayer";
+import TweaksLayer, { type TweakApplyOptions, type TweaksStyleKey, type TweaksTarget } from "./TweaksLayer";
+import type { FileArtifactIdentity } from "@/lib/artifact-identity";
 import QualityLayer from "./QualityLayer";
 import GraphicFrameNavigator from "./GraphicFrameNavigator";
 import {
@@ -129,6 +130,7 @@ export default function Canvas({
   tweaksTarget,
   tweaksSaving,
   onApplyTweak,
+  readTweakIdentity,
   onSelectTweaksTarget,
   drawTool,
   drawColor,
@@ -177,7 +179,9 @@ export default function Canvas({
   tweaksSelectedBgId: string | null;
   tweaksTarget: TweaksTarget | null;
   tweaksSaving: boolean;
-  onApplyTweak: (patch: Partial<Record<TweaksStyleKey, string | null>>) => void;
+  onApplyTweak: (patch: Partial<Record<TweaksStyleKey, string | null>>, options?: TweakApplyOptions) => void;
+  /** Reads the identity of a node in the open file when a canvas gesture starts. */
+  readTweakIdentity?: (bgId: string) => Promise<FileArtifactIdentity>;
   onSelectTweaksTarget: (target: TweaksTarget | null) => void;
   drawTool: DrawTool;
   drawColor: string;
@@ -510,6 +514,9 @@ export default function Canvas({
           saving={tweaksSaving}
           onApply={onApplyTweak}
           onSelect={onSelectTweaksTarget}
+          zoom={zoom}
+          magnet={magnet}
+          readIdentity={readTweakIdentity}
         />
         {mode === "quality" && <QualityLayer
           active={loadedFrameKey === (frameKey ?? src ?? null)}

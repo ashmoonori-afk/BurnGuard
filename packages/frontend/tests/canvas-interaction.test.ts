@@ -7,6 +7,10 @@ import { buildSandboxedArtifactSrcDoc } from "../src/components/canvas/frame-bri
 import { canvasPoint } from "../src/components/canvas/canvas-coordinates";
 import { buildCommentEditRequest, commentEditDisplayText, saveAndRequestCommentEdit } from "../src/components/modes/comment-edit-request";
 import { parseLocalFonts, type Comment } from "@bg/shared";
+import { identityForPatch, type FileArtifactIdentity } from "../src/lib/artifact-identity";
+import { translatePatch } from "../src/lib/element-geometry";
+import { beginMoveGesture, type MoveGestureStart } from "../src/lib/move-gesture";
+import type { SnapSources } from "../src/lib/snap-engine";
 
 test("Given a zoomed and moved canvas When pointing Then hit and draw coordinates remain unscaled", () => {
   const element = { clientWidth: 800, clientHeight: 600, getBoundingClientRect: () => ({ left: 120, top: 70, width: 400, height: 300 }) } as HTMLElement;
@@ -84,4 +88,106 @@ test("Given an overlay wheel When the tagged parent requests scrolling Then the 
   listeners.get("message")!({ source: parent, data });
   expect(node.scrollTop).toBe(80);
   expect(windowScroll).toBe(0);
+});
+
+const identityAt = (revision: number): FileArtifactIdentity => ({ expected_revision: revision, expected_artifact_digest: `digest-${revision}`, expected_file_hash: `hash-${revision}`, node_fingerprint: `node-${revision}` });
+const NEIGHBOUR: SnapSources = { parent: null, artboard: null, siblings: [{ bgId: "next", rect: { left: 203, top: 300, width: 100, height: 40 } }] };
+
+/** A move gesture on a 60 x 40 box at 100,100 whose snap rects have already arrived unless `sources` says otherwise. */
+async function moveGesture(overrides: Partial<MoveGestureStart<FileArtifactIdentity>> = {}) {
+  const start: MoveGestureStart<FileArtifactIdentity> = { rect: { left: 100, top: 100, width: 60, height: 40 }, rotation: 0, scaleX: 1, scaleY: 1, offset: { x: 0, y: 0 }, zoom: 1, sources: Promise.resolve(NEIGHBOUR), identity: Promise.resolve(identityAt(1)), ...overrides };
+  const gesture = beginMoveGesture(start);
+  await start.sources.catch(() => null);
+  return gesture;
+}
+const pointer = (dx: number, dy = 0, options: { magnet?: boolean; paused?: boolean } = {}) => ({ dx, dy, magnet: true, paused: false, ...options });
+
+test("Given a press that travels 2 px When released Then it is a click and nothing is saved", async () => {
+  const gesture = await moveGesture();
+  expect(gesture.update(pointer(2))).toBeNull();
+  expect(gesture.dragging).toBe(false);
+  expect(gesture.release()).toBeNull();
+});
+
+test("Given a 40 px drag When released Then exactly one save carries translate 40px 0px", async () => {
+  const gesture = await moveGesture({ sources: Promise.resolve(null) });
+  expect(gesture.update(pointer(40))).toMatchObject({ delta: { x: 40, y: 0 }, rect: { left: 140, top: 100 }, guides: [] });
+  const commit = gesture.release()!;
+  expect(translatePatch(commit.offset.x, commit.offset.y)).toEqual({ translate: "40px 0px" });
+  expect(gesture.release()).toBeNull();
+  expect(gesture.update(pointer(80))).toBeNull();
+});
+
+test("Given a sibling edge 3 px from where the pointer leaves the box When released Then the locked value is saved", async () => {
+  const gesture = await moveGesture();
+  const preview = gesture.update(pointer(100))!;
+  expect(preview.guides).toMatchObject([{ kind: "line", bgId: "next", part: "start" }]);
+  expect(preview.rect.left).toBe(203);
+  expect(gesture.release()!.offset).toEqual({ x: 103, y: 0 });
+});
+
+test("Given the pause key or the magnet switched off When dragging next to a sibling Then the unlocked value is saved", async () => {
+  const paused = await moveGesture();
+  expect(paused.update(pointer(100, 0, { paused: true }))).toMatchObject({ guides: [], rect: { left: 200 } });
+  expect(paused.release()!.offset).toEqual({ x: 100, y: 0 });
+  const off = await moveGesture();
+  off.update(pointer(100, 0, { magnet: false }));
+  expect(off.release()!.offset).toEqual({ x: 100, y: 0 });
+});
+
+test("Given Escape during a drag When the pointer is released Then nothing is saved", async () => {
+  const gesture = await moveGesture();
+  gesture.update(pointer(40));
+  gesture.cancel();
+  expect(gesture.update(pointer(60))).toBeNull();
+  expect(gesture.release()).toBeNull();
+});
+
+test("Given a drag that returns to its start When released Then nothing is saved", async () => {
+  const gesture = await moveGesture({ sources: Promise.resolve(null) });
+  gesture.update(pointer(40));
+  gesture.update(pointer(0));
+  expect(gesture.dragging).toBe(true);
+  expect(gesture.release()).toBeNull();
+});
+
+test("Given a saved offset, a slide scaled to 50% and a 200% zoom When dragging Then the offset is in the element's own pixels and the click threshold stays 3 screen px", async () => {
+  const scaled = await moveGesture({ offset: { x: 10, y: -5 }, scaleX: 0.5, scaleY: 0.5, sources: Promise.resolve(null) });
+  scaled.update(pointer(40, 20));
+  expect(scaled.release()!.offset).toEqual({ x: 90, y: 35 });
+  const zoomed = await moveGesture({ zoom: 2, sources: Promise.resolve(null) });
+  expect(zoomed.update(pointer(1.4))).toBeNull();
+  expect(zoomed.update(pointer(1.6))).not.toBeNull();
+  // At 200% the magnet reaches 3 canvas px: a neighbour 4 px away does not lock.
+  const far = await moveGesture({ zoom: 2 });
+  expect(far.update(pointer(99))!.guides).toEqual([]);
+  expect((await moveGesture()).update(pointer(99))!.guides).toHaveLength(1);
+});
+
+test("Given snap rects that never arrive or fail When dragging Then the element still moves without locking", async () => {
+  const pending = beginMoveGesture({ rect: { left: 100, top: 100, width: 60, height: 40 }, rotation: 0, scaleX: 1, scaleY: 1, offset: { x: 0, y: 0 }, zoom: 1, sources: new Promise(() => undefined), identity: Promise.resolve(identityAt(1)) });
+  expect(pending.update(pointer(100))).toMatchObject({ guides: [], rect: { left: 200 } });
+  const failed = await moveGesture({ sources: Promise.reject(new Error("bridge_failed")) });
+  expect(failed.update(pointer(100))).toMatchObject({ guides: [], rect: { left: 200 } });
+});
+
+test("Given a newer identity at release When a gesture saves Then it sends the identity read at its start, and a panel field reads one at save time", async () => {
+  let revision = 0;
+  const readNow = async () => identityAt(++revision);
+  const gesture = await moveGesture({ identity: readNow() });
+  gesture.update(pointer(40));
+  await readNow();
+  const commit = gesture.release()!;
+  expect(await identityForPatch(commit.identity, readNow)).toEqual(identityAt(1));
+  expect(revision).toBe(2);
+  expect(await identityForPatch(undefined, readNow)).toEqual(identityAt(3));
+});
+
+test("Given the identity read at gesture start failed When the gesture saves Then the save fails instead of reading a newer identity", async () => {
+  let reads = 0;
+  const gesture = await moveGesture({ identity: Promise.reject(new Error("node_not_found")) });
+  gesture.update(pointer(40));
+  const commit = gesture.release()!;
+  await expect(identityForPatch(commit.identity, async () => { reads += 1; return identityAt(9); })).rejects.toThrow("node_not_found");
+  expect(reads).toBe(0);
 });

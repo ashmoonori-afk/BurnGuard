@@ -32,6 +32,10 @@ interface UIState {
   /** Whether moving and resizing on the canvas lock to nearby lines. On until switched off; remembered on this computer. */
   canvasMagnet: boolean;
   setCanvasMagnet: (on: boolean) => void;
+
+  /** What the element being moved is locked to, in words; the Style panel reads it out. Null when nothing is locked. */
+  canvasSnapStatus: string | null;
+  setCanvasSnapStatus: (status: string | null) => void;
 }
 
 const TOAST_AUTO_DISMISS_MS = 3000;
@@ -83,4 +87,7 @@ export const useUIStore = create<UIState>((set, get) => ({
     writeCanvasPref(CANVAS_MAGNET_PREF, canvasMagnet);
     set({ canvasMagnet });
   },
+
+  canvasSnapStatus: null,
+  setCanvasSnapStatus: (canvasSnapStatus) => { if (get().canvasSnapStatus !== canvasSnapStatus) set({ canvasSnapStatus }); },
 }));

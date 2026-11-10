@@ -12,12 +12,19 @@ import {
   frameHitLayout,
   requestFrameBgAtPoint,
   requestFrameRectForBgId,
+  requestFrameSnapRects,
   type FrameBgHit,
   type FrameHitLayout,
   type FrameRect,
 } from "./frame-bridge";
 import { useFrameElementRect } from "@/hooks/useFrameElementRect";
-import { targetDimensions, dimensionPatch, rotationPatch, isAspectLocked } from "@/lib/element-geometry";
+import { targetDimensions, targetOffset, translatePatch, dimensionPatch, rotationPatch, isAspectLocked } from "@/lib/element-geometry";
+import type { FileArtifactIdentity } from "@/lib/artifact-identity";
+import { beginMoveGesture, type MoveGesture } from "@/lib/move-gesture";
+import { primaryGuides, snapGuideChip, snapGuideStatus } from "@/lib/snap-guides";
+import type { SnapGuide } from "@/lib/snap-engine";
+import { useUIStore } from "@/state/uiStore";
+import SnapGuides from "./SnapGuides";
 
 export const TWEAKS_STYLE_KEYS = [
   "width", "height", "rotate", "aspect-ratio", "box-sizing", "display",
@@ -54,6 +61,15 @@ export interface TweaksTarget {
   parent?: FrameHitLayout["parent"];
 }
 
+type TweaksPatch = Partial<Record<TweaksStyleKey, string | null>>;
+
+/** A selection narrower or shorter than this keeps its resize handles outside the box. */
+const SMALL_BOX_PX = 40;
+const NO_GUIDES: { items: SnapGuide[]; box: { left: number; top: number }; live: boolean } = { items: [], box: { left: 0, top: 0 }, live: false };
+
+/** A gesture hands over the file identity it read when it started; panel fields leave it out and read it at save time. */
+export interface TweakApplyOptions { identity?: Promise<FileArtifactIdentity> }
+
 /** Builds the Style target from a bridge hit; null when the hit has no node id. */
 export function tweaksTargetFromHit(hit: FrameBgHit | null): TweaksTarget | null {
   if (!hit?.bgId) return null;
@@ -74,6 +90,9 @@ export default function TweaksLayer({
   target,
   saving,
   onApply,
+  zoom = 1,
+  magnet = true,
+  readIdentity,
 }: {
   active: boolean;
   iframeRef: RefObject<HTMLIFrameElement | null>;
@@ -81,29 +100,44 @@ export default function TweaksLayer({
   onSelect: (target: TweaksTarget | null) => void;
   target: TweaksTarget | null;
   saving: boolean;
-  onApply: (patch: Partial<Record<TweaksStyleKey, string | null>>) => void;
+  onApply: (patch: TweaksPatch, options?: TweakApplyOptions) => void;
+  /** The canvas zoom, so the magnet's reach and the guide lines keep their size on screen. */
+  zoom?: number;
+  magnet?: boolean;
+  /** Reads the identity of a node in the open file. Without it the element cannot be moved by dragging. */
+  readIdentity?: (bgId: string) => Promise<FileArtifactIdentity>;
 }) {
   const t = useT();
   const overlayRef = useRef<HTMLDivElement>(null);
   const requestSeqRef = useRef(0);
   const [hoverRect, setHoverRect] = useState<FrameRect | null>(null);
   const [preview, setPreview] = useState<FrameRect | null>(null);
-  const drag = useRef<{ bgId: string; x: number; y: number; rect: FrameRect; kind: string; patch: Partial<Record<TweaksStyleKey, string | null>> } | null>(null);
+  const [guides, setGuides] = useState<{ items: SnapGuide[]; box: { left: number; top: number }; live: boolean }>(NO_GUIDES);
+  const setSnapStatus = useUIStore((state) => state.setCanvasSnapStatus);
+  const drag = useRef<{ bgId: string; x: number; y: number; rect: FrameRect; kind: string; patch: TweaksPatch; identity?: Promise<FileArtifactIdentity>; session?: MoveGesture<FileArtifactIdentity> | null; names?: Map<string, string> } | null>(null);
   useEffect(() => {
+    drag.current?.session?.cancel();
     drag.current = null;
     setPreview(null);
   }, [active, saving, selectedBgId]);
+  useEffect(() => {
+    setGuides(NO_GUIDES);
+    setSnapStatus(null);
+  }, [active, selectedBgId, setSnapStatus]);
   useEffect(() => {
     const cancel = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || !drag.current) return;
       event.preventDefault();
       event.stopImmediatePropagation();
+      drag.current.session?.cancel();
       drag.current = null;
       setPreview(null);
+      setGuides(NO_GUIDES);
+      setSnapStatus(null);
     };
     window.addEventListener("keydown", cancel, true);
     return () => window.removeEventListener("keydown", cancel, true);
-  }, []);
+  }, [setSnapStatus]);
   // Shared 200 ms poll loop (audit fix #11). Hovering is still local
   // because it uses different request shape (point-based, not id-based).
   const selectedRect = useFrameElementRect(
@@ -133,12 +167,70 @@ export default function TweaksLayer({
     });
   };
 
-  const handleClick = (e: MouseEvent<HTMLDivElement>) => {
+  const selectAt = (clientX: number, clientY: number) => {
     if (!active || saving || !overlayRef.current) return;
-    if (e.target !== overlayRef.current) return;
-
-    const [relX, relY] = canvasPoint(overlayRef.current, e.clientX, e.clientY);
+    const [relX, relY] = canvasPoint(overlayRef.current, clientX, clientY);
     void requestFrameBgAtPoint(iframeRef.current, relX, relY).then((hit) => onSelect(tweaksTargetFromHit(hit)));
+  };
+
+  const handleClick = (e: MouseEvent<HTMLDivElement>) => {
+    if (e.target === overlayRef.current) selectAt(e.clientX, e.clientY);
+  };
+
+  /** Every gesture saves against the identity it reads here, when it starts. */
+  const gestureIdentity = (bgId: string) => {
+    const identity = readIdentity?.(bgId);
+    identity?.catch(() => undefined);
+    return identity;
+  };
+
+  const startMove = (event: PointerEvent<HTMLButtonElement>) => {
+    if (saving || !target || !selectedRect || !overlayRef.current || event.button !== 0) return;
+    event.preventDefault(); event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const [x, y] = canvasPoint(overlayRef.current, event.clientX, event.clientY);
+    const offset = targetOffset(target);
+    const identity = gestureIdentity(target.bg_id);
+    const names = new Map<string, string>();
+    const sources = requestFrameSnapRects(iframeRef.current, target.bg_id);
+    void sources.then((rects) => { for (const sibling of rects?.siblings ?? []) names.set(sibling.bgId, sibling.label); });
+    // Without a readable pixel offset or an identity the press still selects what is under the pointer, but does not move.
+    const session = offset && identity ? beginMoveGesture({ rect: selectedRect, rotation: selectedRect.rotation ?? 0, scaleX: selectedRect.scaleX ?? 1, scaleY: selectedRect.scaleY ?? 1, offset, zoom, sources, identity }) : null;
+    drag.current = { bgId: target.bg_id, x, y, rect: selectionBox(selectedRect), kind: "move", patch: {}, identity, session, names };
+    setGuides(NO_GUIDES);
+  };
+  const moveMove = (event: PointerEvent<HTMLButtonElement>) => {
+    const current = drag.current;
+    if (!current?.session || !overlayRef.current) return;
+    const [x, y] = canvasPoint(overlayRef.current, event.clientX, event.clientY);
+    const next = current.session.update({ dx: x - current.x, dy: y - current.y, magnet, paused: event.ctrlKey || event.metaKey });
+    if (!next) return;
+    setPreview({ ...current.rect, left: current.rect.left + next.delta.x, top: current.rect.top + next.delta.y });
+    const shown = primaryGuides(next.guides);
+    setGuides({ items: shown, box: next.rect, live: true });
+    const names = current.names ?? new Map<string, string>();
+    const sentences = shown.map((guide) => {
+      const chip = snapGuideChip(guide);
+      const status = snapGuideStatus(guide, t(chip.key, chip.params), names);
+      return status ? t(status.key, status.params) : null;
+    }).filter((sentence): sentence is string => sentence !== null);
+    setSnapStatus(sentences.length ? sentences.join(" ") : null);
+  };
+  const finishMove = (event: PointerEvent<HTMLButtonElement>, commit: boolean) => {
+    event.stopPropagation();
+    const current = drag.current; drag.current = null; setPreview(null);
+    // Guides fade out once their gesture ends; with reduced motion, or nothing to fade, they go at once.
+    setGuides((shown) => shown.items.length === 0 || window.matchMedia("(prefers-reduced-motion: reduce)").matches ? NO_GUIDES : { ...shown, live: false });
+    // The sentence describes a lock that is being held; once the pointer is up, the save may still be refused.
+    setSnapStatus(null);
+    if (!current) return;
+    if (!commit) { current.session?.cancel(); return; }
+    const result = current.session?.release() ?? null;
+    if (result) {
+      if (active && !saving && current.bgId === target?.bg_id) onApply(translatePatch(result.offset.x, result.offset.y), { identity: result.identity });
+    } else if (!current.session?.dragging) {
+      selectAt(event.clientX, event.clientY);
+    }
   };
 
   const start = (event: PointerEvent<HTMLButtonElement>, kind: string) => {
@@ -146,7 +238,7 @@ export default function TweaksLayer({
     event.preventDefault(); event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
     const [x, y] = canvasPoint(overlayRef.current, event.clientX, event.clientY);
-    drag.current = { bgId: target.bg_id, x, y, rect: selectionBox(selectedRect), kind, patch: {} };
+    drag.current = { bgId: target.bg_id, x, y, rect: selectionBox(selectedRect), kind, patch: {}, identity: gestureIdentity(target.bg_id) };
   };
   const move = (event: PointerEvent<HTMLButtonElement>) => {
     const current = drag.current;
@@ -171,9 +263,12 @@ export default function TweaksLayer({
   const finish = (event: PointerEvent<HTMLButtonElement>, commit: boolean) => {
     event.stopPropagation();
     const current = drag.current; drag.current = null; setPreview(null);
-    if (commit && active && !saving && current && current.bgId === target?.bg_id && Object.keys(current.patch).length) onApply(current.patch);
+    if (commit && active && !saving && current && current.bgId === target?.bg_id && Object.keys(current.patch).length) onApply(current.patch, current.identity ? { identity: current.identity } : undefined);
   };
   const box = preview ?? (selectedRect ? selectionBox(selectedRect) : null);
+  // On a small box the handles would cover the Move surface, so they step outside it.
+  const handleX = box && box.width < SMALL_BOX_PX ? "calc(100% + 10px)" : "100%";
+  const handleY = box && box.height < SMALL_BOX_PX ? "calc(100% + 10px)" : "100%";
 
   return (
     <div
@@ -209,11 +304,13 @@ export default function TweaksLayer({
             rotate: `${(box.rotation ?? 0) + (drag.current?.kind === "rotate" && target ? Number.parseFloat(String(drag.current.patch.rotate ?? targetDimensions(target).rotation)) - targetDimensions(target).rotation : 0)}deg`,
           }}
         >
-          {([['e', t("canvas.handles.width"), '100%', '50%'], ['s', t("canvas.handles.height"), '50%', '100%'], ['se', t("canvas.handles.size"), '100%', '100%'], ['rotate', t("canvas.handles.rotation"), '50%', '-24px']] as const).map(([kind, label, left, top]) => (
+          <button type="button" aria-label={t("canvas.handles.move")} data-canvas-move="" disabled={saving} className="absolute inset-0 pointer-events-auto bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default" style={{ touchAction: "none", cursor: "move" }} onPointerDown={startMove} onPointerMove={moveMove} onPointerUp={(event) => finishMove(event, true)} onPointerCancel={(event) => finishMove(event, false)} onClick={(event) => event.stopPropagation()} />
+          {([['e', t("canvas.handles.width"), handleX, '50%'], ['s', t("canvas.handles.height"), '50%', handleY], ['se', t("canvas.handles.size"), handleX, handleY], ['rotate', t("canvas.handles.rotation"), '50%', '-24px']] as const).map(([kind, label, left, top]) => (
             <button key={kind} aria-label={label} disabled={saving} className="absolute h-3 w-3 border border-accent bg-card pointer-events-auto disabled:opacity-50" style={{ left, top, borderRadius: kind === 'rotate' ? '50%' : 0, transform: 'translate(-50%, -50%)', touchAction: 'none', cursor: kind === 'rotate' ? 'grab' : `${kind}-resize` }} onPointerDown={(event) => start(event, kind)} onPointerMove={move} onPointerUp={(event) => finish(event, true)} onPointerCancel={(event) => finish(event, false)} onClick={(event) => event.stopPropagation()} />
           ))}
         </div>
       )}
+      {active && <SnapGuides guides={guides.items} box={guides.box} zoom={zoom} live={guides.live} onFaded={() => setGuides((shown) => shown.live ? shown : NO_GUIDES)} />}
     </div>
   );
 }

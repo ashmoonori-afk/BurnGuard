@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { ASPECT_PRESETS, aspectPresetValue, dimensionPatch, isAspectLocked, rotationPatch, targetDimensions } from "../src/lib/element-geometry";
+import { ASPECT_PRESETS, aspectPresetValue, dimensionPatch, isAspectLocked, rotationPatch, targetDimensions, targetOffset, translatePatch } from "../src/lib/element-geometry";
 import type { TweaksTarget } from "../src/components/canvas/TweaksLayer";
 
 const target: TweaksTarget = { bg_id: "image", tag: "img", computed: { width: "180px", height: "80px", rotate: "0.25turn" }, inline: {}, geometry: { width: 200, height: 100 } };
@@ -28,4 +28,23 @@ test("Given a stored aspect-ratio When the preset value is derived Then a matchi
   expect(aspectPresetValue(target)).toBe("free");
   expect(ASPECT_PRESETS.map((preset) => preset.value)).toEqual([1, 4 / 3, 16 / 9, 9 / 16]);
   for (const preset of ASPECT_PRESETS) expect(aspectPresetValue({ ...target, inline: { "aspect-ratio": `${preset.value} / 1` } })).toBe(String(preset.value));
+});
+
+test("Given a stored translate When the offset is read Then pixel values parse, none is zero and other units are left alone", () => {
+  expect(targetOffset(target)).toEqual({ x: 0, y: 0 });
+  expect(targetOffset({ ...target, computed: { ...target.computed, translate: "none" } })).toEqual({ x: 0, y: 0 });
+  expect(targetOffset({ ...target, computed: { translate: "12px 3px" }, inline: { translate: "40px -8.5px" } })).toEqual({ x: 40, y: -8.5 });
+  expect(targetOffset({ ...target, computed: { translate: "12px" } })).toEqual({ x: 12, y: 0 });
+  expect(targetOffset({ ...target, computed: { translate: "12px 4px 0px" } })).toEqual({ x: 12, y: 4 });
+  expect(targetOffset({ ...target, inline: { translate: "10% 0px" } })).toBeNull();
+  expect(targetOffset({ ...target, inline: { translate: "calc(1px + 2px)" } })).toBeNull();
+  expect(targetOffset({ ...target, inline: { translate: "1px 2px 3px" } })).toBeNull();
+});
+
+test("Given an offset When the move patch is built Then only translate is written, rounded to two decimals", () => {
+  expect(translatePatch(40, 0)).toEqual({ translate: "40px 0px" });
+  expect(translatePatch(-12.346, 0.004)).toEqual({ translate: "-12.35px 0px" });
+  expect(translatePatch(-0, -0.001)).toEqual({ translate: "0px 0px" });
+  expect(translatePatch(Number.NaN, 1)).toEqual({});
+  expect(translatePatch(1, Number.POSITIVE_INFINITY)).toEqual({});
 });
