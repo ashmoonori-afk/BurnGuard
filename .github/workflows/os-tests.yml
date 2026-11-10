@@ -124,6 +124,7 @@ jobs:
           packages/backend/tests/app-screens.test.ts
           packages/backend/tests/desktop-lifecycle.test.ts
           packages/frontend/tests/canvas-source.test.ts
+          packages/frontend/tests/selection-bridge.test.ts
           packages/frontend/tests/side-input.test.ts
           packages/frontend/tests/error-copy.test.ts
           packages/backend/tests/artifact-history.test.ts

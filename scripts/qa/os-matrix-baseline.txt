@@ -293,7 +293,6 @@ packages/frontend/tests/project-thumbnail.test.ts
 packages/frontend/tests/quality-fix-request.test.ts
 packages/frontend/tests/quick-comment.test.ts
 packages/frontend/tests/request-display.test.ts
-packages/frontend/tests/selection-bridge.test.ts
 packages/frontend/tests/session-multipart.test.ts
 packages/frontend/tests/session-review.test.ts
 packages/frontend/tests/settings-locale.test.ts
