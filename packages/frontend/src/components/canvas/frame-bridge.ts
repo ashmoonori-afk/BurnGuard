@@ -78,6 +78,25 @@ export interface FrameBgHit {
   inline: Record<string, string>;
 }
 
+/** An axis-aligned box in the iframe's client pixels. */
+export interface FrameBox { left: number; top: number; width: number; height: number }
+
+/** One grid line. With a gap the line has thickness: `start` ends the track before it, `end` starts the next one. */
+export interface FrameGridLine { start: number; end: number }
+
+/** What one element may align to, read once when a gesture starts. */
+export interface FrameSnapRects {
+  self: FrameRect;
+  parent: { rect: FrameBox; content: FrameBox; display: string; columnLines: FrameGridLine[]; rowLines: FrameGridLine[] } | null;
+  /** The slide or graphic artboard that holds the element, when there is one. */
+  artboard: FrameBox | null;
+  /** Visible siblings that carry a node id, nearest first. `label` is their short text, or the tag when they have none. */
+  siblings: Array<{ bgId: string; rect: FrameBox; label: string }>;
+}
+
+export const FRAME_SNAP_SIBLING_LIMIT = 80;
+const FRAME_SNAP_LINE_LIMIT = 201;
+
 type BridgeAction =
   | "preview-report"
   | "scroll-at-point"
@@ -87,6 +106,7 @@ type BridgeAction =
   | "hit-bg"
   | "rect-selector"
   | "rect-bg"
+  | "snap-rects"
   | "active-slide"
   | "set-active-slide"
   | "reveal-selector"
@@ -368,6 +388,67 @@ export async function requestFrameRectForBgId(
   })) as FrameRect | null;
 }
 
+const isFiniteNumber = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
+
+function parseFrameBox(value: unknown): FrameBox | null {
+  if (value === null || typeof value !== "object") return null;
+  const { left, top, width, height } = value as Record<string, unknown>;
+  return isFiniteNumber(left) && isFiniteNumber(top) && isFiniteNumber(width) && isFiniteNumber(height) && width >= 0 && height >= 0 ? { left, top, width, height } : null;
+}
+
+function parseFrameGridLines(value: unknown): FrameGridLine[] | null {
+  if (!Array.isArray(value) || value.length > FRAME_SNAP_LINE_LIMIT) return null;
+  const lines: FrameGridLine[] = [];
+  for (const entry of value) {
+    const { start, end } = (entry ?? {}) as Record<string, unknown>;
+    if (!isFiniteNumber(start) || !isFiniteNumber(end)) return null;
+    lines.push({ start, end });
+  }
+  return lines;
+}
+
+/**
+ * The answer comes from a sandboxed document that can run authored script, and its numbers end up in saved
+ * styles, so it is parsed all-or-nothing: finite numbers only, bounded lists, known fields only.
+ */
+export function parseFrameSnapRects(payload: unknown): FrameSnapRects | null {
+  if (payload === null || typeof payload !== "object" || Array.isArray(payload)) return null;
+  const source = payload as Record<string, unknown>;
+  const selfBox = parseFrameBox(source.self);
+  if (!selfBox) return null;
+  const self: FrameRect = { ...selfBox };
+  for (const key of ["rotation", "boxWidth", "boxHeight", "scaleX", "scaleY"] as const) {
+    const value = (source.self as Record<string, unknown>)[key];
+    if (value === undefined) continue;
+    if (!isFiniteNumber(value)) return null;
+    self[key] = value;
+  }
+  let parent: FrameSnapRects["parent"] = null;
+  if (source.parent !== null) {
+    const raw = (source.parent ?? {}) as Record<string, unknown>;
+    const rect = parseFrameBox(raw.rect), content = parseFrameBox(raw.content);
+    const columnLines = parseFrameGridLines(raw.columnLines), rowLines = parseFrameGridLines(raw.rowLines);
+    if (!rect || !content || !columnLines || !rowLines || typeof raw.display !== "string") return null;
+    parent = { rect, content, display: raw.display.slice(0, 40), columnLines, rowLines };
+  }
+  const artboard = source.artboard === null ? null : parseFrameBox(source.artboard);
+  if (source.artboard !== null && !artboard) return null;
+  if (!Array.isArray(source.siblings)) return null;
+  const siblings: FrameSnapRects["siblings"] = [];
+  for (const entry of source.siblings.slice(0, FRAME_SNAP_SIBLING_LIMIT)) {
+    const raw = (entry ?? {}) as Record<string, unknown>;
+    const rect = parseFrameBox(raw.rect);
+    if (!rect || typeof raw.bgId !== "string" || !raw.bgId || raw.bgId.length > 256 || typeof raw.label !== "string") return null;
+    siblings.push({ bgId: raw.bgId, rect, label: raw.label.slice(0, 40) });
+  }
+  return { self, parent, artboard, siblings };
+}
+
+/** Asked once when a gesture starts (never polled): the element, its parent, its artboard and its nearest siblings. */
+export async function requestFrameSnapRects(iframe: HTMLIFrameElement | null, bgId: string): Promise<FrameSnapRects | null> {
+  return parseFrameSnapRects(await requestFrameBridge(iframe, "snap-rects", { bgId }));
+}
+
 export async function requestFrameActiveSlide(
   iframe: HTMLIFrameElement | null,
 ): Promise<number | null> {
@@ -459,6 +540,9 @@ const BRIDGE_SCRIPT = String.raw`(function () {
     "line-height",
     "letter-spacing",
     "rotate", "aspect-ratio", "box-sizing", "display",
+    "translate", "position",
+    "grid-template-columns", "grid-auto-rows", "gap", "grid-column", "grid-row",
+    "min-width", "object-fit", "object-position",
     "width",
     "height",
     "padding",
@@ -601,6 +685,106 @@ const BRIDGE_SCRIPT = String.raw`(function () {
   window.addEventListener("scroll", queueCommentPositions, true);
   window.addEventListener("resize", queueCommentPositions);
   document.addEventListener("load", queueCommentPositions, true);
+
+  function plainRect(node) {
+    var rect = node.getBoundingClientRect();
+    return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
+  }
+
+  function pixels(value) {
+    var number = parseFloat(value);
+    return isFinite(number) ? number : 0;
+  }
+
+  // Grid lines of one axis in client pixels: one per track edge, so N tracks give N + 1 lines. An empty list means
+  // the resolved track list could not be read as pixels, and the caller then has no grid lines to offer.
+  function gridLines(style, axis, origin, size, scale) {
+    var horizontal = axis === "x";
+    var template = String(style.getPropertyValue(horizontal ? "grid-template-columns" : "grid-template-rows") || "");
+    var tokens = template.replace(/\[[^\]]*\]/g, " ").trim().split(/\s+/);
+    var tracks = [];
+    for (var i = 0; i < tokens.length; i++) {
+      if (!/^\d+(?:\.\d+)?px$/.test(tokens[i])) return [];
+      tracks.push(parseFloat(tokens[i]) * scale);
+    }
+    if (tracks.length > 200) return [];
+    var rawGap = String(style.getPropertyValue(horizontal ? "column-gap" : "row-gap") || "");
+    var gap = /%$/.test(rawGap) ? size * pixels(rawGap) / 100 : pixels(rawGap) * scale;
+    var used = gap * (tracks.length - 1);
+    for (var j = 0; j < tracks.length; j++) used += tracks[j];
+    var free = Math.max(0, size - used);
+    var align = String(style.getPropertyValue(horizontal ? "justify-content" : "align-content") || "").replace(/^(safe|unsafe)\s+/, "");
+    var offset = 0;
+    if (align === "center") offset = free / 2;
+    else if (align === "end" || align === "flex-end") offset = free;
+    else if (align === "space-between" && tracks.length > 1) gap += free / (tracks.length - 1);
+    else if (align === "space-around") { gap += free / tracks.length; offset = free / tracks.length / 2; }
+    else if (align === "space-evenly") { gap += free / (tracks.length + 1); offset = free / (tracks.length + 1); }
+    var position = origin + offset;
+    var lines = [{ start: position, end: position }];
+    for (var k = 0; k < tracks.length; k++) {
+      var trackEnd = position + tracks[k];
+      lines.push({ start: trackEnd, end: k === tracks.length - 1 ? trackEnd : trackEnd + gap });
+      position = trackEnd + gap;
+    }
+    // Right-to-left grids lay the same tracks out from the other side.
+    if (horizontal && style.getPropertyValue("direction") === "rtl") {
+      var mirror = 2 * origin + size;
+      lines = lines.map(function (line) { return { start: mirror - line.end, end: mirror - line.start }; }).reverse();
+    }
+    return lines;
+  }
+
+  var SNAP_SIBLING_LIMIT = 80;
+
+  // Everything one element may align to, in client pixels. Read-only: nothing in the document changes.
+  function snapRects(node) {
+    var parent = node.parentElement;
+    var parentInfo = null;
+    var siblings = [];
+    if (parent && parent.getBoundingClientRect) {
+      var style = window.getComputedStyle(parent);
+      var frame = elementRect(parent);
+      var sx = frame.scaleX || 1, sy = frame.scaleY || 1;
+      var insetLeft = (pixels(style.borderLeftWidth) + pixels(style.paddingLeft)) * sx;
+      var insetTop = (pixels(style.borderTopWidth) + pixels(style.paddingTop)) * sy;
+      var insetRight = (pixels(style.borderRightWidth) + pixels(style.paddingRight)) * sx;
+      var insetBottom = (pixels(style.borderBottomWidth) + pixels(style.paddingBottom)) * sy;
+      var content = { left: frame.left + insetLeft, top: frame.top + insetTop,
+        width: Math.max(0, frame.width - insetLeft - insetRight), height: Math.max(0, frame.height - insetTop - insetBottom) };
+      var display = String(style.getPropertyValue("display") || "");
+      var writing = String(style.getPropertyValue("writing-mode") || "horizontal-tb");
+      // A rotated or vertically written grid has no lines that are vertical and horizontal on screen.
+      var readable = /grid/.test(display) && Math.abs(frame.rotation || 0) < 0.01 && writing === "horizontal-tb";
+      parentInfo = { rect: { left: frame.left, top: frame.top, width: frame.width, height: frame.height }, content: content, display: display,
+        columnLines: readable ? gridLines(style, "x", content.left - (parent.scrollLeft || 0) * sx, content.width, sx) : [],
+        rowLines: readable ? gridLines(style, "y", content.top - (parent.scrollTop || 0) * sy, content.height, sy) : [] };
+
+      var own = node.getBoundingClientRect();
+      var centreX = own.left + own.width / 2, centreY = own.top + own.height / 2;
+      var ranked = [];
+      var children = parent.children || [];
+      for (var i = 0; i < children.length; i++) {
+        var child = children[i];
+        if (child === node || !child.getAttribute || !child.getAttribute("data-bg-node-id")) continue;
+        var rect = child.getBoundingClientRect();
+        if (!(rect.width > 0 && rect.height > 0)) continue;
+        var dx = rect.left + rect.width / 2 - centreX, dy = rect.top + rect.height / 2 - centreY;
+        ranked.push({ node: child, rect: rect, distance: dx * dx + dy * dy });
+      }
+      ranked.sort(function (a, b) { return a.distance - b.distance; });
+      for (var r = 0; r < ranked.length && siblings.length < SNAP_SIBLING_LIMIT; r++) {
+        var entry = ranked[r];
+        if (window.getComputedStyle(entry.node).getPropertyValue("visibility") === "hidden") continue;
+        var label = String(entry.node.textContent || "").replace(/\s+/g, " ").trim().slice(0, 40);
+        siblings.push({ bgId: entry.node.getAttribute("data-bg-node-id"),
+          rect: { left: entry.rect.left, top: entry.rect.top, width: entry.rect.width, height: entry.rect.height },
+          label: label || String(entry.node.tagName || "").toLowerCase() });
+      }
+    }
+    var board = parent && parent.closest ? (parent.closest("[data-slide]") || parent.closest("[data-graphic-artboard]")) : null;
+    return { self: elementRect(node), parent: parentInfo, artboard: board ? plainRect(board) : null, siblings: siblings };
+  }
 
   function readComputed(node) {
     var out = {};
@@ -783,6 +967,13 @@ const BRIDGE_SCRIPT = String.raw`(function () {
     } else if (data.action === "rect-bg") {
       var bgRectNode = queryByBgId(payload.bgId);
       response = bgRectNode ? elementRect(bgRectNode) : null;
+    } else if (data.action === "snap-rects") {
+      try {
+        var snapNode = queryByBgId(payload.bgId);
+        response = snapNode ? snapRects(snapNode) : null;
+      } catch (e) {
+        response = null;
+      }
     } else if (data.action === "active-slide") {
       var slides = document.querySelectorAll("[data-slide]");
       if (!slides || slides.length === 0) {
