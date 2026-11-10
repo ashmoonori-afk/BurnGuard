@@ -45,7 +45,8 @@ export interface SnapCandidates { lines: SnapLine[]; siblings: readonly SnapSibl
 export type SnapGuide =
   | (SnapLine & { kind: "line" })
   | { kind: "size"; axis: SnapAxis; value: number; bgId: string }
-  | { kind: "gap"; axis: SnapAxis; value: number; cross: number; segments: [{ from: number; to: number }, { from: number; to: number }] };
+  | { kind: "gap"; axis: SnapAxis; value: number; cross: number; segments: [{ from: number; to: number }, { from: number; to: number }] }
+  | { kind: "angle"; value: number };
 
 export interface SnapResult {
   /** Correction to add to the box: a translation for `move`, a change of width or height for a resize. */
@@ -203,4 +204,13 @@ export function resolveSnap(input: { moving: SnapRect; kind: SnapKind; candidate
   const x = resolveAxis("x", input);
   const y = resolveAxis("y", input);
   return { dx: x.delta, dy: y.delta, guides: [...x.guides, ...y.guides] };
+}
+
+export const ROTATION_SNAP_STEP_DEG = 15;
+export const ROTATION_SNAP_REACH_DEG = 3;
+
+/** A rotation within 3 degrees of a multiple of 15 locks to it. */
+export function snapRotation(degrees: number): { degrees: number; locked: boolean } {
+  const nearest = Math.round(degrees / ROTATION_SNAP_STEP_DEG) * ROTATION_SNAP_STEP_DEG;
+  return Math.abs(degrees - nearest) <= ROTATION_SNAP_REACH_DEG ? { degrees: nearest, locked: true } : { degrees, locked: false };
 }

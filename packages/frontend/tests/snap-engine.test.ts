@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { collectCandidates, resolveSnap, snapThreshold, type SnapKind, type SnapRect, type SnapSources } from "../src/lib/snap-engine";
+import { collectCandidates, resolveSnap, snapRotation, snapThreshold, type SnapKind, type SnapRect, type SnapSources } from "../src/lib/snap-engine";
 
 const rect = (left: number, top: number, width: number, height: number): SnapRect => ({ left, top, width, height });
 const NONE: SnapSources = { parent: null, artboard: null, siblings: [] };
@@ -99,4 +99,14 @@ test("Given a sibling of the same size When the box locks Then every coinciding 
 test("Given no candidates When resolving Then the box is returned unchanged", () => {
   expect(snap(NONE, rect(10, 10, 100, 40))).toEqual({ dx: 0, dy: 0, guides: [] });
   expect(collectCandidates(NONE)).toEqual({ lines: [], siblings: [] });
+});
+
+test("Given a rotation When it comes within 3 degrees of a multiple of 15 Then it locks to it, and stays free otherwise", () => {
+  expect(snapRotation(43)).toEqual({ degrees: 45, locked: true });
+  expect(snapRotation(48)).toEqual({ degrees: 45, locked: true });
+  expect(snapRotation(41.9)).toEqual({ degrees: 41.9, locked: false });
+  expect(snapRotation(-2)).toMatchObject({ locked: true });
+  expect(Math.abs(snapRotation(-2).degrees)).toBe(0);
+  expect(snapRotation(-178)).toEqual({ degrees: -180, locked: true });
+  expect(snapRotation(22.5)).toEqual({ degrees: 22.5, locked: false });
 });

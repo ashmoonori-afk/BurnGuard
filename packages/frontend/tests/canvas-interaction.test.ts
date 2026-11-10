@@ -8,7 +8,10 @@ import { canvasPoint } from "../src/components/canvas/canvas-coordinates";
 import { buildCommentEditRequest, commentEditDisplayText, saveAndRequestCommentEdit } from "../src/components/modes/comment-edit-request";
 import { parseLocalFonts, type Comment } from "@bg/shared";
 import { identityForPatch, type FileArtifactIdentity } from "../src/lib/artifact-identity";
-import { translatePatch } from "../src/lib/element-geometry";
+import { dimensionPatch, rotationPatch, translatePatch } from "../src/lib/element-geometry";
+import { snapResize, snapRotate } from "../src/lib/resize-gesture";
+import { collectCandidates } from "../src/lib/snap-engine";
+import type { TweaksTarget } from "../src/components/canvas/TweaksLayer";
 import { beginMoveGesture, type MoveGestureStart } from "../src/lib/move-gesture";
 import type { SnapSources } from "../src/lib/snap-engine";
 
@@ -190,4 +193,52 @@ test("Given the identity read at gesture start failed When the gesture saves The
   const commit = gesture.release()!;
   await expect(identityForPatch(commit.identity, async () => { reads += 1; return identityAt(9); })).rejects.toThrow("node_not_found");
   expect(reads).toBe(0);
+});
+
+const CARD: TweaksTarget = { bg_id: "card", tag: "div", computed: { width: "200px", height: "100px" }, inline: {}, geometry: { width: 200, height: 100 } };
+/** A 200 x 100 card at 100,100 with a 300 x 100 sibling below whose right edge is at x = 400. */
+const BELOW = collectCandidates({ parent: null, artboard: null, siblings: [{ bgId: "wide", rect: { left: 100, top: 300, width: 300, height: 100 } }] });
+const resize = (width: number, height: number, overrides: Partial<Parameters<typeof snapResize>[0]> = {}) =>
+  snapResize({ handle: "e", rect: { left: 100, top: 100, width: 200, height: 100 }, width, height, scaleX: 1, scaleY: 1, rotation: 0, candidates: BELOW, zoom: 1, magnet: true, paused: false, ...overrides });
+
+test("Given an east-handle drag that ends 4 px before a sibling's right edge When released Then the saved width meets the edge", () => {
+  const snapped = resize(296, 100);
+  expect(snapped.width).toBe(300);
+  expect(snapped.guides.map((guide) => guide.kind)).toContain("line");
+  expect(dimensionPatch(CARD, snapped.width, snapped.height, false)).toMatchObject({ width: "300px", height: "100px" });
+});
+
+test("Given the pause key, the magnet off or snap rects that have not arrived When resizing Then the size is the pointer's", () => {
+  expect(resize(296, 100, { paused: true })).toEqual({ width: 296, height: 100, guides: [] });
+  expect(resize(296, 100, { magnet: false })).toEqual({ width: 296, height: 100, guides: [] });
+  expect(resize(296, 100, { candidates: null })).toEqual({ width: 296, height: 100, guides: [] });
+});
+
+test("Given a sibling of another width When the dragged width comes within reach Then it locks to the same width and names the sibling", () => {
+  const far = collectCandidates({ parent: null, artboard: null, siblings: [{ bgId: "narrow", rect: { left: 900, top: 300, width: 150, height: 100 } }] });
+  const snapped = resize(147, 100, { candidates: far });
+  expect(snapped.width).toBe(150);
+  expect(snapped.guides).toEqual([{ kind: "size", axis: "x", value: 150, bgId: "narrow" }]);
+});
+
+test("Given a slide scaled to 50% and a 200% zoom When resizing Then the lock is measured on screen and the size stays in the element's pixels", () => {
+  // On screen the box is 100 px wide per 200 CSS px; the sibling edge at client x = 400 needs 600 CSS px.
+  const scaled = resize(596, 100, { scaleX: 0.5, scaleY: 0.5 });
+  expect(scaled.width).toBe(600);
+  // 4 client px away is out of reach at 200% zoom (3 canvas px).
+  expect(resize(296, 100, { zoom: 2 }).width).toBe(296);
+});
+
+test("Given an aspect-locked element When the east handle locks to an edge Then the ratio is kept", () => {
+  const locked: TweaksTarget = { ...CARD, inline: { "aspect-ratio": "2 / 1" } };
+  const snapped = resize(296, 100);
+  expect(dimensionPatch(locked, snapped.width, snapped.height, true)).toMatchObject({ width: "300px", height: "150px", "aspect-ratio": "300 / 150" });
+});
+
+test("Given a rotate drag that ends at 43 degrees When released Then 45deg is saved, and 43deg with the pause key", () => {
+  const rotate = (magnet: boolean, paused: boolean) => snapRotate({ degrees: 43, magnet, paused });
+  expect(rotate(true, false)).toEqual({ degrees: 45, locked: true });
+  expect(rotationPatch(rotate(true, false).degrees)).toEqual({ rotate: "45deg" });
+  expect(rotationPatch(rotate(true, true).degrees)).toEqual({ rotate: "43deg" });
+  expect(rotate(false, false)).toEqual({ degrees: 43, locked: false });
 });

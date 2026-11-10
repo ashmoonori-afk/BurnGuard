@@ -11,8 +11,14 @@ const PART_KEYS = {
 
 const pixels = (value: number) => Math.round(value * 10) / 10;
 
-/** The chip drawn on the guide: which edge it is, which grid track, or how many pixels. */
-export function snapGuideChip(guide: SnapGuide): SnapLabel {
+/** The chip drawn on the guide: which edge it is, which grid track, how many pixels, whose size, or which angle. */
+export function snapGuideChip(guide: SnapGuide, names: ReadonlyMap<string, string> = new Map()): SnapLabel {
+  if (guide.kind === "angle") return { key: "canvas.snap.degrees", params: { value: guide.value } };
+  if (guide.kind === "size") {
+    const name = names.get(guide.bgId);
+    if (guide.axis === "x") return name ? { key: "canvas.snap.sameWidth", params: { name } } : { key: "canvas.snap.sameWidthNeighbor" };
+    return name ? { key: "canvas.snap.sameHeight", params: { name } } : { key: "canvas.snap.sameHeightNeighbor" };
+  }
   if (guide.kind !== "line") return { key: "canvas.snap.px", params: { value: pixels(guide.value) } };
   if (guide.source === "grid") return { key: guide.axis === "x" ? "canvas.snap.column" : "canvas.snap.row", params: { n: guide.track ?? 1 } };
   return { key: PART_KEYS[guide.axis][guide.part] };
@@ -24,7 +30,13 @@ export function snapGuideChip(guide: SnapGuide): SnapLabel {
  */
 export function snapGuideStatus(guide: SnapGuide, chip: string, names: ReadonlyMap<string, string>): SnapLabel | null {
   if (guide.kind === "gap") return { key: "canvas.snap.equalGap", params: { value: pixels(guide.value) } };
-  if (guide.kind === "size") return null;
+  if (guide.kind === "angle") return { key: "canvas.snap.rotationLocked", params: { value: guide.value } };
+  if (guide.kind === "size") {
+    const matched = names.get(guide.bgId);
+    const value = pixels(guide.value);
+    if (guide.axis === "x") return matched ? { key: "canvas.snap.widthMatches", params: { name: matched, value } } : { key: "canvas.snap.widthMatchesNeighbor", params: { value } };
+    return matched ? { key: "canvas.snap.heightMatches", params: { name: matched, value } } : { key: "canvas.snap.heightMatchesNeighbor", params: { value } };
+  }
   if (guide.source === "grid") return { key: "canvas.snap.alignedGrid", params: { line: chip } };
   if (guide.source === "artboard") return { key: "canvas.snap.alignedArtboard", params: { part: chip } };
   if (guide.source === "parent") return { key: "canvas.snap.alignedParent", params: { part: chip } };
