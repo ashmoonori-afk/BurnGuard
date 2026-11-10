@@ -2,7 +2,7 @@
 
 ## OVERVIEW
 
-62 dependency-free helper modules containing pure view logic; earned this guide at score 9 for export count, test coverage density, and wide use of `cn` and `apiErrorCopy`.
+68 dependency-free helper modules containing pure view logic; earned this guide at score 9 for export count, test coverage density, and wide use of `cn` and `apiErrorCopy`.
 
 ## WHERE TO LOOK
 

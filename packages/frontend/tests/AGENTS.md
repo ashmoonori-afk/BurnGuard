@@ -2,7 +2,7 @@
 
 ## OVERVIEW
 
-144 `bun:test` suites and browser fixtures kept in `packages/frontend/tests/` instead of next to source files; earned this guide at score 8 for suite count and test-harness rules distinct from `src/`.
+158 `bun:test` suites and browser fixtures kept in `packages/frontend/tests/` instead of next to source files; earned this guide at score 8 for suite count and test-harness rules distinct from `src/`.
 
 ## WHERE TO LOOK
 
@@ -14,7 +14,7 @@
 | Browser page sources | `fixtures/*-browser.ts(x)` | Documents loaded by the browser suites; not test files themselves |
 | Creation flows | `project-creation.test.ts` (292), `graphic-project-creation.test.ts` (278) | Largest suites; cover `@/lib/project-creation` |
 | Localization | `i18n-locale.test.ts`, `i18n-messages.test.ts` | Locale resolution and pack key/locale completeness |
-| Canvas/mode logic | `canvas-*.test.ts`, `tweak-review`, `side-input`, `selection-bridge`, `quick-comment` | Assert the pure helpers behind canvas overlays |
+| Canvas/mode logic | `canvas-*.test.ts`, `tweak-review`, `side-input`, `selection-bridge`, `quick-comment`, `snap-engine`, `snap-guides`, `history-dialog` | Assert the pure helpers behind canvas overlays; `selection-bridge` and `edit-target` run the real bridge script against a fake document |
 
 ## CONVENTIONS
 

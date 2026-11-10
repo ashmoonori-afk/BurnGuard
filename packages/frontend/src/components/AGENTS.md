@@ -10,7 +10,7 @@ Feature-grouped React components and canvas integration; earned this guide at sc
 components/
 ├── alternatives/ # visual alternatives generation and side-by-side comparison
 ├── app-screens/  # App screens Board (sections, links), Play overlay, screen preview
-├── canvas/       # sandbox iframe, frame bridge (1,005 LOC), draw/edit/tweak overlays (3.1k LOC)
+├── canvas/       # sandbox iframe, frame bridge (1,242 LOC), draw/edit/tweak overlays (3.1k LOC)
 ├── chat/         # composer, attachment intake, blocks/ event renderers
 ├── directions/   # generated direction choices and status
 ├── errors/       # backend crash toast container, CLI missing modal
@@ -35,7 +35,8 @@ components/
 | Frame protocol | `canvas/frame-bridge.ts` | Source identity substitutes for opaque-origin checks |
 | Draw persistence | `canvas/DrawLayer.tsx` | Serialization format is consumed by API storage |
 | Attachment behavior | `chat/attachment-intake.ts` | Limits, roles, readiness, and supported kinds |
-| Tweak controls | `modes/TweaksPanel.tsx` | 644 LOC: parsing, clamping, previews, commit on blur |
+| Style overlay | `canvas/TweaksLayer.tsx`, `canvas/SnapGuides.tsx` | Move surface, resize and rotate handles, arrow-key bursts, guides; geometry lives in `@/lib` (`move-gesture`, `resize-gesture`, `snap-engine`) |
+| Tweak controls | `modes/TweaksPanel.tsx` | 712 LOC: parsing, clamping, previews, commit on blur; Magnet status, Position and Align sections |
 | Mode routing | `modes/ModePanel.tsx` | Single orchestrator for every mode panel |
 | Settings UI | `settings/SettingsModal.tsx` | 776 LOC hub for backend, provider, generation, update, and locale state |
 | Shared controls | `ui/` | Shared disabled, focus, and radius styling; `Tooltip` (without Radix), `Spinner`, `Skeleton`, `EmptyState` |
@@ -56,6 +57,7 @@ components/
 
 - Do not add `allow-same-origin` or weaken bridge source checks because `postMessage` targets `"*"`.
 - Do not add independent polling when the frame bridge or application stream can signal the exact change.
+- Do not move, restyle or draw anything inside the iframe during a canvas gesture; preview in the parent overlay, ask `snap-rects` once at the start, and save once at the end.
 - Do not render raw API/provider errors; use the feature error-copy mapping.
 - Do not copy stateful view orchestration into reusable components.
 - Do not bypass attachment role/limit planning in composer UI.

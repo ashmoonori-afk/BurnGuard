@@ -85,8 +85,21 @@ competing vertical scrollports, and hidden metadata on narrow containers.
   (390 CSS pixels). These change only the viewport width of the mounted
   preview, never its document or model output. Fixed artboards keep their
   geometry. Selected presets use a neutral wash and pressed state. The toolbar stays on
-  a single row: when space is narrow, presets and history move into the More menu.
+  a single row: when space is narrow, the alignment group (first), history and
+  presets move into the More menu.
   Wide previews scroll inside the canvas.
+- **Canvas magnet**: in Style mode the selection box carries a Move surface
+  under its resize and rotate handles; on a box under 40px the handles step
+  outside so they do not cover it. A lock draws a one-screen-pixel accent line
+  with a small mono chip naming the lock (left, center, column 3, 24 px) beside
+  the moved box, one line per direction; a same-size lock shows a badge naming
+  the sibling, a rotation lock its angle. Guides are parent chrome over the
+  preview and never enter the artifact. The panel's Magnet section repeats
+  every lock as a sentence in a polite live region, so a lock is never shown by
+  colour alone. Position offers exact X and Y, Reset position and six Align to
+  parent buttons; arrow keys on the focused Move surface move 1px, 10px with
+  Shift, and to the next line with Alt or Option. The Magnet toggle sits in the
+  top bar's alignment group and states On or Off in words.
 - **App screens Board**: the workspace's Board/Canvas controls retain the normal
   single-file editor. Layout: sections run left to right in one board scrollport,
   with 64px between sections and 40px between scaled, non-interactive screen
@@ -174,6 +187,9 @@ competing vertical scrollports, and hidden metadata on narrow containers.
 Use short opacity/color transitions for mode changes and selection feedback.
 Avoid layout movement during streaming. Under `prefers-reduced-motion: reduce`,
 remove non-essential transitions and preserve the same visible state changes.
+Moving, resizing and rotating on the canvas are direct manipulation and do not
+animate. Magnet guides fade out in 100ms once their gesture ends, and are
+removed at once under reduced motion.
 
 ## Responsive behavior
 
