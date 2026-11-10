@@ -79,6 +79,17 @@ export async function readFileIdentity(
   };
 }
 
+/**
+ * A canvas gesture reads the identity when it starts and saves against that one, so a change that lands while the
+ * pointer is still down is refused as stale. Anything that commits at once reads the identity at save time.
+ */
+export function identityForPatch(
+  gestureStart: Promise<FileArtifactIdentity> | undefined,
+  readNow: () => Promise<FileArtifactIdentity>,
+): Promise<FileArtifactIdentity> {
+  return gestureStart ?? readNow();
+}
+
 /** True when the server rejected a write because the canvas moved on. */
 export function isStaleIdentityError(error: unknown): boolean {
   if (!(error instanceof ApiError)) return false;

@@ -16,6 +16,7 @@ import {
   type TweaksStyleKey,
   type TweaksTarget,
 } from "@/components/canvas/TweaksLayer";
+import { useUIStore } from "@/state/uiStore";
 import { ModePanelHeader } from "./ModePanelHeader";
 import {
   applySideDraft,
@@ -103,6 +104,7 @@ export default function TweaksPanel({ projectId, relPath, target, saving, onAppl
   if (!target) return <div className="flex min-h-0 flex-col overflow-y-auto"><ModePanelHeader title={t("modes.tweaks.select")} description={t("modes.tweaks.selectHint")} onClose={onClose} /></div>;
   return <div className="flex min-h-0 flex-col overflow-y-auto">
     <ModePanelHeader title={t("modes.tweaks.selected")} onClose={onClose} action={<button type="button" onClick={onClear} className="min-h-8 rounded-control px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t("modes.clearSelection")}</button>} />
+    <MagnetStatus />
     <GeometryControls key={target.bg_id} target={target} saving={saving} onApply={onApply} />
     <details className="border-t border-border">
       <summary className="min-h-11 cursor-pointer px-3 py-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t("modes.tweaks.advanced")}</summary>
@@ -133,6 +135,22 @@ export default function TweaksPanel({ projectId, relPath, target, saving, onAppl
       {review && <section aria-label={t("modes.tweaks.lastChange")} className="border-t border-border px-3 py-3"><SectionHeader>{t("modes.tweaks.lastChange")}</SectionHeader><p className="mt-2 break-all font-mono text-xs text-muted-foreground">{review.property}: {review.from} → {review.to}</p></section>}
     </details>
   </div>;
+}
+
+function MagnetStatus() {
+  const magnet = useUIStore((state) => state.canvasMagnet);
+  const status = useUIStore((state) => state.canvasSnapStatus);
+  return <MagnetStatusSection magnet={magnet} status={status} />;
+}
+
+/** Says in words what the guide lines show, so a lock is never signalled by colour alone. */
+export function MagnetStatusSection({ magnet, status }: { magnet: boolean; status: string | null }) {
+  const t = useT();
+  return <section aria-label={t("canvas.toolbar.magnet")} className="mx-3 mt-3 space-y-2 rounded-lg border border-border bg-card p-3">
+    <SectionHeader>{t("canvas.toolbar.magnet")}</SectionHeader>
+    <p role="status" aria-live="polite" data-magnet-status={magnet ? (status ? "locked" : "idle") : "off"} className="min-h-10 text-xs leading-relaxed text-foreground">{magnet ? status ?? t("modes.tweaks.magnetIdle") : t("modes.tweaks.magnetOff")}</p>
+    <p className="text-xs leading-relaxed text-muted-foreground">{t("modes.tweaks.magnetHint")}</p>
+  </section>;
 }
 
 function GeometryControls({ target, saving, onApply }: { target: TweaksTarget; saving: boolean; onApply: ApplyFn }) {

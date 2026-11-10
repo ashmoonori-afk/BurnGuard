@@ -225,7 +225,6 @@ packages/frontend/tests/bridge-inline-style.test.ts
 packages/frontend/tests/brief-choices.test.ts
 packages/frontend/tests/canvas-ai-request.test.ts
 packages/frontend/tests/canvas-images.test.ts
-packages/frontend/tests/canvas-interaction.test.ts
 packages/frontend/tests/canvas-load-error.test.ts
 packages/frontend/tests/canvas-placeholder.test.ts
 packages/frontend/tests/canvas-scroll-restore.test.ts
@@ -259,7 +258,6 @@ packages/frontend/tests/direction-card.test.ts
 packages/frontend/tests/directions-view.test.ts
 packages/frontend/tests/draw-history.test.ts
 packages/frontend/tests/draws-authority.test.ts
-packages/frontend/tests/element-geometry.test.ts
 packages/frontend/tests/error-card.test.ts
 packages/frontend/tests/export-delivery-status.test.ts
 packages/frontend/tests/export-menu.test.ts

@@ -106,6 +106,8 @@ jobs:
           packages/desktop-mac/main.test.ts
           packages/desktop-windows/close-guard.test.ts
           packages/frontend/tests/leave-guard.test.ts
+          packages/frontend/tests/element-geometry.test.ts
+          packages/frontend/tests/snap-guides.test.ts
           packages/frontend/tests/export-menu.test.ts
           packages/frontend/tests/design-system-layout-panel.test.ts
           packages/backend/tests/package-resources.test.ts
