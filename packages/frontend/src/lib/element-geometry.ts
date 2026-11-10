@@ -77,3 +77,24 @@ export function translatePatch(x: number, y: number): Patch {
   const rounded = (value: number) => String(Math.round(value * 100) / 100 || 0);
   return { translate: `${rounded(x)}px ${rounded(y)}px` };
 }
+
+export type AlignMode = "left" | "center" | "right" | "top" | "middle" | "bottom";
+export const ALIGN_MODES: readonly AlignMode[] = ["left", "center", "right", "top", "middle", "bottom"];
+interface Box { left: number; top: number; width: number; height: number }
+
+/**
+ * The offset that lines one side or the centre of the element up with its parent's content box. `rect` and `content`
+ * are in iframe client pixels, `scale` is client pixels per CSS pixel of the element; the other axis keeps its offset.
+ */
+export function alignOffset(input: { mode: AlignMode; rect: Box; content: Box; offset: { x: number; y: number }; scaleX: number; scaleY: number }): { x: number; y: number } {
+  const { mode, rect, content, offset } = input;
+  const horizontal = mode === "left" || mode === "center" || mode === "right";
+  const share = mode === "left" || mode === "top" ? 0 : mode === "center" || mode === "middle" ? 0.5 : 1;
+  const travel = horizontal
+    ? (content.left + content.width * share) - (rect.left + rect.width * share)
+    : (content.top + content.height * share) - (rect.top + rect.height * share);
+  const rounded = (value: number) => Math.round(value * 100) / 100 || 0;
+  return horizontal
+    ? { x: rounded(offset.x + travel / (input.scaleX || 1)), y: offset.y }
+    : { x: offset.x, y: rounded(offset.y + travel / (input.scaleY || 1)) };
+}

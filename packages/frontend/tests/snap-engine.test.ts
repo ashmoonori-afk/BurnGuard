@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { collectCandidates, resolveSnap, snapRotation, snapThreshold, type SnapKind, type SnapRect, type SnapSources } from "../src/lib/snap-engine";
+import { collectCandidates, nextSnapDelta, resolveSnap, snapRotation, snapThreshold, type SnapKind, type SnapRect, type SnapSources } from "../src/lib/snap-engine";
 
 const rect = (left: number, top: number, width: number, height: number): SnapRect => ({ left, top, width, height });
 const NONE: SnapSources = { parent: null, artboard: null, siblings: [] };
@@ -109,4 +109,19 @@ test("Given a rotation When it comes within 3 degrees of a multiple of 15 Then i
   expect(Math.abs(snapRotation(-2).degrees)).toBe(0);
   expect(snapRotation(-178)).toEqual({ degrees: -180, locked: true });
   expect(snapRotation(22.5)).toEqual({ degrees: 22.5, locked: false });
+});
+
+test("Given lines ahead and behind When the keyboard asks for the next line Then the nearest one in that direction is returned, and 0 when none lies ahead", () => {
+  const candidates = collectCandidates(withSiblings(rect(200, 300, 100, 50)));
+  const next = (moving: SnapRect, axis: "x" | "y", direction: 1 | -1, rotation = 0) => nextSnapDelta({ moving, candidates, axis, direction, rotation });
+  // Box 100..160: its right edge reaches the sibling's left edge (200) first.
+  expect(next(rect(100, 100, 60, 40), "x", 1)).toBe(40);
+  // Sitting on that line, the next stop is the box centre (170) reaching it.
+  expect(next(rect(140, 100, 60, 40), "x", 1)).toBe(30);
+  expect(next(rect(100, 100, 60, 40), "x", -1)).toBe(0);
+  // From the right of the sibling, moving left: the box's left edge (340) reaches the sibling's right edge (300).
+  expect(next(rect(340, 100, 60, 40), "x", -1)).toBe(-40);
+  expect(next(rect(100, 100, 60, 40), "y", 1)).toBe(160);
+  // A box rotated 30 degrees travels by its centre only.
+  expect(next(rect(100, 100, 60, 40), "x", 1, 30)).toBe(70);
 });

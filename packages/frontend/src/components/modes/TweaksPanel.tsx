@@ -6,7 +6,8 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import { cn } from "@/lib/utils";
-import { ASPECT_PRESETS, aspectPresetValue, dimensionPatch, isAspectLocked, MAX_ELEMENT_SIZE, rotationPatch, targetDimensions } from "@/lib/element-geometry";
+import { ALIGN_MODES, ASPECT_PRESETS, aspectPresetValue, dimensionPatch, isAspectLocked, MAX_ELEMENT_SIZE, rotationPatch, targetDimensions, targetOffset, translatePatch, type AlignMode } from "@/lib/element-geometry";
+import { AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignStartHorizontal, AlignStartVertical, type LucideIcon } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { parseLocalFonts } from "@bg/shared";
 import { apiFetch } from "@/api/client";
@@ -89,12 +90,14 @@ export function sizeRuleFor(styleKey: SizeRuleKey, target: Pick<TweaksTarget, "i
 }
 
 /** Simple geometry first; the existing style controls remain under Advanced. */
-export default function TweaksPanel({ projectId, relPath, target, saving, onApply, onResetAll, onClear, onClose, review }: {
+export default function TweaksPanel({ projectId, relPath, target, saving, onApply, onAlign, onResetAll, onClear, onClose, review }: {
   projectId: string;
   relPath: string | null;
   target: TweaksTarget | null;
   saving: boolean;
   onApply: ApplyFn;
+  /** Lines the element up with its parent; the canvas measures the page. Without it the Align row is not shown. */
+  onAlign?: (mode: AlignMode) => void;
   onResetAll: () => void;
   onClear: () => void;
   onClose?: () => void;
@@ -106,6 +109,7 @@ export default function TweaksPanel({ projectId, relPath, target, saving, onAppl
     <ModePanelHeader title={t("modes.tweaks.selected")} onClose={onClose} action={<button type="button" onClick={onClear} className="min-h-8 rounded-control px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t("modes.clearSelection")}</button>} />
     <MagnetStatus />
     <GeometryControls key={target.bg_id} target={target} saving={saving} onApply={onApply} />
+    <PositionControls key={`position-${target.bg_id}`} target={target} saving={saving} onApply={onApply} onAlign={onAlign} />
     <details className="border-t border-border">
       <summary className="min-h-11 cursor-pointer px-3 py-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t("modes.tweaks.advanced")}</summary>
       <div className="flex items-center justify-between gap-2 px-3 pb-2">
@@ -172,6 +176,52 @@ function GeometryControls({ target, saving, onApply }: { target: TweaksTarget; s
       </label>
     </div>
     <p className="text-xs leading-relaxed text-muted-foreground">{t("modes.tweaks.dragHint")}<br />{t("modes.tweaks.shortcuts")}</p>
+  </section>;
+}
+
+const ALIGN_BUTTONS: Record<AlignMode, { icon: LucideIcon; label: MessageKey }> = {
+  left: { icon: AlignStartVertical, label: "modes.tweaks.alignLeft" },
+  center: { icon: AlignCenterVertical, label: "modes.tweaks.alignCenter" },
+  right: { icon: AlignEndVertical, label: "modes.tweaks.alignRight" },
+  top: { icon: AlignStartHorizontal, label: "modes.tweaks.alignTop" },
+  middle: { icon: AlignCenterHorizontal, label: "modes.tweaks.alignMiddle" },
+  bottom: { icon: AlignEndHorizontal, label: "modes.tweaks.alignBottom" },
+};
+const POSITION_LIMIT = 100000;
+
+function PositionControls(props: { target: TweaksTarget; saving: boolean; onApply: ApplyFn; onAlign?: (mode: AlignMode) => void }) {
+  const moving = useUIStore((state) => state.canvasMoveOffset);
+  return <PositionSection {...props} moving={moving} />;
+}
+
+/**
+ * Exact position for keyboard and assistive input: what a drag does with the pointer, these fields and buttons do
+ * with numbers. `moving` is the offset of a move in progress, so the numbers follow the gesture.
+ */
+export function PositionSection({ target, moving, saving, onApply, onAlign }: { target: TweaksTarget; moving: { x: number; y: number } | null; saving: boolean; onApply: ApplyFn; onAlign?: (mode: AlignMode) => void }) {
+  const t = useT();
+  const saved = targetOffset(target);
+  const offset = moving ?? saved ?? { x: 0, y: 0 };
+  const locked = saving || saved === null;
+  return <section aria-label={t("modes.tweaks.position")} data-position-state={saved === null ? "unsupported" : "ready"} className="mx-3 mb-3 space-y-3 rounded-lg border border-border bg-card p-3">
+    <SectionHeader>{t("modes.tweaks.position")}</SectionHeader>
+    <div className="grid grid-cols-2 gap-3">
+      <GeometryNumber label="X" unit="px" value={offset.x} min={-POSITION_LIMIT} max={POSITION_LIMIT} disabled={locked} onCommit={value => onApply(translatePatch(value, offset.y))} />
+      <GeometryNumber label="Y" unit="px" value={offset.y} min={-POSITION_LIMIT} max={POSITION_LIMIT} disabled={locked} onCommit={value => onApply(translatePatch(offset.x, value))} />
+    </div>
+    {saved === null
+      ? <p className="text-xs leading-relaxed text-muted-foreground">{t("modes.tweaks.positionUnsupported")}</p>
+      : <button type="button" data-position-reset="" disabled={saving || target.inline.translate === undefined} onClick={() => onApply({ translate: null })} className="min-h-10 rounded border border-input bg-background px-3 text-xs hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:text-muted-foreground max-lg:min-h-11">{t("modes.tweaks.resetPosition")}</button>}
+    {onAlign && saved !== null && target.parent != null && <div role="group" aria-label={t("modes.tweaks.align")} className="space-y-2">
+      <SectionHeader>{t("modes.tweaks.align")}</SectionHeader>
+      <div className="grid grid-cols-6 gap-1 max-lg:gap-2">
+        {ALIGN_MODES.map((mode) => {
+          const Icon = ALIGN_BUTTONS[mode].icon;
+          const label = t(ALIGN_BUTTONS[mode].label);
+          return <button key={mode} type="button" data-align={mode} aria-label={label} title={label} disabled={saving} onClick={() => onAlign(mode)} className="grid min-h-10 place-items-center rounded border border-input bg-background hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:text-muted-foreground max-lg:min-h-11"><Icon aria-hidden="true" className="size-4" /></button>;
+        })}
+      </div>
+    </div>}
   </section>;
 }
 
