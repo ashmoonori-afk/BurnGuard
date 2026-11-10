@@ -189,4 +189,9 @@ export const canvasMessages = defineMessages({
   "canvas.three.aiRequestTemplate": {"ko":"파일 {file}의 data-bg-three 관리형 3D 장면을 다음 요청에 맞게 수정해 주세요. ThreeSceneV1 계약을 유지하고 변경 결과를 설명해 주세요.","en":"Update the data-bg-three managed 3D scene in file {file} to match the request below. Keep the ThreeSceneV1 contract and describe what changed.","zh-CN":"请按照下面的要求修改文件 {file} 中由 data-bg-three 管理的 3D 场景。保持 ThreeSceneV1 契约并说明所做的更改。"},
   "canvas.toolbar.more": {"ko":"더 보기","en":"More","zh-CN":"更多"},
   "canvas.toolbar.moreHint": {"ko":"자리가 모자라 접어 둔 도구예요","en":"Tools that did not fit in the row","zh-CN":"这一行放不下的工具"},
+  "canvas.toolbar.assist": { ko: "맞춤 도우미", en: "Alignment aids", "zh-CN": "对齐辅助" },
+  "canvas.toolbar.magnet": { ko: "자석", en: "Magnet", "zh-CN": "磁吸" },
+  "canvas.toolbar.magnetHint": { ko: "스타일 모드에서 요소를 옮기거나 크기를 바꿀 때 가까운 가장자리와 가운데에 맞춰 붙여요.", en: "In Style mode, moving or resizing an element locks it to nearby edges and centers.", "zh-CN": "在样式模式下移动或调整元素大小时，会吸附到附近的边缘和中心。" },
+  "canvas.toolbar.on": { ko: "켬", en: "On", "zh-CN": "开" },
+  "canvas.toolbar.off": { ko: "끔", en: "Off", "zh-CN": "关" },
 });

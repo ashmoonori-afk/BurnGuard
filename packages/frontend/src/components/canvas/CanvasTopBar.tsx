@@ -1,5 +1,5 @@
 import { useT, type MessageKey } from "@/i18n/t";
-import { Eye, MessageSquare, MoreHorizontal, Paintbrush, Pencil, RefreshCw, ShieldCheck, SlidersHorizontal, Undo2, type LucideIcon } from "lucide-react";
+import { Eye, Magnet, MessageSquare, MoreHorizontal, Paintbrush, Pencil, RefreshCw, ShieldCheck, SlidersHorizontal, Undo2, type LucideIcon } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import type { CanvasMode } from "@/components/modes/types";
@@ -24,8 +24,9 @@ const MORE_BUTTON_WIDTH = 32;
 const FALLBACK_ITEM_WIDTH = 160;
 const ICON_BUTTON = "h-8 w-8 shrink-0 p-0 max-[900px]:h-9 max-[900px]:w-9";
 
-type OptionalId = "device" | "palette" | "history";
-const OVERFLOW_PRIORITY: Record<OptionalId, number> = { device: 1, palette: 2, history: 3 };
+type OptionalId = "device" | "assist" | "palette" | "history";
+/** The highest number leaves the row first: alignment aids fold into More before history, palette and width presets. */
+export const CANVAS_TOOLBAR_OVERFLOW_PRIORITY: Record<OptionalId, number> = { device: 1, palette: 2, history: 3, assist: 4 };
 
 function Divider() {
   return <span aria-hidden="true" className="mx-1 h-5 w-px shrink-0 bg-border" />;
@@ -55,6 +56,8 @@ export default function CanvasTopBar({
   colorPalette,
   historyTools,
   readOnly = false,
+  magnet = true,
+  onMagnetChange,
 }: {
   devicePreset?: CanvasDevicePreset;
   onDevicePresetChange?: (preset: CanvasDevicePreset) => void;
@@ -72,6 +75,9 @@ export default function CanvasTopBar({
   colorPalette?: ReactNode;
   historyTools?: ReactNode;
   readOnly?: boolean;
+  /** Whether the magnet is on. The toggle is shown only when `onMagnetChange` is given. */
+  magnet?: boolean;
+  onMagnetChange?: (on: boolean) => void;
 }) {
   const t = useT();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -85,9 +91,10 @@ export default function CanvasTopBar({
 
   const present: OptionalId[] = [];
   if (devicePreset !== undefined) present.push("device");
+  if (onMagnetChange) present.push("assist");
   if (colorPalette) present.push("palette");
   if (historyTools) present.push("history");
-  const items: ToolbarOverflowItem[] = present.map((id) => ({ id, width: widthsRef.current[id] ?? FALLBACK_ITEM_WIDTH, priority: OVERFLOW_PRIORITY[id] }));
+  const items: ToolbarOverflowItem[] = present.map((id) => ({ id, width: widthsRef.current[id] ?? FALLBACK_ITEM_WIDTH, priority: CANVAS_TOOLBAR_OVERFLOW_PRIORITY[id] }));
   const split = splitToolbarItems(items, available, ROW_GAP, MORE_BUTTON_WIDTH);
   const overflowIds = new Set<string>(split.overflow);
 
@@ -96,7 +103,7 @@ export default function CanvasTopBar({
     const fixed = fixedRef.current;
     if (!root || !fixed) return;
     for (const [id, element] of Object.entries(itemRefs.current) as Array<[OptionalId, HTMLDivElement | null | undefined]>) {
-      if (element && element.offsetParent !== null) widthsRef.current[id] = Math.ceil(element.getBoundingClientRect().width);
+      if (element && element.offsetParent !== null && !moreRef.current?.contains(element)) widthsRef.current[id] = Math.ceil(element.getBoundingClientRect().width);
     }
     const style = getComputedStyle(root);
     const inner = root.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
@@ -142,6 +149,19 @@ export default function CanvasTopBar({
         className={cn("h-7 rounded-control px-2 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-[900px]:h-8", devicePreset === preset ? "bg-background text-foreground shadow-app-1" : "text-muted-foreground hover:text-foreground")}
       >{t(`canvas.device.${preset}`)}</button>)}
     </fieldset>,
+    assist: onMagnetChange === undefined ? null : <div role="group" aria-label={t("canvas.toolbar.assist")} className="flex shrink-0 items-center gap-0.5">
+      <ToolTip label={t("canvas.toolbar.magnet")} hint={t("canvas.toolbar.magnetHint")}>
+        <Button type="button" variant="ghost" size="sm" aria-label={t("canvas.toolbar.magnet")} aria-pressed={magnet} onClick={() => onMagnetChange(!magnet)} className={cn("h-8 gap-1.5 px-2 duration-100 ease-out motion-reduce:transition-none max-[900px]:h-9", magnet && "bg-accent/10 text-accent hover:bg-accent/15 hover:text-accent")}>
+          <Magnet aria-hidden="true" />
+          <span>{t("canvas.toolbar.magnet")}</span>
+          {/* Both words share one cell so the button keeps its width when the state flips. */}
+          <span aria-hidden="true" className="grid pl-1 text-right text-[11px] opacity-80">
+            <span className={cn("col-start-1 row-start-1", !magnet && "invisible")}>{t("canvas.toolbar.on")}</span>
+            <span className={cn("col-start-1 row-start-1", magnet && "invisible")}>{t("canvas.toolbar.off")}</span>
+          </span>
+        </Button>
+      </ToolTip>
+    </div>,
     palette: colorPalette,
     history: historyTools,
   };
@@ -193,7 +213,7 @@ export default function CanvasTopBar({
           </Button>
         </ToolTip>
         <div role="group" aria-label={t("canvas.toolbar.more")} className={cn("absolute right-0 top-full z-50 mt-1 flex w-max max-w-[calc(100vw-1rem)] flex-col items-stretch gap-2 rounded-card border border-border bg-popover p-2 text-popover-foreground shadow-app-3", !moreOpen && "hidden")}>
-          {inMore.map((id) => <div key={id} className="flex flex-wrap items-center gap-1">{slot(id, optionalContent[id])}</div>)}
+          {inMore.map((id) => <div key={id} className={cn("flex flex-wrap items-center gap-1", id === "assist" && "[&_button]:min-h-11")}>{slot(id, optionalContent[id])}</div>)}
         </div>
       </div>}
     </div>

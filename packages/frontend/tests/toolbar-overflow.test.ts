@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { splitToolbarItems, type ToolbarOverflowItem } from "../src/lib/toolbar-overflow";
+import { CANVAS_TOOLBAR_OVERFLOW_PRIORITY } from "../src/components/canvas/CanvasTopBar";
 
 const ITEMS: readonly ToolbarOverflowItem[] = [
   { id: "device", width: 120, priority: 3 },
@@ -35,4 +36,11 @@ test("Given no room at all When split Then every item overflows into More", () =
 
 test("Given no optional items When split Then both lists are empty", () => {
   expect(splitToolbarItems([], 0, GAP, MORE)).toEqual({ visible: [], overflow: [] });
+});
+
+test("Given the canvas toolbar priorities and 300 px When the row is too narrow Then the alignment aids fold into More before the width presets", () => {
+  const items = ([["device", 200], ["assist", 100]] as const).map(([id, width]) => ({ id, width, priority: CANVAS_TOOLBAR_OVERFLOW_PRIORITY[id] }));
+  expect(splitToolbarItems(items, 300, GAP, MORE)).toEqual({ visible: ["device"], overflow: ["assist"] });
+  const all = (["device", "assist", "palette", "history"] as const).map((id) => ({ id, width: 100, priority: CANVAS_TOOLBAR_OVERFLOW_PRIORITY[id] }));
+  expect(splitToolbarItems(all, 100 * 3 + 2 * GAP + GAP + MORE, GAP, MORE).overflow).toEqual(["assist"]);
 });

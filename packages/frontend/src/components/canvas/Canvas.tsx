@@ -41,6 +41,7 @@ import { requestFrameScrollAtPoint } from "./frame-bridge";
 import { MIN_CANVAS_ZOOM, MAX_CANVAS_ZOOM, zoomCanvasAt } from "./canvas-zoom";
 import { useT } from "@/i18n/t";
 import { useLocaleStore } from "@/i18n/locale";
+import { useUIStore } from "@/state/uiStore";
 import { canvasPlaceholderKeys, canvasRenderingVisible } from "@/lib/canvas-placeholder";
 import { canvasDeviceWidth, type CanvasDevicePreset } from "@/lib/canvas-device-width";
 
@@ -218,6 +219,8 @@ export default function Canvas({
   const frameSrcDoc = frameDocument && frameDocument.src === src ? frameDocument.html : null;
   const frameDocumentKey = frameDocument && frameDocument.src === src ? frameDocument.key : `placeholder:${src ?? ""}`;
   const [zoom, setZoom] = useState(1);
+  const magnet = useUIStore((state) => state.canvasMagnet);
+  const setMagnet = useUIStore((state) => state.setCanvasMagnet);
   const [devicePreset, setDevicePreset] = useState<CanvasDevicePreset>("fit");
   const deviceWidth = projectType === undefined ? undefined : canvasDeviceWidth(projectType, devicePreset);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -437,6 +440,8 @@ export default function Canvas({
         onUndo={onUndo}
         colorPalette={colorPalette}
         historyTools={historyTools}
+        magnet={magnet}
+        onMagnetChange={setMagnet}
       />
       {livePreview && <div role="status" className="border-b border-border bg-accent/10 px-3 py-1 text-xs text-accent">{t("workspace.canvas.livePreview")}</div>}
       <div ref={containerRef} className="relative flex-1 overflow-auto bg-muted/70">
