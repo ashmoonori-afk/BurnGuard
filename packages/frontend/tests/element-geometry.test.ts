@@ -86,3 +86,16 @@ test("Given what the canvas read of an element When the move tools are asked The
   expect(moveRefusal({ ...text, inline: { display: "inline", translate: "10% 0px" } })).toBe("line");
   expect(moveRefusal({ ...target, inline: { translate: "10% 0px" } })).toBe("unit");
 });
+
+test("Given a basis of finite numbers too large to calculate with When a distance is converted or an Align is worked out Then nothing moves and the saved offset stays", () => {
+  const huge = [1e308, 0, 0, 1e308] as const;
+  expect(offsetDelta(huge, 40, 8)).toEqual({ x: 0, y: 0 });
+  expect(offsetDelta([1, 0, 0, 1], 1e308, 1e308)).toEqual({ x: 1e308, y: 1e308 });
+  expect(offsetDelta([1e-200, 0, 0, 1e200], 1e200, 0)).toEqual({ x: 0, y: 0 });
+  const rect = { left: 100, top: 100, width: 60, height: 40 }, content = { left: 0, top: 0, width: 400, height: 300 };
+  for (const mode of ALIGN_MODES) {
+    expect(alignOffset({ mode, rect, content, offset: { x: 10, y: 0 }, basis: huge })).toEqual({ x: 10, y: 0 });
+  }
+  // The ordinary case next to it still moves.
+  expect(alignOffset({ mode: "left", rect, content, offset: { x: 10, y: 0 }, basis: [1, 0, 0, 1] })).toEqual({ x: -90, y: 0 });
+});

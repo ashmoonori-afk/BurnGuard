@@ -82,3 +82,26 @@ Align asks the frame for a measurement before it saves, and the file can change 
 file's identity at the press, like a drag, and saves against that one: a change in between is refused as stale and the
 newer file stays. An answer that comes back after the selection changed, a save started or Style mode was left is
 dropped.
+
+## Events, comment positions and node ids from the frame
+
+The second security pass found the same gap one step further out. Events from the frame (`active-slide-changed`,
+`navigate`, `viewport-wheel`, the comment and document events) are now parsed before any subscriber sees them, and
+an event with a missing payload or a value of the wrong type is dropped. Comment positions are rebuilt entry by entry
+into a new list, so a list with holes is refused instead of handed on. The answer to "scroll this frame into view"
+is parsed like every other rectangle.
+
+A node id is never cut or capped. The first version of the hit parser refused ids longer than 256 characters, which
+the file and the backend allow; such an element could no longer be selected. The same cap is gone from the snap
+neighbours.
+
+A basis of finite numbers that are too large to calculate with moves nothing, like a flattened one. Before, the
+division gave no number and Align saved an offset of zero.
+
+## Still open: the displayed page and the file's identity
+
+Every Style gesture reads the file's identity from the backend when it starts. If the file changed and the canvas has
+not shown the new page yet, that identity is newer than what the person is looking at, and the gesture's result is
+saved over the newer offset of that one element. Closing this means tying each save to the version of the page the
+canvas displays, and telling apart the app's own save from a change made elsewhere, or a quick second edit after a
+save would be refused. That is a change to the save path of every canvas mode and is left for its own design.
