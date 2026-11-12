@@ -12,7 +12,7 @@ import { dimensionPatch, rotationPatch, translatePatch } from "../src/lib/elemen
 import { snapResize, snapRotate } from "../src/lib/resize-gesture";
 import { collectCandidates } from "../src/lib/snap-engine";
 import type { TweaksTarget } from "../src/components/canvas/TweaksLayer";
-import { beginMoveGesture, type MoveGestureStart } from "../src/lib/move-gesture";
+import { arrowStep, beginMoveGesture, type MoveGestureStart } from "../src/lib/move-gesture";
 import type { SnapSources } from "../src/lib/snap-engine";
 
 test("Given a zoomed and moved canvas When pointing Then hit and draw coordinates remain unscaled", () => {
@@ -241,4 +241,49 @@ test("Given a rotate drag that ends at 43 degrees When released Then 45deg is sa
   expect(rotationPatch(rotate(true, false).degrees)).toEqual({ rotate: "45deg" });
   expect(rotationPatch(rotate(true, true).degrees)).toEqual({ rotate: "43deg" });
   expect(rotate(false, false)).toEqual({ degrees: 43, locked: false });
+});
+
+test("Given three Arrow Right presses and a key release When the burst ends Then exactly one save carries translate 3px 0px", async () => {
+  const burst = await moveGesture({ clickThresholdScreenPx: 0, sources: Promise.resolve(null) });
+  let x = 0;
+  for (let press = 0; press < 3; press += 1) {
+    x += arrowStep("ArrowRight", false)!.x;
+    expect(burst.update(pointer(x))).not.toBeNull();
+  }
+  const commit = burst.release()!;
+  expect(translatePatch(commit.offset.x, commit.offset.y)).toEqual({ translate: "3px 0px" });
+  expect(burst.release()).toBeNull();
+});
+
+test("Given an arrow key When the step is read Then it is 1 px, 10 px with Shift, and nothing for other keys", () => {
+  expect(arrowStep("ArrowDown", true)).toEqual({ x: 0, y: 10 });
+  expect(arrowStep("ArrowUp", false)).toEqual({ x: 0, y: -1 });
+  expect(arrowStep("ArrowLeft", true)).toEqual({ x: -10, y: 0 });
+  expect(arrowStep("ArrowRight", false)).toEqual({ x: 1, y: 0 });
+  expect(arrowStep("Enter", false)).toBeNull();
+  expect(arrowStep("a", true)).toBeNull();
+});
+
+test("Given a nudge that lands 3 px from a sibling edge When it reports its locks Then it is not pulled, and on the edge it names the line", async () => {
+  const near = await moveGesture({ clickThresholdScreenPx: 0 });
+  expect(near.update({ ...pointer(40), reachPx: 0.01 })).toMatchObject({ rect: { left: 140 }, guides: [], offset: { x: 40, y: 0 } });
+  const exact = await moveGesture({ clickThresholdScreenPx: 0 });
+  expect(exact.update({ ...pointer(43), reachPx: 0.01 })).toMatchObject({ rect: { left: 143 }, guides: [{ kind: "line", bgId: "next" }] });
+});
+
+test("Given Alt or Option with an arrow When the next line is asked Then the burst jumps line by line, and stays put before the snap rects arrive", async () => {
+  const burst = await moveGesture({ clickThresholdScreenPx: 0 });
+  const first = burst.nextLine("x", 1);
+  expect(first).toBe(43);
+  burst.update({ ...pointer(first), reachPx: 0.01 });
+  expect(burst.nextLine("x", 1)).toBe(30);
+  expect(burst.nextLine("x", -1)).toBe(0);
+  const early = beginMoveGesture({ rect: { left: 100, top: 100, width: 60, height: 40 }, rotation: 0, scaleX: 1, scaleY: 1, offset: { x: 0, y: 0 }, zoom: 1, clickThresholdScreenPx: 0, sources: new Promise(() => undefined), identity: Promise.resolve(identityAt(1)) });
+  expect(early.nextLine("x", 1)).toBe(0);
+});
+
+test("Given a slide scaled to 50% When one arrow press travels half a client pixel Then the saved offset moves one whole pixel", async () => {
+  const burst = await moveGesture({ clickThresholdScreenPx: 0, scaleX: 0.5, scaleY: 0.5, sources: Promise.resolve(null) });
+  burst.update(pointer(arrowStep("ArrowRight", false)!.x * 0.5));
+  expect(burst.release()!.offset).toEqual({ x: 1, y: 0 });
 });

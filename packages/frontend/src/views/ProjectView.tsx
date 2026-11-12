@@ -105,6 +105,7 @@ import {
 import type { EditTarget } from "@/components/canvas/EditLayer";
 import type {
   TweakApplyOptions,
+  TweaksLayerActions,
   TweaksStyleKey,
   TweaksTarget,
 } from "@/components/canvas/TweaksLayer";
@@ -223,6 +224,7 @@ export default function ProjectView() {
   const [drawLoadAttempt, setDrawLoadAttempt] = useState(0);
   const drawSavesRef = useRef(new Map<string, Promise<unknown>>());
   const drawLayerRef = useRef<DrawLayerHandle | null>(null);
+  const tweaksActionsRef = useRef<TweaksLayerActions | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
   const [sendPending, setSendPending] = useState(false);
   const [autoFixPending, setAutoFixPending] = useState(false);
@@ -1616,6 +1618,7 @@ export default function ProjectView() {
               tweaksSaving={tweaksMutation.isPending}
               onApplyTweak={handleApplyTweak}
               readTweakIdentity={activeRelPath ? (bgId) => readFileIdentity(id!, activeRelPath, bgId) : undefined}
+              tweaksActionsRef={tweaksActionsRef}
               onSelectTweaksTarget={setTweaksTarget}
               drawTool={drawTool}
               drawColor={drawColor}
@@ -1736,6 +1739,7 @@ export default function ProjectView() {
               tweakReview={tweakReview}
               tweaksSaving={tweaksMutation.isPending}
               onApplyTweak={handleApplyTweak}
+              onAlignTweak={(mode) => tweaksActionsRef.current?.align(mode)}
               onResetTweaks={() => {
                 if (!activeRelPath || !tweaksTarget) return;
                 const keys = Object.keys(tweaksTarget.inline);

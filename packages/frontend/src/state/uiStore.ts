@@ -36,6 +36,10 @@ interface UIState {
   /** What the element being moved is locked to, in words; the Style panel reads it out. Null when nothing is locked. */
   canvasSnapStatus: string | null;
   setCanvasSnapStatus: (status: string | null) => void;
+
+  /** The offset a move in progress would save, so the Position fields follow the gesture. Null when nothing is moving. */
+  canvasMoveOffset: { x: number; y: number } | null;
+  setCanvasMoveOffset: (offset: { x: number; y: number } | null) => void;
 }
 
 const TOAST_AUTO_DISMISS_MS = 3000;
@@ -90,4 +94,10 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   canvasSnapStatus: null,
   setCanvasSnapStatus: (canvasSnapStatus) => { if (get().canvasSnapStatus !== canvasSnapStatus) set({ canvasSnapStatus }); },
+
+  canvasMoveOffset: null,
+  setCanvasMoveOffset: (canvasMoveOffset) => {
+    const current = get().canvasMoveOffset;
+    if (current?.x !== canvasMoveOffset?.x || current?.y !== canvasMoveOffset?.y) set({ canvasMoveOffset });
+  },
 }));

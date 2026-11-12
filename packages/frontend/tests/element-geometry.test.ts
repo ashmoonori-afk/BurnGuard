@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { ASPECT_PRESETS, aspectPresetValue, dimensionPatch, isAspectLocked, rotationPatch, targetDimensions, targetOffset, translatePatch } from "../src/lib/element-geometry";
+import { ALIGN_MODES, alignOffset, ASPECT_PRESETS, aspectPresetValue, dimensionPatch, isAspectLocked, rotationPatch, targetDimensions, targetOffset, translatePatch } from "../src/lib/element-geometry";
 import type { TweaksTarget } from "../src/components/canvas/TweaksLayer";
 
 const target: TweaksTarget = { bg_id: "image", tag: "img", computed: { width: "180px", height: "80px", rotate: "0.25turn" }, inline: {}, geometry: { width: 200, height: 100 } };
@@ -47,4 +47,18 @@ test("Given an offset When the move patch is built Then only translate is writte
   expect(translatePatch(-0, -0.001)).toEqual({ translate: "0px 0px" });
   expect(translatePatch(Number.NaN, 1)).toEqual({});
   expect(translatePatch(1, Number.POSITIVE_INFINITY)).toEqual({});
+});
+
+test("Given an element inside its parent's content box When aligned Then one side or centre lines up and the other axis keeps its offset", () => {
+  const input = { rect: { left: 100, top: 100, width: 60, height: 40 }, content: { left: 0, top: 0, width: 400, height: 300 }, offset: { x: 5, y: 5 }, scaleX: 1, scaleY: 1 };
+  const align = (mode: (typeof ALIGN_MODES)[number], overrides = {}) => alignOffset({ ...input, ...overrides, mode });
+  expect(align("left")).toEqual({ x: -95, y: 5 });
+  expect(align("center")).toEqual({ x: 75, y: 5 });
+  expect(align("right")).toEqual({ x: 245, y: 5 });
+  expect(align("top")).toEqual({ x: 5, y: -95 });
+  expect(align("middle")).toEqual({ x: 5, y: 35 });
+  expect(align("bottom")).toEqual({ x: 5, y: 165 });
+  // In a slide scaled to 50%, 70 client px are 140 of the element's own pixels.
+  expect(align("center", { scaleX: 0.5, scaleY: 0.5 })).toEqual({ x: 145, y: 5 });
+  expect(ALIGN_MODES).toEqual(["left", "center", "right", "top", "middle", "bottom"]);
 });

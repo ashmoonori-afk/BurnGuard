@@ -153,10 +153,16 @@ function gapOptions(axis: SnapAxis, moving: SnapRect, siblings: readonly SnapSib
   return options;
 }
 
+/** At a multiple of 90 degrees the bounding box edges are real edges; at any other angle only the centre is meaningful. */
+function isQuarterTurn(rotation: number): boolean {
+  const turn = ((rotation % 360) + 360) % 360;
+  return Math.abs(turn % 90) < COINCIDENT || Math.abs((turn % 90) - 90) < COINCIDENT;
+}
+
 function resolveAxis(axis: SnapAxis, input: { moving: SnapRect; kind: SnapKind; candidates: SnapCandidates; thresholdPx: number; rotation: number }): { delta: number; guides: SnapGuide[] } {
   const { moving, kind, candidates, thresholdPx } = input;
   const turn = ((input.rotation % 360) + 360) % 360;
-  const quarterTurn = Math.abs(turn % 90) < COINCIDENT || Math.abs((turn % 90) - 90) < COINCIDENT;
+  const quarterTurn = isQuarterTurn(input.rotation);
   const upright = turn < COINCIDENT || 360 - turn < COINCIDENT;
   const [start, end] = span(moving, axis);
   const centre = (start + end) / 2;
@@ -213,4 +219,22 @@ export const ROTATION_SNAP_REACH_DEG = 3;
 export function snapRotation(degrees: number): { degrees: number; locked: boolean } {
   const nearest = Math.round(degrees / ROTATION_SNAP_STEP_DEG) * ROTATION_SNAP_STEP_DEG;
   return Math.abs(degrees - nearest) <= ROTATION_SNAP_REACH_DEG ? { degrees: nearest, locked: true } : { degrees, locked: false };
+}
+
+/**
+ * How far the box must travel along `axis` to reach the next candidate line in `direction` (the keyboard's "jump to
+ * the next line"); 0 when no line lies ahead.
+ */
+export function nextSnapDelta(input: { moving: SnapRect; candidates: SnapCandidates; axis: SnapAxis; direction: 1 | -1; rotation: number }): number {
+  const [start, end] = span(input.moving, input.axis);
+  const points = isQuarterTurn(input.rotation) ? [start, (start + end) / 2, end] : [(start + end) / 2];
+  let travel = 0;
+  for (const line of input.candidates.lines) {
+    if (line.axis !== input.axis) continue;
+    for (const point of points) {
+      const ahead = (line.position - point) * input.direction;
+      if (ahead > COINCIDENT && (travel === 0 || ahead < travel)) travel = ahead;
+    }
+  }
+  return travel === 0 ? 0 : travel * input.direction;
 }

@@ -3,6 +3,7 @@ import type { Comment } from "@bg/shared";
 import type { CanvasMode } from "./types";
 import type { EditTarget } from "@/components/canvas/EditLayer";
 import type { DrawTool } from "@/components/canvas/DrawLayer";
+import type { AlignMode } from "@/lib/element-geometry";
 import type {
   TweaksStyleKey,
   TweaksTarget,
@@ -43,6 +44,7 @@ export default function ModePanel({
   tweaksTarget,
   tweaksSaving,
   onApplyTweak,
+  onAlignTweak,
   onResetTweaks,
   onClearTweaks,
   tweakReview,
@@ -83,6 +85,7 @@ export default function ModePanel({
   tweaksTarget: TweaksTarget | null;
   tweaksSaving: boolean;
   onApplyTweak: (patch: Partial<Record<TweaksStyleKey, string | null>>) => void;
+  onAlignTweak?: (mode: AlignMode) => void;
   onResetTweaks: () => void;
   onClearTweaks: () => void;
   tweakReview: TweakChangePreview | null;
@@ -113,6 +116,7 @@ export default function ModePanel({
           target={tweaksTarget}
           saving={tweaksSaving}
           onApply={onApplyTweak}
+          onAlign={onAlignTweak}
           onResetAll={onResetTweaks}
           onClear={onClearTweaks}
           review={tweakReview}

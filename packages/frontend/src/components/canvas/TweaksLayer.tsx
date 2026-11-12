@@ -1,10 +1,14 @@
 import { useT } from "@/i18n/t";
 import { canvasPoint } from "./canvas-coordinates";
 import {
+  useCallback,
   useEffect,
+  useImperativeHandle,
   useRef,
   useState,
+  type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent,
+  type Ref,
   type RefObject,
   type PointerEvent,
 } from "react";
@@ -16,11 +20,12 @@ import {
   type FrameBgHit,
   type FrameHitLayout,
   type FrameRect,
+  type FrameSnapRects,
 } from "./frame-bridge";
 import { useFrameElementRect } from "@/hooks/useFrameElementRect";
-import { targetDimensions, targetOffset, translatePatch, dimensionPatch, rotationPatch, isAspectLocked } from "@/lib/element-geometry";
+import { alignOffset, targetDimensions, targetOffset, translatePatch, dimensionPatch, rotationPatch, isAspectLocked, type AlignMode } from "@/lib/element-geometry";
 import type { FileArtifactIdentity } from "@/lib/artifact-identity";
-import { beginMoveGesture, type MoveGesture } from "@/lib/move-gesture";
+import { arrowStep, beginMoveGesture, type MoveGesture } from "@/lib/move-gesture";
 import { primaryGuides, snapGuideChip, snapGuideStatus } from "@/lib/snap-guides";
 import { snapResize, snapRotate, type ResizeHandle } from "@/lib/resize-gesture";
 import { collectCandidates, type SnapCandidates, type SnapGuide, type SnapRect } from "@/lib/snap-engine";
@@ -64,6 +69,8 @@ export interface TweaksTarget {
 
 type TweaksPatch = Partial<Record<TweaksStyleKey, string | null>>;
 
+/** Taps on an arrow key join one burst, and one save, while they follow each other within this pause. */
+const NUDGE_IDLE_MS = 400;
 /** A selection narrower or shorter than this keeps its resize handles outside the box. */
 const SMALL_BOX_PX = 40;
 /** One pointer gesture on the selection. `names` and `candidates` fill in when the snap rects asked at its start arrive. */
@@ -72,12 +79,21 @@ interface DragState {
   identity?: Promise<FileArtifactIdentity>;
   session: MoveGesture<FileArtifactIdentity> | null;
   names: Map<string, string>; bbox: SnapRect; candidates: SnapCandidates | null;
+  /** A keyboard burst only: the arrow keys still held, and when its snap rects have arrived. */
+  keys?: Set<string>;
+  ready?: Promise<FrameSnapRects | null>;
 }
 interface ShownGuides { items: SnapGuide[]; box: SnapRect; names: ReadonlyMap<string, string>; live: boolean }
 const NO_GUIDES: ShownGuides = { items: [], box: { left: 0, top: 0, width: 0, height: 0 }, names: new Map(), live: false };
 
 /** A gesture hands over the file identity it read when it started; panel fields leave it out and read it at save time. */
 export interface TweakApplyOptions { identity?: Promise<FileArtifactIdentity> }
+
+/** What the Style panel can ask of the overlay, which is the only place that can measure the page. */
+export interface TweaksLayerActions {
+  /** Lines the selected element up with its parent's content box. */
+  align(mode: AlignMode): void;
+}
 
 /** Builds the Style target from a bridge hit; null when the hit has no node id. */
 export function tweaksTargetFromHit(hit: FrameBgHit | null): TweaksTarget | null {
@@ -102,6 +118,7 @@ export default function TweaksLayer({
   zoom = 1,
   magnet = true,
   readIdentity,
+  actionsRef,
 }: {
   active: boolean;
   iframeRef: RefObject<HTMLIFrameElement | null>;
@@ -115,6 +132,7 @@ export default function TweaksLayer({
   magnet?: boolean;
   /** Reads the identity of a node in the open file. Without it the element cannot be moved by dragging. */
   readIdentity?: (bgId: string) => Promise<FileArtifactIdentity>;
+  actionsRef?: Ref<TweaksLayerActions>;
 }) {
   const t = useT();
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -123,6 +141,36 @@ export default function TweaksLayer({
   const [preview, setPreview] = useState<FrameRect | null>(null);
   const [guides, setGuides] = useState<ShownGuides>(NO_GUIDES);
   const setSnapStatus = useUIStore((state) => state.setCanvasSnapStatus);
+  const setMoveOffset = useUIStore((state) => state.setCanvasMoveOffset);
+  const surfaceRef = useRef<HTMLButtonElement | null>(null);
+  const focusSurface = useRef(false);
+  // A save reloads the canvas, which removes the selection box for a moment. If the Move surface held the keyboard
+  // then, it takes it back when the box returns for the same element, so a second burst needs no new click.
+  const selectedId = useRef(selectedBgId);
+  selectedId.current = selectedBgId;
+  const refocusFor = useRef<string | null>(null);
+  const attachSurface = useCallback((element: HTMLButtonElement | null) => {
+    if (element === null) {
+      if (surfaceRef.current !== null && document.activeElement === surfaceRef.current) refocusFor.current = selectedId.current;
+      surfaceRef.current = null;
+      return;
+    }
+    surfaceRef.current = element;
+    if (refocusFor.current !== null && refocusFor.current === selectedId.current && document.activeElement === document.body) element.focus({ preventScroll: true });
+    refocusFor.current = null;
+  }, []);
+  const nudgeTimer = useRef<number | null>(null);
+  const stopNudgeTimer = () => {
+    if (nudgeTimer.current !== null) window.clearTimeout(nudgeTimer.current);
+    nudgeTimer.current = null;
+  };
+  useEffect(() => stopNudgeTimer, []);
+  // A click that selects an element hands it the keyboard, so the arrow keys nudge it at once.
+  useEffect(() => {
+    if (!focusSurface.current || !surfaceRef.current) return;
+    focusSurface.current = false;
+    surfaceRef.current.focus({ preventScroll: true });
+  });
   const drag = useRef<DragState | null>(null);
   useEffect(() => {
     drag.current?.session?.cancel();
@@ -132,7 +180,8 @@ export default function TweaksLayer({
   useEffect(() => {
     setGuides(NO_GUIDES);
     setSnapStatus(null);
-  }, [active, selectedBgId, setSnapStatus]);
+    setMoveOffset(null);
+  }, [active, selectedBgId, setSnapStatus, setMoveOffset]);
   useEffect(() => {
     const cancel = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || !drag.current) return;
@@ -140,13 +189,16 @@ export default function TweaksLayer({
       event.stopImmediatePropagation();
       drag.current.session?.cancel();
       drag.current = null;
+      if (nudgeTimer.current !== null) window.clearTimeout(nudgeTimer.current);
+      nudgeTimer.current = null;
       setPreview(null);
       setGuides(NO_GUIDES);
       setSnapStatus(null);
+      setMoveOffset(null);
     };
     window.addEventListener("keydown", cancel, true);
     return () => window.removeEventListener("keydown", cancel, true);
-  }, [setSnapStatus]);
+  }, [setSnapStatus, setMoveOffset]);
   // Shared 200 ms poll loop (audit fix #11). Hovering is still local
   // because it uses different request shape (point-based, not id-based).
   const selectedRect = useFrameElementRect(
@@ -179,7 +231,10 @@ export default function TweaksLayer({
   const selectAt = (clientX: number, clientY: number) => {
     if (!active || saving || !overlayRef.current) return;
     const [relX, relY] = canvasPoint(overlayRef.current, clientX, clientY);
-    void requestFrameBgAtPoint(iframeRef.current, relX, relY).then((hit) => onSelect(tweaksTargetFromHit(hit)));
+    void requestFrameBgAtPoint(iframeRef.current, relX, relY).then((hit) => {
+      focusSurface.current = hit?.bgId != null;
+      onSelect(tweaksTargetFromHit(hit));
+    });
   };
 
   const handleClick = (e: MouseEvent<HTMLDivElement>) => {
@@ -209,6 +264,7 @@ export default function TweaksLayer({
     setGuides((shown) => shown.items.length === 0 || window.matchMedia("(prefers-reduced-motion: reduce)").matches ? NO_GUIDES : { ...shown, live: false });
     // The sentence describes a lock that is being held; once the pointer is up, the save may still be refused.
     setSnapStatus(null);
+    setMoveOffset(null);
   };
   /** Asks once, at the start of a gesture, what the element may lock to; the answer fills in when it arrives. */
   const loadSnapRects = (bgId: string, into: { names: Map<string, string>; candidates: SnapCandidates | null }) => {
@@ -225,6 +281,8 @@ export default function TweaksLayer({
     if (saving || !target || !selectedRect || !overlayRef.current || event.button !== 0) return;
     event.preventDefault(); event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
+    // The press takes the keyboard too, so the arrow keys can fine-tune right after a drag.
+    event.currentTarget.focus({ preventScroll: true });
     const [x, y] = canvasPoint(overlayRef.current, event.clientX, event.clientY);
     const offset = targetOffset(target);
     const identity = gestureIdentity(target.bg_id);
@@ -243,6 +301,7 @@ export default function TweaksLayer({
     if (!next) return;
     setPreview({ ...current.rect, left: current.rect.left + next.delta.x, top: current.rect.top + next.delta.y });
     showLocks(next.guides, next.rect, current.names);
+    setMoveOffset(next.offset);
   };
   const finishMove = (event: PointerEvent<HTMLButtonElement>, commit: boolean) => {
     event.stopPropagation();
@@ -257,6 +316,77 @@ export default function TweaksLayer({
       selectAt(event.clientX, event.clientY);
     }
   };
+
+  /** Arrow keys on the Move surface: 1 px, 10 px with Shift, the next line with Alt or Option. One save per burst. */
+  const nudgeKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
+    const step = arrowStep(event.key, event.shiftKey);
+    if (!step || event.ctrlKey || event.metaKey || saving || !target || !selectedRect) return;
+    event.preventDefault(); event.stopPropagation();
+    stopNudgeTimer();
+    if (!drag.current) {
+      const offset = targetOffset(target);
+      const identity = gestureIdentity(target.bg_id);
+      if (!offset || !identity) return;
+      const next: DragState = { bgId: target.bg_id, x: 0, y: 0, rect: selectionBox(selectedRect), kind: "nudge", patch: {}, identity, session: null, names: new Map(), bbox: selectedRect, candidates: null, keys: new Set() };
+      next.ready = loadSnapRects(target.bg_id, next);
+      next.session = beginMoveGesture({ rect: selectedRect, rotation: selectedRect.rotation ?? 0, scaleX: selectedRect.scaleX ?? 1, scaleY: selectedRect.scaleY ?? 1, offset, zoom, clickThresholdScreenPx: 0, sources: next.ready, identity });
+      drag.current = next;
+      setGuides(NO_GUIDES);
+    }
+    const current = drag.current;
+    if (current.kind !== "nudge" || !current.session) return;
+    current.keys?.add(event.key);
+    const travel = (dx: number, dy: number) => {
+      if (drag.current !== current || !current.session) return;
+      current.x += dx; current.y += dy;
+      // A hair's reach: the nudge names the lines it lands on but is never pulled off its exact step.
+      const next = current.session.update({ dx: current.x, dy: current.y, magnet: true, paused: false, reachPx: 0.01 });
+      if (!next) return;
+      setPreview({ ...current.rect, left: current.rect.left + next.delta.x, top: current.rect.top + next.delta.y });
+      showLocks(next.guides, next.rect, current.names);
+      setMoveOffset(next.offset);
+    };
+    if (event.altKey) {
+      const axis = step.x !== 0 ? "x" : "y";
+      const direction = step.x + step.y > 0 ? 1 : -1;
+      void current.ready?.then(() => {
+        const jump = current.session?.nextLine(axis, direction) ?? 0;
+        if (jump !== 0) travel(axis === "x" ? jump : 0, axis === "y" ? jump : 0);
+      });
+    } else {
+      travel(step.x * (current.rect.scaleX || 1), step.y * (current.rect.scaleY || 1));
+    }
+  };
+  const commitNudge = () => {
+    stopNudgeTimer();
+    const current = drag.current;
+    if (!current || current.kind !== "nudge") return;
+    drag.current = null; setPreview(null);
+    endLocks();
+    const result = current.session?.release() ?? null;
+    if (result && active && !saving && current.bgId === target?.bg_id) onApply(translatePatch(result.offset.x, result.offset.y), { identity: result.identity });
+  };
+  const nudgeKeyUp = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
+    const current = drag.current;
+    if (!current || current.kind !== "nudge" || !current.keys) return;
+    current.keys.delete(event.key);
+    // Saving waits for a short pause, so five taps are one save and one undo step, like one held key.
+    if (current.keys.size === 0) nudgeTimer.current = window.setTimeout(commitNudge, NUDGE_IDLE_MS);
+  };
+
+  useImperativeHandle(actionsRef, () => ({
+    align(mode) {
+      if (saving || !target) return;
+      const offset = targetOffset(target);
+      if (!offset) return;
+      void requestFrameSnapRects(iframeRef.current, target.bg_id).then((rects) => {
+        if (!rects?.parent) return;
+        const next = alignOffset({ mode, rect: rects.self, content: rects.parent.content, offset, scaleX: rects.self.scaleX ?? 1, scaleY: rects.self.scaleY ?? 1 });
+        // A panel button commits at once, so the identity is read at save time.
+        if (next.x !== offset.x || next.y !== offset.y) onApply(translatePatch(next.x, next.y));
+      });
+    },
+  }), [saving, target, iframeRef, onApply]);
 
   const start = (event: PointerEvent<HTMLButtonElement>, kind: string) => {
     if (saving || !target || !selectedRect || !overlayRef.current) return;
@@ -343,7 +473,7 @@ export default function TweaksLayer({
             rotate: `${(box.rotation ?? 0) + (drag.current?.kind === "rotate" && target ? Number.parseFloat(String(drag.current.patch.rotate ?? targetDimensions(target).rotation)) - targetDimensions(target).rotation : 0)}deg`,
           }}
         >
-          <button type="button" aria-label={t("canvas.handles.move")} data-canvas-move="" disabled={saving} className="absolute inset-0 pointer-events-auto bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default" style={{ touchAction: "none", cursor: "move" }} onPointerDown={startMove} onPointerMove={moveMove} onPointerUp={(event) => finishMove(event, true)} onPointerCancel={(event) => finishMove(event, false)} onClick={(event) => event.stopPropagation()} />
+          <button ref={attachSurface} type="button" aria-label={t("canvas.handles.move")} data-canvas-move="" aria-disabled={saving} onKeyDown={nudgeKeyDown} onKeyUp={nudgeKeyUp} onBlur={commitNudge} className="absolute inset-0 pointer-events-auto bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" style={{ touchAction: "none", cursor: saving ? "default" : "move" }} onPointerDown={startMove} onPointerMove={moveMove} onPointerUp={(event) => finishMove(event, true)} onPointerCancel={(event) => finishMove(event, false)} onClick={(event) => event.stopPropagation()} />
           {([['e', t("canvas.handles.width"), handleX, '50%'], ['s', t("canvas.handles.height"), '50%', handleY], ['se', t("canvas.handles.size"), handleX, handleY], ['rotate', t("canvas.handles.rotation"), '50%', '-24px']] as const).map(([kind, label, left, top]) => (
             <button key={kind} aria-label={label} disabled={saving} className="absolute h-3 w-3 border border-accent bg-card pointer-events-auto disabled:opacity-50" style={{ left, top, borderRadius: kind === 'rotate' ? '50%' : 0, transform: 'translate(-50%, -50%)', touchAction: 'none', cursor: kind === 'rotate' ? 'grab' : `${kind}-resize` }} onPointerDown={(event) => start(event, kind)} onPointerMove={move} onPointerUp={(event) => finish(event, true)} onPointerCancel={(event) => finish(event, false)} onClick={(event) => event.stopPropagation()} />
           ))}
