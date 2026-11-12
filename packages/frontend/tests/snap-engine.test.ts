@@ -125,3 +125,32 @@ test("Given lines ahead and behind When the keyboard asks for the next line Then
   // A box rotated 30 degrees travels by its centre only.
   expect(next(rect(100, 100, 60, 40), "x", 1, 30)).toBe(70);
 });
+
+test("Given a box dropped onto a neighbour When the only matching gap is that neighbour's own Then it is not offered as equal spacing", () => {
+  // Siblings a 0..100 and b 300..400 are 200 px apart. A box sitting on a, 1 px off, is 200 px before b as well.
+  const sources = withSiblings(rect(0, 0, 100, 50), rect(300, 0, 100, 50));
+  const onFirst = snap(sources, rect(1, 10, 100, 30));
+  expect(onFirst.guides.some((guide) => guide.kind === "gap")).toBe(false);
+  const onSecond = snap(sources, rect(299, 10, 100, 30));
+  expect(onSecond.guides.some((guide) => guide.kind === "gap")).toBe(false);
+  // The real case still locks: one gap past the far side of the pair.
+  expect(snap(sources, rect(598, 10, 100, 30))).toMatchObject({ dx: 2 });
+  expect(snap(sources, rect(598, 10, 100, 30)).guides.some((guide) => guide.kind === "gap")).toBe(true);
+  // In an evenly spaced row of three, one gap after the second is where the third sits: still not equal spacing.
+  const even = withSiblings(rect(0, 0, 100, 50), rect(300, 0, 100, 50), rect(600, 0, 100, 50));
+  for (const left of [1, 299, 301, 599]) expect(snap(even, rect(left, 10, 100, 30)).guides.some((guide) => guide.kind === "gap")).toBe(false);
+  expect(snap(even, rect(898, 10, 100, 30))).toMatchObject({ dx: 2 });
+  // A narrower box that fits in the free part of a wider gap is a real slot: 200 px after the second, 300 px before the third.
+  const uneven = withSiblings(rect(0, 0, 100, 50), rect(300, 0, 100, 50), rect(1000, 0, 100, 50));
+  const slot = snap(uneven, rect(602, 10, 100, 30));
+  expect(slot.dx).toBe(-2);
+  expect(slot.guides).toContainEqual(expect.objectContaining({ kind: "gap", value: 200 }));
+});
+
+test("Given a box a few hundredths of a pixel from a line When it locks Then the guide shows but the box is not shifted", () => {
+  const sources = withSiblings(rect(200, 300, 100, 50));
+  const settled = snap(sources, rect(200.03, 100, 60, 40));
+  expect(settled.dx).toBe(0);
+  expect(settled.guides).toMatchObject([{ kind: "line", part: "start" }]);
+  expect(snap(sources, rect(200.06, 100, 60, 40)).dx).toBeCloseTo(-0.06, 5);
+});
