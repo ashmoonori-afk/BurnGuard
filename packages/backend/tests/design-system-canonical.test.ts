@@ -1,4 +1,4 @@
-import { afterEach, expect, spyOn, test } from "bun:test";
+import { afterEach, expect, setDefaultTimeout, spyOn, test } from "bun:test";
 import { Database } from "bun:sqlite";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
@@ -33,6 +33,14 @@ import { provisionCanonicalPinStylesheet, selectedPinnedThemeCss } from "../src/
 import { resolveTokenColor } from "../src/services/design-system-contrast";
 import { buildSessionContext } from "../src/services/context";
 import { buildPrompt } from "../src/harness/prompt-builder";
+
+/**
+ * Every case here builds a real system tree and a SQLite profile under the temp directory. On Windows a case takes up
+ * to 9 s on a healthy runner. A runner whose disk stalled for two and a half minutes took 16 to 21 s for cases that
+ * normally take 1.3 s, and the 30 s default then cut the next one off in its setup. The limit only stops a hang, so it
+ * is sized for a stall like that one and applies to every case and hook in this file.
+ */
+setDefaultTimeout(180_000);
 
 const homes: string[] = [];
 const databases: Database[] = [];
