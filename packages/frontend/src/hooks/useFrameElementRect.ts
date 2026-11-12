@@ -66,6 +66,7 @@ function rectEqual(a: FrameRect | null, b: FrameRect | null): boolean {
     a.height === b.height &&
     a.rotation === b.rotation &&
     a.boxWidth === b.boxWidth &&
-    a.boxHeight === b.boxHeight
+    a.boxHeight === b.boxHeight &&
+    a.basis?.join() === b.basis?.join()
   );
 }

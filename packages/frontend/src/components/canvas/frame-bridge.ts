@@ -36,6 +36,11 @@ export interface FrameRect {
   boxHeight?: number;
   scaleX?: number;
   scaleY?: number;
+  /**
+   * The 2x2 part (a, b, c, d) of the transforms above the element, without its own: how one pixel of its CSS
+   * `translate` lands in client pixels.
+   */
+  basis?: readonly [number, number, number, number];
   left: number;
   top: number;
   width: number;
@@ -456,6 +461,11 @@ export function parseFrameSnapRects(payload: unknown): FrameSnapRects | null {
     if (!isFiniteNumber(value)) return null;
     self[key] = value;
   }
+  const basis = (source.self as Record<string, unknown>).basis;
+  if (basis !== undefined) {
+    if (!Array.isArray(basis) || basis.length !== 4 || !basis.every(isFiniteNumber)) return null;
+    self.basis = [basis[0], basis[1], basis[2], basis[3]];
+  }
   let parent: FrameSnapRects["parent"] = null;
   if (source.parent !== null) {
     const raw = (source.parent ?? {}) as Record<string, unknown>;
@@ -589,8 +599,8 @@ const BRIDGE_SCRIPT = String.raw`(function () {
     "background-color"
   ];
 
-  function elementRect(node) {
-    var rect = node.getBoundingClientRect();
+  // The rotation and scale of every transform from this node up to the root.
+  function transformsFrom(node) {
     var matrix = new DOMMatrix();
     for (var current = node; current; current = current.parentElement) {
       var style = getComputedStyle(current);
@@ -599,11 +609,19 @@ const BRIDGE_SCRIPT = String.raw`(function () {
       if (style.transform && style.transform !== "none") own = own.multiply(new DOMMatrix(style.transform));
       matrix = own.multiply(matrix);
     }
+    return matrix;
+  }
+
+  function elementRect(node) {
+    var rect = node.getBoundingClientRect();
+    var matrix = transformsFrom(node);
+    // CSS applies translate outside the element's own rotate and transform, so a move needs only what is above it.
+    var above = transformsFrom(node.parentElement);
     var scaleX = Math.hypot(matrix.a, matrix.b), scaleY = Math.hypot(matrix.c, matrix.d);
     return { left: rect.left, top: rect.top, width: rect.width, height: rect.height,
       rotation: Math.atan2(matrix.b, matrix.a) * 180 / Math.PI,
       boxWidth: node.offsetWidth * scaleX, boxHeight: node.offsetHeight * scaleY,
-      scaleX: scaleX, scaleY: scaleY };
+      scaleX: scaleX, scaleY: scaleY, basis: [above.a, above.b, above.c, above.d] };
   }
 
   function toRect(node) {

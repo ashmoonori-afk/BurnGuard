@@ -37,6 +37,7 @@ Start with the [product introduction and setup](../README.md), available in [Kor
 - [Construction exports in the export menu](37-logo-construction-export-menu-2026-11-09.md)
 - [The construction draw-in MP4 export](38-logo-construction-mp4-2026-11-09.md)
 - [The canvas magnet: move, resize and rotate with alignment](39-canvas-magnet-2026-11-10.md)
+- [Canvas move corrections after the pre-release check](40-canvas-move-corrections-2026-11-12.md)
 - [Model capability profiles, CSS logos and web asset sourcing](model-profiles.md)
 - [Edit scope and revision comparison](edit-scope.md)
 - [Sample design system](<../design system sample/README.md>)

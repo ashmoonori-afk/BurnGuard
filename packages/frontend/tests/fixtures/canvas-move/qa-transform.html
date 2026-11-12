@@ -1,0 +1,11 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>QA-transform</title>
+<style>body{margin:0;font-family:system-ui,sans-serif;padding:40px}
+.row{height:160px;position:relative;border-bottom:1px solid #ddd}
+p{font-size:22px}
+.inl{background:#fde68a}
+.scaled{position:absolute;left:60px;top:50px;width:40px;height:40px;background:#60a5fa;transform:scale(2)}
+.rot{position:absolute;left:60px;top:20px;width:200px;height:120px;background:#eee;transform:rotate(90deg)}
+.child{position:absolute;left:20px;top:20px;width:40px;height:40px;background:#f87171}</style></head>
+<body><div class="row"><p>앞 글자 <span class="inl">인라인</span> 뒤 글자</p></div>
+<div class="row"><div class="scaled"></div></div>
+<div class="row"><div class="rot"><div class="child"></div></div></div></body></html>

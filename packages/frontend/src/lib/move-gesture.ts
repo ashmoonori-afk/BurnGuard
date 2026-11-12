@@ -2,6 +2,7 @@
  * One move gesture on the canvas, free of React and the DOM: it starts when the pointer goes down on the selected
  * element, previews while the pointer moves and yields at most one save when the pointer is released.
  */
+import { offsetDelta, type OffsetBasis } from "./element-geometry";
 import { collectCandidates, nextSnapDelta, resolveSnap, snapThreshold, type SnapAxis, type SnapCandidates, type SnapGuide, type SnapRect, type SnapSources } from "./snap-engine";
 
 /** A press that travels less than this on screen is a click, so a nested element can still be selected. */
@@ -11,9 +12,8 @@ export interface MoveGestureStart<Identity> {
   /** The element's bounding box in iframe client pixels when the pointer went down. */
   rect: SnapRect;
   rotation: number;
-  /** Client pixels per CSS pixel of the element, from scaled ancestors such as a fitted slide. */
-  scaleX: number;
-  scaleY: number;
+  /** The transforms above the element, such as a fitted slide or a rotated parent; undefined when there are none. */
+  basis: OffsetBasis;
   /** The element's saved offset. */
   offset: { x: number; y: number };
   zoom: number;
@@ -80,10 +80,11 @@ export function beginMoveGesture<Identity>(start: MoveGestureStart<Identity>): M
         const snap = resolveSnap({ moving, kind: "move", candidates, thresholdPx: reachPx ?? snapThreshold(start.zoom), rotation: start.rotation });
         x += snap.dx; y += snap.dy; guides = snap.guides;
       }
+      const own = offsetDelta(start.basis, x, y);
       last = {
         rect: { ...start.rect, left: start.rect.left + x, top: start.rect.top + y },
         delta: { x, y },
-        offset: { x: round(start.offset.x + x / (start.scaleX || 1)), y: round(start.offset.y + y / (start.scaleY || 1)) },
+        offset: { x: round(start.offset.x + own.x), y: round(start.offset.y + own.y) },
         guides,
       };
       return last;

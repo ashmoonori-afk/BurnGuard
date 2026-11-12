@@ -136,7 +136,7 @@ describe("snap rects bridge", () => {
       fake([112, 110, 100, 40], { id: "e", tag: "SECTION" }),
     ] });
     expect(snapRects(parent, "a")).toEqual({
-      self: { left: 112, top: 62, width: 100, height: 40, rotation: 0, boxWidth: 100, boxHeight: 40, scaleX: 1, scaleY: 1 },
+      self: { left: 112, top: 62, width: 100, height: 40, rotation: 0, boxWidth: 100, boxHeight: 40, scaleX: 1, scaleY: 1, basis: [1, 0, 0, 1] },
       parent: { rect: { left: 100, top: 50, width: 400, height: 300 }, content: { left: 112, top: 62, width: 376, height: 276 }, display: "block", columnLines: [], rowLines: [] },
       artboard: null,
       siblings: [{ bgId: "e", rect: { left: 112, top: 110, width: 100, height: 40 }, label: "section" }, { bgId: "b", rect: { left: 230, top: 62, width: 100, height: 40 }, label: "Card 2" }],
@@ -169,7 +169,7 @@ describe("snap rects bridge", () => {
     const rects = snapRects(slide, "a")!;
     expect(rects.parent!.columnLines).toEqual([{ start: 10, end: 10 }, { start: 60, end: 68 }, { start: 118, end: 126 }, { start: 176, end: 176 }]);
     expect(rects.artboard).toEqual({ left: 0, top: 0, width: 640, height: 360 });
-    expect(rects.self).toMatchObject({ boxWidth: 50, scaleX: 0.5 });
+    expect(rects.self).toMatchObject({ boxWidth: 50, scaleX: 0.5, basis: [0.5, 0, 0, 0.5] });
   });
 
   test("Given free space, a percentage gap or a right-to-left grid When snap rects are read Then lines follow where the browser places the tracks", () => {
@@ -207,7 +207,7 @@ describe("snap rects bridge", () => {
 
 describe("snap rects parsing", () => {
   const box = { left: 1, top: 2, width: 3, height: 4 };
-  const valid = { self: { ...box, rotation: 0, boxWidth: 3, boxHeight: 4, scaleX: 1, scaleY: 1 }, parent: { rect: box, content: box, display: "grid", columnLines: [{ start: 1, end: 2 }], rowLines: [] }, artboard: box, siblings: [{ bgId: "b", rect: box, label: "Card" }] };
+  const valid = { self: { ...box, rotation: 0, boxWidth: 3, boxHeight: 4, scaleX: 1, scaleY: 1, basis: [1, 0, 0, 1] }, parent: { rect: box, content: box, display: "grid", columnLines: [{ start: 1, end: 2 }], rowLines: [] }, artboard: box, siblings: [{ bgId: "b", rect: box, label: "Card" }] };
 
   test("Given a well-formed answer When parsed Then it passes through, and a missing parent or artboard stays null", () => {
     expect(parseFrameSnapRects(valid)).toEqual(valid);
@@ -220,6 +220,9 @@ describe("snap rects parsing", () => {
       null, "text", [],
       { ...valid, self: { ...box, left: "1" } },
       { ...valid, self: { ...valid.self, rotation: Number.NaN } },
+      { ...valid, self: { ...valid.self, basis: [1, 0, 0] } },
+      { ...valid, self: { ...valid.self, basis: [1, 0, 0, Number.NaN] } },
+      { ...valid, self: { ...valid.self, basis: "1 0 0 1" } },
       { ...valid, parent: { ...valid.parent, content: { ...box, width: Number.POSITIVE_INFINITY } } },
       { ...valid, parent: { ...valid.parent, columnLines: [{ start: 1 }] } },
       { ...valid, parent: { ...valid.parent, columnLines: Array.from({ length: 202 }, () => ({ start: 0, end: 0 })) } },

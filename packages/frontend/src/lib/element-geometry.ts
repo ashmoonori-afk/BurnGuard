@@ -1,3 +1,4 @@
+import type { FrameRect } from "@/components/canvas/frame-bridge";
 import type { TweaksStyleKey, TweaksTarget } from "@/components/canvas/TweaksLayer";
 
 export const MAX_ELEMENT_SIZE = 16384;
@@ -78,23 +79,46 @@ export function translatePatch(x: number, y: number): Patch {
   return { translate: `${rounded(x)}px ${rounded(y)}px` };
 }
 
+export type OffsetBasis = FrameRect["basis"];
+
+/**
+ * A distance on screen, in iframe client pixels, as the element's own `translate` pixels. It undoes the transforms
+ * above the element and leaves out its own, because CSS applies `translate` outside them. No basis means none above.
+ */
+export function offsetDelta(basis: OffsetBasis, dx: number, dy: number): { x: number; y: number } {
+  const [a = 1, b = 0, c = 0, d = 1]: readonly number[] = Array.isArray(basis) ? basis : [];
+  const determinant = a * d - b * c;
+  // A flattened or unreadable basis moves nothing, instead of saving a wild number.
+  if (!(Math.abs(determinant) > 1e-9)) return { x: 0, y: 0 };
+  return { x: (d * dx - c * dy) / determinant, y: (a * dy - b * dx) / determinant };
+}
+
+/** One arrow-key step of `translate` pixels as the distance it covers on screen, along the screen's own axes. */
+export function nudgeTravel(basis: OffsetBasis, step: { x: number; y: number }): { x: number; y: number } {
+  const along = (x: number, y: number) => {
+    const own = offsetDelta(basis, x, y);
+    return 1 / (Math.hypot(own.x, own.y) || 1);
+  };
+  return { x: step.x * along(1, 0), y: step.y * along(0, 1) };
+}
+
 export type AlignMode = "left" | "center" | "right" | "top" | "middle" | "bottom";
 export const ALIGN_MODES: readonly AlignMode[] = ["left", "center", "right", "top", "middle", "bottom"];
 interface Box { left: number; top: number; width: number; height: number }
 
 /**
  * The offset that lines one side or the centre of the element up with its parent's content box. `rect` and `content`
- * are in iframe client pixels, `scale` is client pixels per CSS pixel of the element; the other axis keeps its offset.
+ * are in iframe client pixels; the element keeps its place along the other screen axis.
  */
-export function alignOffset(input: { mode: AlignMode; rect: Box; content: Box; offset: { x: number; y: number }; scaleX: number; scaleY: number }): { x: number; y: number } {
+export function alignOffset(input: { mode: AlignMode; rect: Box; content: Box; offset: { x: number; y: number }; basis: OffsetBasis }): { x: number; y: number } {
   const { mode, rect, content, offset } = input;
   const horizontal = mode === "left" || mode === "center" || mode === "right";
   const share = mode === "left" || mode === "top" ? 0 : mode === "center" || mode === "middle" ? 0.5 : 1;
   const travel = horizontal
     ? (content.left + content.width * share) - (rect.left + rect.width * share)
     : (content.top + content.height * share) - (rect.top + rect.height * share);
-  const rounded = (value: number) => Math.round(value * 100) / 100 || 0;
-  return horizontal
-    ? { x: rounded(offset.x + travel / (input.scaleX || 1)), y: offset.y }
-    : { x: offset.x, y: rounded(offset.y + travel / (input.scaleY || 1)) };
+  const moved = horizontal ? offsetDelta(input.basis, travel, 0) : offsetDelta(input.basis, 0, travel);
+  // An axis the travel does not touch keeps its saved value digit for digit.
+  const shifted = (saved: number, by: number) => by === 0 ? saved : Math.round((saved + by) * 100) / 100 || 0;
+  return { x: shifted(offset.x, moved.x), y: shifted(offset.y, moved.y) };
 }
