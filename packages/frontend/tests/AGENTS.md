@@ -10,7 +10,7 @@
 |------|----------|-------|
 | Transport/authority | `client.test.ts` | `apiFetch`, `authorizedFetch`, `bootstrapApiAuthority`; in the CI security list |
 | Artifact sandbox | `artifact-csp.test.ts` | `buildSandboxedArtifactSrcDoc` CSP guarantees; in the CI security list |
-| Real-browser behavior | `*.browser.test.ts` | `canvas-css-imports`, `deck-sandbox`; launch Chromium and need real opaque-iframe semantics |
+| Real-browser behavior | `*.browser.test.ts` | `canvas-css-imports`, `deck-sandbox`; launch Chromium and need real opaque-iframe semantics. `canvas-move` drags, nudges and aligns through the real Style overlay and bridge, saves with the backend's patch function and measures the saved page |
 | Browser page sources | `fixtures/*-browser.ts(x)` | Documents loaded by the browser suites; not test files themselves |
 | Creation flows | `project-creation.test.ts` (292), `graphic-project-creation.test.ts` (278) | Largest suites; cover `@/lib/project-creation` |
 | Localization | `i18n-locale.test.ts`, `i18n-messages.test.ts` | Locale resolution and pack key/locale completeness |

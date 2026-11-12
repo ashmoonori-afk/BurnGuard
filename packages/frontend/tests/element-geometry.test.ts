@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { ALIGN_MODES, alignOffset, ASPECT_PRESETS, aspectPresetValue, dimensionPatch, isAspectLocked, rotationPatch, targetDimensions, targetOffset, translatePatch } from "../src/lib/element-geometry";
+import { ALIGN_MODES, alignOffset, ASPECT_PRESETS, aspectPresetValue, dimensionPatch, isAspectLocked, nudgeTravel, offsetDelta, rotationPatch, targetDimensions, targetOffset, translatePatch } from "../src/lib/element-geometry";
 import type { TweaksTarget } from "../src/components/canvas/TweaksLayer";
 
 const target: TweaksTarget = { bg_id: "image", tag: "img", computed: { width: "180px", height: "80px", rotate: "0.25turn" }, inline: {}, geometry: { width: 200, height: 100 } };
@@ -50,7 +50,7 @@ test("Given an offset When the move patch is built Then only translate is writte
 });
 
 test("Given an element inside its parent's content box When aligned Then one side or centre lines up and the other axis keeps its offset", () => {
-  const input = { rect: { left: 100, top: 100, width: 60, height: 40 }, content: { left: 0, top: 0, width: 400, height: 300 }, offset: { x: 5, y: 5 }, scaleX: 1, scaleY: 1 };
+  const input = { rect: { left: 100, top: 100, width: 60, height: 40 }, content: { left: 0, top: 0, width: 400, height: 300 }, offset: { x: 5, y: 5 }, basis: undefined };
   const align = (mode: (typeof ALIGN_MODES)[number], overrides = {}) => alignOffset({ ...input, ...overrides, mode });
   expect(align("left")).toEqual({ x: -95, y: 5 });
   expect(align("center")).toEqual({ x: 75, y: 5 });
@@ -59,6 +59,20 @@ test("Given an element inside its parent's content box When aligned Then one sid
   expect(align("middle")).toEqual({ x: 5, y: 35 });
   expect(align("bottom")).toEqual({ x: 5, y: 165 });
   // In a slide scaled to 50%, 70 client px are 140 of the element's own pixels.
-  expect(align("center", { scaleX: 0.5, scaleY: 0.5 })).toEqual({ x: 145, y: 5 });
+  expect(align("center", { basis: [0.5, 0, 0, 0.5] })).toEqual({ x: 145, y: 5 });
+  // Under a parent turned a quarter, travel to the right on screen is travel up in the element's own pixels.
+  expect(align("left", { basis: [0, 1, -1, 0] })).toEqual({ x: 5, y: 105 });
+  expect(align("left", { offset: { x: 5, y: 1.2345 } })).toEqual({ x: -95, y: 1.2345 });
   expect(ALIGN_MODES).toEqual(["left", "center", "right", "top", "middle", "bottom"]);
+});
+
+test("Given the transforms above an element When a distance on screen is converted Then it comes back in the element's own translate pixels, and a flattened or unreadable basis moves nothing", () => {
+  expect(offsetDelta(undefined, 40, -8)).toEqual({ x: 40, y: -8 });
+  expect(offsetDelta([0.5, 0, 0, 0.5], 40, -8)).toEqual({ x: 80, y: -16 });
+  // A quarter turn: right on screen is up for the element.
+  expect(offsetDelta([0, 1, -1, 0], 40, 0)).toEqual({ x: 0, y: -40 });
+  expect(offsetDelta([2, 0, 0, 0], 40, 8)).toEqual({ x: 0, y: 0 });
+  expect(offsetDelta([Number.NaN, 0, 0, 1], 40, 8)).toEqual({ x: 0, y: 0 });
+  expect(offsetDelta(JSON.parse('"1 0 0 1"'), 40, 8)).toEqual({ x: 40, y: 8 });
+  expect(nudgeTravel([0, 3, -0.5, 0], { x: 1, y: 10 })).toEqual({ x: 0.5, y: 30 });
 });

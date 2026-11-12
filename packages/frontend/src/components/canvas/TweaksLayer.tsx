@@ -23,7 +23,7 @@ import {
   type FrameSnapRects,
 } from "./frame-bridge";
 import { useFrameElementRect } from "@/hooks/useFrameElementRect";
-import { alignOffset, targetDimensions, targetOffset, translatePatch, dimensionPatch, rotationPatch, isAspectLocked, type AlignMode } from "@/lib/element-geometry";
+import { alignOffset, nudgeTravel, targetDimensions, targetOffset, translatePatch, dimensionPatch, rotationPatch, isAspectLocked, type AlignMode } from "@/lib/element-geometry";
 import type { FileArtifactIdentity } from "@/lib/artifact-identity";
 import { arrowStep, beginMoveGesture, type MoveGesture } from "@/lib/move-gesture";
 import { primaryGuides, snapGuideChip, snapGuideStatus } from "@/lib/snap-guides";
@@ -289,7 +289,7 @@ export default function TweaksLayer({
     const next: DragState = { bgId: target.bg_id, x, y, rect: selectionBox(selectedRect), kind: "move", patch: {}, identity, session: null, names: new Map(), bbox: selectedRect, candidates: null };
     const sources = loadSnapRects(target.bg_id, next);
     // Without a readable pixel offset or an identity the press still selects what is under the pointer, but does not move.
-    if (offset && identity) next.session = beginMoveGesture({ rect: selectedRect, rotation: selectedRect.rotation ?? 0, scaleX: selectedRect.scaleX ?? 1, scaleY: selectedRect.scaleY ?? 1, offset, zoom, sources, identity });
+    if (offset && identity) next.session = beginMoveGesture({ rect: selectedRect, rotation: selectedRect.rotation ?? 0, basis: selectedRect.basis, offset, zoom, sources, identity });
     drag.current = next;
     setGuides(NO_GUIDES);
   };
@@ -329,7 +329,7 @@ export default function TweaksLayer({
       if (!offset || !identity) return;
       const next: DragState = { bgId: target.bg_id, x: 0, y: 0, rect: selectionBox(selectedRect), kind: "nudge", patch: {}, identity, session: null, names: new Map(), bbox: selectedRect, candidates: null, keys: new Set() };
       next.ready = loadSnapRects(target.bg_id, next);
-      next.session = beginMoveGesture({ rect: selectedRect, rotation: selectedRect.rotation ?? 0, scaleX: selectedRect.scaleX ?? 1, scaleY: selectedRect.scaleY ?? 1, offset, zoom, clickThresholdScreenPx: 0, sources: next.ready, identity });
+      next.session = beginMoveGesture({ rect: selectedRect, rotation: selectedRect.rotation ?? 0, basis: selectedRect.basis, offset, zoom, clickThresholdScreenPx: 0, sources: next.ready, identity });
       drag.current = next;
       setGuides(NO_GUIDES);
     }
@@ -354,7 +354,8 @@ export default function TweaksLayer({
         if (jump !== 0) travel(axis === "x" ? jump : 0, axis === "y" ? jump : 0);
       });
     } else {
-      travel(step.x * (current.rect.scaleX || 1), step.y * (current.rect.scaleY || 1));
+      const onScreen = nudgeTravel(current.rect.basis, step);
+      travel(onScreen.x, onScreen.y);
     }
   };
   const commitNudge = () => {
@@ -381,7 +382,7 @@ export default function TweaksLayer({
       if (!offset) return;
       void requestFrameSnapRects(iframeRef.current, target.bg_id).then((rects) => {
         if (!rects?.parent) return;
-        const next = alignOffset({ mode, rect: rects.self, content: rects.parent.content, offset, scaleX: rects.self.scaleX ?? 1, scaleY: rects.self.scaleY ?? 1 });
+        const next = alignOffset({ mode, rect: rects.self, content: rects.parent.content, offset, basis: rects.self.basis });
         // A panel button commits at once, so the identity is read at save time.
         if (next.x !== offset.x || next.y !== offset.y) onApply(translatePatch(next.x, next.y));
       });

@@ -1,0 +1,19 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Canvas move cases</title>
+<style>body{margin:0;font-family:system-ui,sans-serif}
+.box{width:60px;height:40px;background:#60a5fa}
+.plain{position:absolute;left:40px;top:40px}
+.half{position:absolute;left:40px;top:140px;width:600px;height:200px;background:#eee;transform:scale(.5);transform-origin:0 0}
+.inhalf{position:absolute;left:80px;top:60px}
+.pad{position:absolute;left:40px;top:300px;width:400px;height:200px;padding:20px;border:2px solid #999;box-sizing:border-box}
+.zoomed{margin:60px;transform:scale(2)}
+.skew{position:absolute;left:620px;top:120px;width:300px;height:160px;background:#eee;transform:rotate(30deg) scale(2,.5)}
+.inskew{position:absolute;left:120px;top:60px}
+.turned{position:absolute;left:1150px;top:100px;rotate:45deg;transform:scale(1.5)}
+.frame{position:absolute;left:620px;top:500px;width:300px;height:160px;background:#eee;transform:rotate(90deg)}
+.inframe{position:absolute;left:30px;top:20px}</style></head>
+<body><div class="box plain"></div>
+<div class="half"><div class="box inhalf"></div></div>
+<div class="pad"><div class="box zoomed"></div></div>
+<div class="skew"><div class="box inskew"></div></div>
+<div class="box turned"></div>
+<div class="frame"><div class="box inframe"></div></div></body></html>

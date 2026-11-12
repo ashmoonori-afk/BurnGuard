@@ -8,7 +8,7 @@ import { canvasPoint } from "../src/components/canvas/canvas-coordinates";
 import { buildCommentEditRequest, commentEditDisplayText, saveAndRequestCommentEdit } from "../src/components/modes/comment-edit-request";
 import { parseLocalFonts, type Comment } from "@bg/shared";
 import { identityForPatch, type FileArtifactIdentity } from "../src/lib/artifact-identity";
-import { dimensionPatch, rotationPatch, translatePatch } from "../src/lib/element-geometry";
+import { dimensionPatch, nudgeTravel, rotationPatch, translatePatch } from "../src/lib/element-geometry";
 import { heldGuides, snapResize, snapRotate } from "../src/lib/resize-gesture";
 import { collectCandidates } from "../src/lib/snap-engine";
 import type { TweaksTarget } from "../src/components/canvas/TweaksLayer";
@@ -98,11 +98,12 @@ const NEIGHBOUR: SnapSources = { parent: null, artboard: null, siblings: [{ bgId
 
 /** A move gesture on a 60 x 40 box at 100,100 whose snap rects have already arrived unless `sources` says otherwise. */
 async function moveGesture(overrides: Partial<MoveGestureStart<FileArtifactIdentity>> = {}) {
-  const start: MoveGestureStart<FileArtifactIdentity> = { rect: { left: 100, top: 100, width: 60, height: 40 }, rotation: 0, scaleX: 1, scaleY: 1, offset: { x: 0, y: 0 }, zoom: 1, sources: Promise.resolve(NEIGHBOUR), identity: Promise.resolve(identityAt(1)), ...overrides };
+  const start: MoveGestureStart<FileArtifactIdentity> = { rect: { left: 100, top: 100, width: 60, height: 40 }, rotation: 0, basis: undefined, offset: { x: 0, y: 0 }, zoom: 1, sources: Promise.resolve(NEIGHBOUR), identity: Promise.resolve(identityAt(1)), ...overrides };
   const gesture = beginMoveGesture(start);
   await start.sources.catch(() => null);
   return gesture;
 }
+const HALF = [0.5, 0, 0, 0.5] as const;
 const pointer = (dx: number, dy = 0, options: { magnet?: boolean; paused?: boolean } = {}) => ({ dx, dy, magnet: true, paused: false, ...options });
 
 test("Given a press that travels 2 px When released Then it is a click and nothing is saved", async () => {
@@ -155,7 +156,7 @@ test("Given a drag that returns to its start When released Then nothing is saved
 });
 
 test("Given a saved offset, a slide scaled to 50% and a 200% zoom When dragging Then the offset is in the element's own pixels and the click threshold stays 3 screen px", async () => {
-  const scaled = await moveGesture({ offset: { x: 10, y: -5 }, scaleX: 0.5, scaleY: 0.5, sources: Promise.resolve(null) });
+  const scaled = await moveGesture({ offset: { x: 10, y: -5 }, basis: HALF, sources: Promise.resolve(null) });
   scaled.update(pointer(40, 20));
   expect(scaled.release()!.offset).toEqual({ x: 90, y: 35 });
   const zoomed = await moveGesture({ zoom: 2, sources: Promise.resolve(null) });
@@ -168,7 +169,7 @@ test("Given a saved offset, a slide scaled to 50% and a 200% zoom When dragging 
 });
 
 test("Given snap rects that never arrive or fail When dragging Then the element still moves without locking", async () => {
-  const pending = beginMoveGesture({ rect: { left: 100, top: 100, width: 60, height: 40 }, rotation: 0, scaleX: 1, scaleY: 1, offset: { x: 0, y: 0 }, zoom: 1, sources: new Promise(() => undefined), identity: Promise.resolve(identityAt(1)) });
+  const pending = beginMoveGesture({ rect: { left: 100, top: 100, width: 60, height: 40 }, rotation: 0, basis: undefined, offset: { x: 0, y: 0 }, zoom: 1, sources: new Promise(() => undefined), identity: Promise.resolve(identityAt(1)) });
   expect(pending.update(pointer(100))).toMatchObject({ guides: [], rect: { left: 200 } });
   const failed = await moveGesture({ sources: Promise.reject(new Error("bridge_failed")) });
   expect(failed.update(pointer(100))).toMatchObject({ guides: [], rect: { left: 200 } });
@@ -294,12 +295,12 @@ test("Given Alt or Option with an arrow When the next line is asked Then the bur
   burst.update({ ...pointer(first), reachPx: 0.01 });
   expect(burst.nextLine("x", 1)).toBe(30);
   expect(burst.nextLine("x", -1)).toBe(0);
-  const early = beginMoveGesture({ rect: { left: 100, top: 100, width: 60, height: 40 }, rotation: 0, scaleX: 1, scaleY: 1, offset: { x: 0, y: 0 }, zoom: 1, clickThresholdScreenPx: 0, sources: new Promise(() => undefined), identity: Promise.resolve(identityAt(1)) });
+  const early = beginMoveGesture({ rect: { left: 100, top: 100, width: 60, height: 40 }, rotation: 0, basis: undefined, offset: { x: 0, y: 0 }, zoom: 1, clickThresholdScreenPx: 0, sources: new Promise(() => undefined), identity: Promise.resolve(identityAt(1)) });
   expect(early.nextLine("x", 1)).toBe(0);
 });
 
 test("Given a slide scaled to 50% When one arrow press travels half a client pixel Then the saved offset moves one whole pixel", async () => {
-  const burst = await moveGesture({ clickThresholdScreenPx: 0, scaleX: 0.5, scaleY: 0.5, sources: Promise.resolve(null) });
-  burst.update(pointer(arrowStep("ArrowRight", false)!.x * 0.5));
+  const burst = await moveGesture({ clickThresholdScreenPx: 0, basis: HALF, sources: Promise.resolve(null) });
+  burst.update(pointer(nudgeTravel(HALF, arrowStep("ArrowRight", false)!).x));
   expect(burst.release()!.offset).toEqual({ x: 1, y: 0 });
 });
