@@ -32,18 +32,33 @@ export function UnverifiedDraftBadge({ state }: { state: UnverifiedDraftStateV1 
   return <span role="status" data-unverified-draft={state.reason} title={t("canvas.draft.unverifiedDetail", { count: state.incomplete_checks.length, date: new Date(state.retained_until).toLocaleString(localeTag(locale)) })} className="h-9 shrink-0 rounded border border-destructive px-2 text-xs leading-9 text-destructive">{t("canvas.draft.unverified")}</span>;
 }
 
-export default function ArtifactHistory({ projectId, history, disabled, onRestore, onReapply, onRecoverDraft }: { projectId: string; history: ArtifactHistoryV1 | null | undefined; disabled: boolean; onRestore: (operationId: string) => Promise<void>; onReapply: (operationId: string) => Promise<void>; onRecoverDraft: (operationId: string) => Promise<void> }) {
+/**
+ * Whether the dialog opens by itself for a comparison it has not shown yet. It stays closed (`quiet`) for a revision
+ * the person just made by hand on the canvas: they watched the change happen, and a dialog there would take the
+ * keyboard away from the next drag or key press. A comparison from anywhere else, such as an AI turn, still opens it.
+ * So does a refused out-of-scope change: it leaves the revision where the hand edit put it, so `quiet` cannot tell it apart.
+ */
+export function historyOpensItself(input: { hasComparison: boolean; previousId: string | null; currentId: string | null; quiet: boolean; refused: boolean }): boolean {
+  if (!input.hasComparison || input.currentId === null || input.previousId === null || input.previousId === input.currentId) return false;
+  return input.refused || !input.quiet;
+}
+
+export default function ArtifactHistory({ projectId, history, disabled, quiet = false, onRestore, onReapply, onRecoverDraft }: { projectId: string; history: ArtifactHistoryV1 | null | undefined; disabled: boolean; /** True while a direct canvas edit is being saved and for the revision it produced: the dialog does not open by itself. */ quiet?: boolean; onRestore: (operationId: string) => Promise<void>; onReapply: (operationId: string) => Promise<void>; onRecoverDraft: (operationId: string) => Promise<void> }) {
   const t = useT();
   const [open, setOpen] = useState(false), [selected, setSelected] = useState("");
   const locale = useLocaleStore((state) => state.locale);
   const entry = history?.entries.find(item => item.operation_id === selected);
   const lastComparison = useRef<string | null>(null);
+  // Read when a new comparison arrives; a later change of `quiet` alone must not reopen an old comparison.
+  const quietNow = useRef(quiet);
+  quietNow.current = quiet;
   const comparison = history?.scope_violation?.comparison ?? history?.latest_comparison;
   const comparisonId = history?.scope_violation?.operation_id ?? (history ? `${history.current_revision}:${comparison?.result_digest ?? ""}` : null);
+  const refused = Boolean(history?.scope_violation);
   useEffect(() => {
-    if (comparison && comparisonId !== null && lastComparison.current !== null && lastComparison.current !== comparisonId) setOpen(true);
+    if (historyOpensItself({ hasComparison: Boolean(comparison), previousId: lastComparison.current, currentId: comparisonId, quiet: quietNow.current, refused })) setOpen(true);
     if (comparisonId !== null) lastComparison.current = comparisonId;
-  }, [comparison, comparisonId]);
+  }, [comparison, comparisonId, refused]);
   return <Dialog open={open} onOpenChange={setOpen}>
     <DialogTrigger asChild><button type="button" disabled={disabled || !history} className="h-9 shrink-0 rounded px-2 text-xs text-muted-foreground hover:bg-muted disabled:opacity-50">{t("canvas.history.title")}</button></DialogTrigger>
     <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto"><DialogHeader><DialogTitle>{t("canvas.history.restoreTitle")}</DialogTitle><DialogDescription>{t("canvas.history.description")}</DialogDescription></DialogHeader>
