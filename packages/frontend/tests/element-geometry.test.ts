@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { ALIGN_MODES, alignOffset, ASPECT_PRESETS, aspectPresetValue, dimensionPatch, isAspectLocked, nudgeTravel, offsetDelta, rotationPatch, targetDimensions, targetOffset, translatePatch } from "../src/lib/element-geometry";
+import { ALIGN_MODES, alignOffset, ASPECT_PRESETS, aspectPresetValue, dimensionPatch, isAspectLocked, moveRefusal, nudgeTravel, offsetDelta, rotationPatch, targetDimensions, targetOffset, translatePatch } from "../src/lib/element-geometry";
 import type { TweaksTarget } from "../src/components/canvas/TweaksLayer";
 
 const target: TweaksTarget = { bg_id: "image", tag: "img", computed: { width: "180px", height: "80px", rotate: "0.25turn" }, inline: {}, geometry: { width: 200, height: 100 } };
@@ -75,4 +75,14 @@ test("Given the transforms above an element When a distance on screen is convert
   expect(offsetDelta([Number.NaN, 0, 0, 1], 40, 8)).toEqual({ x: 0, y: 0 });
   expect(offsetDelta(JSON.parse('"1 0 0 1"'), 40, 8)).toEqual({ x: 40, y: 8 });
   expect(nudgeTravel([0, 3, -0.5, 0], { x: 1, y: 10 })).toEqual({ x: 0.5, y: 30 });
+});
+
+test("Given what the canvas read of an element When the move tools are asked Then text in a line and a non-pixel offset are refused by name, and a resize that gave the text its own box lifts the refusal", () => {
+  const text: TweaksTarget = { ...target, tag: "span", inLine: true, computed: { display: "inline" } };
+  expect(moveRefusal(target)).toBeNull();
+  expect(moveRefusal(text)).toBe("line");
+  expect(targetOffset(text)).toBeNull();
+  expect(moveRefusal({ ...text, inline: { display: "inline-block" } })).toBeNull();
+  expect(moveRefusal({ ...text, inline: { display: "inline", translate: "10% 0px" } })).toBe("line");
+  expect(moveRefusal({ ...target, inline: { translate: "10% 0px" } })).toBe("unit");
 });

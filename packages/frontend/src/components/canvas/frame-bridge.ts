@@ -78,6 +78,8 @@ export interface FrameBgHit {
   hasBlockChildren?: boolean;
   /** True inside a deck slide, where the audit's text floor is 24px instead of 12px. */
   inSlide?: boolean;
+  /** True for plain text inside a line (a non-replaced inline box): CSS transforms, and so a move, do not apply to it. */
+  inLine?: boolean;
   attributes: Record<string, string>;
   computed: Record<string, string>;
   inline: Record<string, string>;
@@ -840,6 +842,15 @@ const BRIDGE_SCRIPT = String.raw`(function () {
     return { self: elementRect(node), parent: parentInfo, artboard: board ? plainRect(board) : null, siblings: siblings };
   }
 
+  // CSS transforms do not apply to a non-replaced inline box, so translate cannot move it. Pictures and other
+  // replaced elements are drawn as one box even in a line, and SVG and MathML elements follow their own rules.
+  function inLine(node) {
+    if (node.namespaceURI && node.namespaceURI !== "http://www.w3.org/1999/xhtml") return false;
+    var display = "";
+    try { display = String(window.getComputedStyle(node).getPropertyValue("display") || ""); } catch (e) { return false; }
+    return display === "inline" && !/^(img|video|canvas|iframe|embed|object|audio)$/i.test(String(node.tagName || ""));
+  }
+
   // The parent as the layout panels need it; the page's root elements have none.
   function parentFacts(node) {
     var parent = node.parentElement;
@@ -995,6 +1006,7 @@ const BRIDGE_SCRIPT = String.raw`(function () {
         text: String(bgNode.textContent || ""),
         hasBlockChildren: !!(bgNode.querySelector && bgNode.querySelector(":not(span,em,strong,br,i,b,u,s,small,sup,sub,mark,code)")),
         inSlide: !!bgNode.closest("[data-slide]"),
+        inLine: inLine(bgNode),
         attributes: readAttributes(bgNode),
         computed: readComputed(bgNode),
         inline: readInline(bgNode),

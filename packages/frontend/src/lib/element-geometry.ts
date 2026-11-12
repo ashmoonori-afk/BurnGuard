@@ -1,5 +1,6 @@
 import type { FrameRect } from "@/components/canvas/frame-bridge";
 import type { TweaksStyleKey, TweaksTarget } from "@/components/canvas/TweaksLayer";
+import type { MessageKey } from "@/i18n/t";
 
 export const MAX_ELEMENT_SIZE = 16384;
 type Patch = Partial<Record<TweaksStyleKey, string | null>>;
@@ -61,11 +62,29 @@ export function rotationPatch(degrees: number): Patch {
   return { rotate: `${rotation}deg` };
 }
 
+/** Still plain text in its line: a resize gives it a box of its own (`display: inline-block`), and then it can move. */
+const staysInLine = (target: TweaksTarget) => target.inLine === true && (target.inline.display ?? target.computed.display) === "inline";
+
+export type MoveRefusal = "line" | "unit";
+/** The sentence that says why, shown on the Move surface and in the panel's Position section. */
+export const MOVE_REFUSAL_MESSAGES = {
+  line: "modes.tweaks.positionInLine",
+  unit: "modes.tweaks.positionUnsupported",
+} as const satisfies Record<MoveRefusal, MessageKey>;
+
+/** Why the move tools leave this element where it is, or null when they can move it. */
+export function moveRefusal(target: TweaksTarget): MoveRefusal | null {
+  if (staysInLine(target)) return "line";
+  return targetOffset(target) === null ? "unit" : null;
+}
+
 /**
  * The element's saved offset from where the page lays it out, read from the CSS `translate` property. Null when the
- * authored value is not plain pixels (a percentage or `calc()`), which the move tools leave untouched.
+ * move tools leave the element untouched: its authored value is not plain pixels (a percentage or `calc()`), or it
+ * is plain text inside a line, which the browser does not move for a `translate`.
  */
 export function targetOffset(target: TweaksTarget): { x: number; y: number } | null {
+  if (staysInLine(target)) return null;
   const raw = (target.inline.translate ?? target.computed.translate ?? "none").trim();
   if (raw === "" || raw === "none") return { x: 0, y: 0 };
   const match = raw.match(/^(-?\d+(?:\.\d+)?)px(?:\s+(-?\d+(?:\.\d+)?)px)?(?:\s+0(?:px)?)?$/);

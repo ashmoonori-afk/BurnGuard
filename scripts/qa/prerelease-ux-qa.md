@@ -53,7 +53,7 @@ Journeys (apply only what exists in the build; do not assume features):
 | J05 | Update the design-system pin | Project, system update notice | New revision pinned; next turn uses it; the change is explained |
 | J06 | Export | Export panel | File produced and downloadable; progress and failure states are clear |
 | J07 | Recover a failed or interrupted turn | Interrupt a running turn, or a provider failure | The failure is explained; retry works; no half-written output is shown as done |
-| J08 | Line up an element by hand | Project canvas, Style mode | The element moves by drag and by arrow keys; each lock is named beside it and in the panel; the saved change is one undo step and nothing else in the file changed |
+| J08 | Line up an element by hand | Project canvas, Style mode | The element moves by drag and by arrow keys; each lock is named beside it and in the panel; the saved change is one undo step and writes only that element's `translate` (a save may also add editing ids to elements that had none); text inside a line is refused before the drag, with the reason in the panel |
 
 For each journey record: goal, entry, main actions and branches, success end state, preconditions and test data, and
 status: verified / partly verified / blocked / not applicable.

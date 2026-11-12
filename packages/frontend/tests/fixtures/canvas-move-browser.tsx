@@ -1,9 +1,10 @@
 import { useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
-import TweaksLayer, { type TweaksLayerActions, type TweaksStyleKey, type TweaksTarget } from "../../src/components/canvas/TweaksLayer";
-import { buildSandboxedArtifactSrcDoc } from "../../src/components/canvas/frame-bridge";
-import type { AlignMode } from "../../src/lib/element-geometry";
+import TweaksLayer, { tweaksTargetFromHit, type TweaksLayerActions, type TweaksStyleKey, type TweaksTarget } from "../../src/components/canvas/TweaksLayer";
+import { buildSandboxedArtifactSrcDoc, requestFrameBgAtPoint } from "../../src/components/canvas/frame-bridge";
+import { PositionSection } from "../../src/components/modes/TweaksPanel";
+import { moveRefusal, type AlignMode, type MoveRefusal } from "../../src/lib/element-geometry";
 
 type Patch = Partial<Record<TweaksStyleKey, string | null>>;
 interface Box { x: number; y: number; width: number; height: number }
@@ -17,6 +18,10 @@ declare global {
     preview(): Promise<Box>;
     /** The styles of the save after `arm`, once the saved page is on screen again. */
     saved(): Promise<Patch>;
+    /** How many saves the overlay has asked for since the page was mounted. */
+    saves(): number;
+    /** What the canvas would select at this point of the frame, and whether the move tools refuse it. */
+    refusalAt(x: number, y: number): Promise<{ tag: string; refusal: MoveRefusal | null } | null>;
     align(mode: AlignMode): void;
   };
 }
@@ -26,6 +31,8 @@ const container = document.getElementById("root");
 if (!container) throw new Error("canvas_move_root_missing");
 const root = createRoot(container);
 const actions: { current: TweaksLayerActions | null } = { current: null };
+let saves = 0;
+let frame: HTMLIFrameElement | null = null;
 let onLoad: (() => void) | null = null;
 let onSaved: ((patch: Patch) => void) | null = null;
 let armed: { preview: Promise<Box>; saved: Promise<Patch> } | null = null;
@@ -41,13 +48,14 @@ function awaited<T>(name: string, subscribe: (resolve: (value: T) => void) => ()
 }
 
 function Harness({ html, zoom }: { html: string; zoom: number }) {
-  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [page, setPage] = useState({ html, version: 0 });
   const [target, setTarget] = useState<TweaksTarget | null>(null);
   const [pending, setPending] = useState<Patch | null>(null);
   // The canvas does the same: it saves, then shows the saved file and the styles it now carries.
   const apply = (patch: Patch) => {
     if (!target) return;
+    saves += 1;
     setPending(patch);
     void fetch("/save", { method: "POST", body: JSON.stringify({ node_bg_id: target.bg_id, styles: patch }) })
       .then((response) => response.text())
@@ -64,7 +72,7 @@ function Harness({ html, zoom }: { html: string; zoom: number }) {
   return (
     <div style={{ position: "fixed", inset: 0, overflow: "hidden" }}>
       <div style={{ position: "absolute", left: 0, top: 0, width: `${100 / zoom}%`, height: `${100 / zoom}%`, transform: `scale(${zoom})`, transformOrigin: "0 0" }}>
-        <iframe ref={iframeRef} key={page.version} title="canvas" sandbox="allow-scripts" className="absolute inset-0 h-full w-full border-0 bg-background"
+        <iframe ref={(element) => { iframeRef.current = element; frame = element; }} key={page.version} title="canvas" sandbox="allow-scripts" className="absolute inset-0 h-full w-full border-0 bg-background"
           srcDoc={buildSandboxedArtifactSrcDoc(page.html, new URL("/page.html", window.location.href).toString())}
           onLoad={() => {
             onLoad?.();
@@ -77,6 +85,9 @@ function Harness({ html, zoom }: { html: string; zoom: number }) {
           readIdentity={async () => ({ expected_revision: 1, expected_artifact_digest: "digest", expected_file_hash: "hash", node_fingerprint: "node" })}
           actionsRef={actions} />
       </div>
+      {target && <aside style={{ position: "absolute", right: 0, bottom: 0, width: 320, pointerEvents: "none" }}>
+        <PositionSection target={target} moving={null} saving={pending !== null} onApply={apply} />
+      </aside>}
     </div>
   );
 }
@@ -106,6 +117,11 @@ globalThis.canvasMoveTest = {
   },
   preview: () => armed?.preview ?? Promise.reject(new Error("canvas_move_not_armed")),
   saved: () => armed?.saved ?? Promise.reject(new Error("canvas_move_not_armed")),
+  saves: () => saves,
+  async refusalAt(x, y) {
+    const target = tweaksTargetFromHit(await requestFrameBgAtPoint(frame, x, y));
+    return target && { tag: target.tag, refusal: moveRefusal(target) };
+  },
   align(mode) {
     if (!actions.current) throw new Error("canvas_move_actions_missing");
     actions.current.align(mode);
