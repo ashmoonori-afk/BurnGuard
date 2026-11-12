@@ -343,9 +343,7 @@ export async function requestFrameBgAtPoint(
   x: number,
   y: number,
 ): Promise<FrameBgHit | null> {
-  return (await requestFrameBridge(iframe, "hit-bg", { x, y })) as
-    | FrameBgHit
-    | null;
+  return parseFrameBgHit(await requestFrameBridge(iframe, "hit-bg", { x, y }));
 }
 
 export async function watchFrameComments(iframe: HTMLIFrameElement | null, comments: Comment[]): Promise<FrameCommentPositions | null> {
@@ -366,9 +364,7 @@ export async function requestFrameRectForSelector(
   iframe: HTMLIFrameElement | null,
   selector: string,
 ): Promise<FrameRect | null> {
-  return (await requestFrameBridge(iframe, "rect-selector", {
-    selector,
-  })) as FrameRect | null;
+  return parseFrameRect(await requestFrameBridge(iframe, "rect-selector", { selector }));
 }
 
 /** Scrolls the matched element into view and answers with its rect. */
@@ -423,9 +419,7 @@ export async function requestFrameRectForBgId(
   iframe: HTMLIFrameElement | null,
   bgId: string,
 ): Promise<FrameRect | null> {
-  return (await requestFrameBridge(iframe, "rect-bg", {
-    bgId,
-  })) as FrameRect | null;
+  return parseFrameRect(await requestFrameBridge(iframe, "rect-bg", { bgId }));
 }
 
 const isFiniteNumber = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
@@ -434,6 +428,72 @@ function parseFrameBox(value: unknown): FrameBox | null {
   if (value === null || typeof value !== "object") return null;
   const { left, top, width, height } = value as Record<string, unknown>;
   return isFiniteNumber(left) && isFiniteNumber(top) && isFiniteNumber(width) && isFiniteNumber(height) && width >= 0 && height >= 0 ? { left, top, width, height } : null;
+}
+
+/**
+ * One rectangle from the frame, all or nothing: finite numbers only, and a basis of exactly four of them. Every
+ * rectangle the canvas uses passes through here, because the sandboxed document can run authored script and answer in
+ * the bridge's place.
+ */
+export function parseFrameRect(value: unknown): FrameRect | null {
+  const box = parseFrameBox(value);
+  if (!box) return null;
+  const source = value as Record<string, unknown>;
+  const rect: FrameRect = { ...box };
+  for (const key of ["rotation", "boxWidth", "boxHeight", "scaleX", "scaleY"] as const) {
+    const entry = source[key];
+    if (entry === undefined) continue;
+    if (!isFiniteNumber(entry)) return null;
+    rect[key] = entry;
+  }
+  const basis: unknown = source.basis;
+  if (basis !== undefined) {
+    // Index by index: `every` skips the holes of a sparse array.
+    if (!Array.isArray(basis) || basis.length !== 4) return null;
+    const [a, b, c, d]: unknown[] = basis;
+    if (!isFiniteNumber(a) || !isFiniteNumber(b) || !isFiniteNumber(c) || !isFiniteNumber(d)) return null;
+    rect.basis = [a, b, c, d];
+  }
+  return rect;
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === "object" && !Array.isArray(value);
+const isTextOrNull = (value: unknown): value is string | null => value === null || typeof value === "string";
+const isFlagOrAbsent = (value: unknown): value is boolean | undefined => value === undefined || typeof value === "boolean";
+
+function parseStringMap(value: unknown): Record<string, string> | null {
+  if (!isRecord(value)) return null;
+  const map: Record<string, string> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (typeof entry !== "string") return null;
+    map[key] = entry;
+  }
+  return map;
+}
+
+/**
+ * What the frame says is under a point, all or nothing like its rectangles: a style or attribute that is not a
+ * string, a flag that is not a boolean or a malformed rectangle drops the whole answer, so nothing is selected.
+ */
+export function parseFrameBgHit(payload: unknown): FrameBgHit | null {
+  if (!isRecord(payload)) return null;
+  const { bgId, tag, text, hasBlockChildren, inSlide, inLine, geometry } = payload;
+  const rect = payload.rect === null ? null : parseFrameRect(payload.rect);
+  const attributes = parseStringMap(payload.attributes), computed = parseStringMap(payload.computed), inline = parseStringMap(payload.inline);
+  if ((payload.rect !== null && !rect) || !attributes || !computed || !inline) return null;
+  if (!isTextOrNull(bgId) || !isTextOrNull(tag) || !isTextOrNull(text) || (bgId !== null && bgId.length > 256)) return null;
+  if (!isFlagOrAbsent(hasBlockChildren) || !isFlagOrAbsent(inSlide) || !isFlagOrAbsent(inLine)) return null;
+  const facts = payload as Pick<FrameBgHit, "childCount" | "siblingCount" | "parent" | "image">;
+  const hit: FrameBgHit = { rect, bgId, tag, text, attributes, computed, inline, ...frameHitLayout(facts), image: frameHitImage(facts) };
+  if (hasBlockChildren !== undefined) hit.hasBlockChildren = hasBlockChildren;
+  if (inSlide !== undefined) hit.inSlide = inSlide;
+  if (inLine !== undefined) hit.inLine = inLine;
+  // An element without an offset box (an SVG shape) sends no size; a size of the wrong type is malformed.
+  if (geometry !== undefined) {
+    if (!isRecord(geometry) || !isFiniteNumber(geometry.width) || !isFiniteNumber(geometry.height)) return null;
+    hit.geometry = { width: geometry.width, height: geometry.height };
+  }
+  return hit;
 }
 
 function parseFrameGridLines(value: unknown): FrameGridLine[] | null {
@@ -454,20 +514,8 @@ function parseFrameGridLines(value: unknown): FrameGridLine[] | null {
 export function parseFrameSnapRects(payload: unknown): FrameSnapRects | null {
   if (payload === null || typeof payload !== "object" || Array.isArray(payload)) return null;
   const source = payload as Record<string, unknown>;
-  const selfBox = parseFrameBox(source.self);
-  if (!selfBox) return null;
-  const self: FrameRect = { ...selfBox };
-  for (const key of ["rotation", "boxWidth", "boxHeight", "scaleX", "scaleY"] as const) {
-    const value = (source.self as Record<string, unknown>)[key];
-    if (value === undefined) continue;
-    if (!isFiniteNumber(value)) return null;
-    self[key] = value;
-  }
-  const basis = (source.self as Record<string, unknown>).basis;
-  if (basis !== undefined) {
-    if (!Array.isArray(basis) || basis.length !== 4 || !basis.every(isFiniteNumber)) return null;
-    self.basis = [basis[0], basis[1], basis[2], basis[3]];
-  }
+  const self = parseFrameRect(source.self);
+  if (!self) return null;
   let parent: FrameSnapRects["parent"] = null;
   if (source.parent !== null) {
     const raw = (source.parent ?? {}) as Record<string, unknown>;
@@ -620,10 +668,13 @@ const BRIDGE_SCRIPT = String.raw`(function () {
     // CSS applies translate outside the element's own rotate and transform, so a move needs only what is above it.
     var above = transformsFrom(node.parentElement);
     var scaleX = Math.hypot(matrix.a, matrix.b), scaleY = Math.hypot(matrix.c, matrix.d);
-    return { left: rect.left, top: rect.top, width: rect.width, height: rect.height,
+    var answer = { left: rect.left, top: rect.top, width: rect.width, height: rect.height,
       rotation: Math.atan2(matrix.b, matrix.a) * 180 / Math.PI,
-      boxWidth: node.offsetWidth * scaleX, boxHeight: node.offsetHeight * scaleY,
       scaleX: scaleX, scaleY: scaleY, basis: [above.a, above.b, above.c, above.d] };
+    // An SVG shape has no offset box: it sends no box size, and the canvas falls back to its drawn rectangle.
+    var boxWidth = node.offsetWidth * scaleX, boxHeight = node.offsetHeight * scaleY;
+    if (isFinite(boxWidth) && isFinite(boxHeight)) { answer.boxWidth = boxWidth; answer.boxHeight = boxHeight; }
+    return answer;
   }
 
   function toRect(node) {
@@ -1000,7 +1051,7 @@ const BRIDGE_SCRIPT = String.raw`(function () {
       var bgNode = rawNode && rawNode.closest ? rawNode.closest("[data-bg-node-id]") : null;
       response = bgNode ? {
         rect: elementRect(bgNode),
-        geometry: { width: bgNode.offsetWidth, height: bgNode.offsetHeight },
+        geometry: typeof bgNode.offsetWidth === "number" ? { width: bgNode.offsetWidth, height: bgNode.offsetHeight } : undefined,
         bgId: bgNode.getAttribute("data-bg-node-id"),
         tag: String(bgNode.tagName || "").toLowerCase(),
         text: String(bgNode.textContent || ""),

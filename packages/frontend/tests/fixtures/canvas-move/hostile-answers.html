@@ -1,0 +1,20 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Answers of the wrong type</title>
+<style>body{margin:0;font-family:system-ui,sans-serif}.box{position:absolute;left:40px;top:40px;width:120px;height:60px;background:#60a5fa}</style>
+<script>
+// Authored script that answers the canvas in the bridge's place. The bridge only answers its parent window, and a
+// page can replace what `window.parent` gives: after that the bridge ignores every question and this script answers,
+// with a hit whose style is a number and a rectangle whose basis is an object.
+var canvas = window.parent;
+window.parent = { postMessage: function () {} };
+window.addEventListener("message", function (event) {
+  var data = event.data;
+  if (event.source !== canvas || !data || data.__bgFrameBridge !== true || data.type !== "request") return;
+  var rect = { left: 40, top: 40, width: 120, height: 60, rotation: 0, boxWidth: 120, boxHeight: 60, scaleX: 1, scaleY: 1, basis: [1, 0, 0, 1] };
+  var payload;
+  if (data.action === "rect-bg") payload = Object.assign({}, rect, { basis: { poison: true } });
+  else if (data.action === "hit-bg") payload = { rect: rect, geometry: { width: 120, height: 60 }, bgId: "hostile", tag: "div", text: "", hasBlockChildren: false, inSlide: false, inLine: false, attributes: {}, computed: { translate: 12 }, inline: {}, childCount: 0, siblingCount: 0, parent: null, image: null };
+  else return;
+  canvas.postMessage({ __bgFrameBridge: true, type: "response", requestId: data.requestId, payload: payload }, "*");
+});
+</script></head>
+<body><div class="box"></div></body></html>

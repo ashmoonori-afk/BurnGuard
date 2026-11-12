@@ -174,9 +174,11 @@ export default function TweaksLayer({
     surfaceRef.current.focus({ preventScroll: true });
   });
   const drag = useRef<DragState | null>(null);
+  const alignRun = useRef(0);
   useEffect(() => {
     drag.current?.session?.cancel();
     drag.current = null;
+    alignRun.current += 1;
     setPreview(null);
   }, [active, saving, selectedBgId]);
   useEffect(() => {
@@ -381,15 +383,19 @@ export default function TweaksLayer({
     align(mode) {
       if (saving || !target) return;
       const offset = targetOffset(target);
-      if (!offset) return;
+      // The measurement is asked of the frame, and the file can change before it answers: the save names the file as it
+      // is at the press, so a change in between is refused as stale instead of overwritten.
+      const identity = gestureIdentity(target.bg_id);
+      if (!offset || !identity) return;
+      const run = ++alignRun.current;
       void requestFrameSnapRects(iframeRef.current, target.bg_id).then((rects) => {
-        if (!rects?.parent) return;
+        // Another selection, a save or leaving Style mode in the meantime drops the answer.
+        if (!rects?.parent || run !== alignRun.current) return;
         const next = alignOffset({ mode, rect: rects.self, content: rects.parent.content, offset, basis: rects.self.basis });
-        // A panel button commits at once, so the identity is read at save time.
-        if (next.x !== offset.x || next.y !== offset.y) onApply(translatePatch(next.x, next.y));
+        if (next.x !== offset.x || next.y !== offset.y) onApply(translatePatch(next.x, next.y), { identity });
       });
     },
-  }), [saving, target, iframeRef, onApply]);
+  }), [saving, target, iframeRef, onApply, readIdentity]);
 
   const start = (event: PointerEvent<HTMLButtonElement>, kind: string) => {
     if (saving || !target || !selectedRect || !overlayRef.current) return;

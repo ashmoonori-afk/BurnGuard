@@ -1,8 +1,8 @@
 import { useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
-import TweaksLayer, { tweaksTargetFromHit, type TweaksLayerActions, type TweaksStyleKey, type TweaksTarget } from "../../src/components/canvas/TweaksLayer";
-import { buildSandboxedArtifactSrcDoc, requestFrameBgAtPoint } from "../../src/components/canvas/frame-bridge";
+import TweaksLayer, { tweaksTargetFromHit, type TweakApplyOptions, type TweaksLayerActions, type TweaksStyleKey, type TweaksTarget } from "../../src/components/canvas/TweaksLayer";
+import { buildSandboxedArtifactSrcDoc, requestFrameBgAtPoint, requestFrameRectForBgId } from "../../src/components/canvas/frame-bridge";
 import { PositionSection } from "../../src/components/modes/TweaksPanel";
 import { moveRefusal, type AlignMode, type MoveRefusal } from "../../src/lib/element-geometry";
 
@@ -23,6 +23,15 @@ declare global {
     /** What the canvas would select at this point of the frame, and whether the move tools refuse it. */
     refusalAt(x: number, y: number): Promise<{ tag: string; refusal: MoveRefusal | null } | null>;
     align(mode: AlignMode): void;
+    /** How many saves were refused because the file was no longer at the revision their identity named. */
+    stale(): number;
+    /**
+     * Presses Align and, before the frame can answer its measurement, lets another save land on the selected element.
+     * Resolves with the file once Align's own save has been refused.
+     */
+    alignWhileFileChanges(mode: AlignMode): Promise<string>;
+    /** Whether the canvas kept what the frame answered for a point and for a node. */
+    answersAt(x: number, y: number, bgId: string): Promise<{ hit: boolean; rect: boolean }>;
   };
 }
 
@@ -32,6 +41,11 @@ if (!container) throw new Error("canvas_move_root_missing");
 const root = createRoot(container);
 const actions: { current: TweaksLayerActions | null } = { current: null };
 let saves = 0;
+let stale = 0;
+let revision = 0;
+let selectedId: string | null = null;
+let onStale: (() => void) | null = null;
+const readIdentity = async () => ({ expected_revision: revision, expected_artifact_digest: "digest", expected_file_hash: "hash", node_fingerprint: "node" });
 let frame: HTMLIFrameElement | null = null;
 let onLoad: (() => void) | null = null;
 let onSaved: ((patch: Patch) => void) | null = null;
@@ -52,14 +66,26 @@ function Harness({ html, zoom }: { html: string; zoom: number }) {
   const [page, setPage] = useState({ html, version: 0 });
   const [target, setTarget] = useState<TweaksTarget | null>(null);
   const [pending, setPending] = useState<Patch | null>(null);
-  // The canvas does the same: it saves, then shows the saved file and the styles it now carries.
-  const apply = (patch: Patch) => {
+  selectedId = target?.bg_id ?? null;
+  // The canvas does the same: it saves, then shows the saved file and the styles it now carries. Like the backend, it
+  // refuses a save whose identity names an older revision of the file.
+  const apply = (patch: Patch, options?: TweakApplyOptions) => {
     if (!target) return;
     saves += 1;
     setPending(patch);
-    void fetch("/save", { method: "POST", body: JSON.stringify({ node_bg_id: target.bg_id, styles: patch }) })
-      .then((response) => response.text())
+    void (options?.identity ?? readIdentity())
+      .then((identity) => {
+        if (identity.expected_revision !== revision) return null;
+        revision += 1;
+        return fetch("/save", { method: "POST", body: JSON.stringify({ node_bg_id: target.bg_id, styles: patch }) }).then((response) => response.text());
+      })
       .then((saved) => {
+        if (saved === null) {
+          stale += 1;
+          setPending(null);
+          onStale?.();
+          return;
+        }
         const inline = { ...target.inline };
         for (const key of Object.keys(patch) as TweaksStyleKey[]) {
           const value = patch[key];
@@ -82,7 +108,7 @@ function Harness({ html, zoom }: { html: string; zoom: number }) {
           }} />
         <TweaksLayer active iframeRef={iframeRef} selectedBgId={target?.bg_id ?? null} target={target} saving={pending !== null}
           onSelect={setTarget} onApply={apply} zoom={zoom} magnet={false}
-          readIdentity={async () => ({ expected_revision: 1, expected_artifact_digest: "digest", expected_file_hash: "hash", node_fingerprint: "node" })}
+          readIdentity={readIdentity}
           actionsRef={actions} />
       </div>
       {target && <aside style={{ position: "absolute", right: 0, bottom: 0, width: 320, pointerEvents: "none" }}>
@@ -125,5 +151,20 @@ globalThis.canvasMoveTest = {
   align(mode) {
     if (!actions.current) throw new Error("canvas_move_actions_missing");
     actions.current.align(mode);
+  },
+  stale: () => stale,
+  async alignWhileFileChanges(mode) {
+    if (!actions.current || selectedId === null) throw new Error("canvas_move_actions_missing");
+    const refused = awaited<void>("canvas_move_stale", (resolve) => { onStale = () => resolve(); return () => { onStale = null; }; });
+    actions.current.align(mode);
+    // Still the task of the press: the frame's measurement cannot have come back yet.
+    revision += 1;
+    await fetch("/save", { method: "POST", body: JSON.stringify({ node_bg_id: selectedId, styles: { translate: "99px 0px" } }) });
+    await refused;
+    return (await fetch("/document")).text();
+  },
+  async answersAt(x, y, bgId) {
+    const [hit, rect] = await Promise.all([requestFrameBgAtPoint(frame, x, y), requestFrameRectForBgId(frame, bgId)]);
+    return { hit: hit !== null, rect: rect !== null };
   },
 };
