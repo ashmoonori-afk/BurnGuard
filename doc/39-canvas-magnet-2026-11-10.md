@@ -20,7 +20,9 @@ the middle of a drag.
   never reflow and nothing else is written.
 - **Magnet.** Within 6 screen pixels at any zoom, the element locks to sibling edges and centres, the
   parent's content box, the slide or artboard, grid lines of a grid parent, and a gap equal to one
-  that already exists between two neighbours. Ties go to the grid line, then artboard centre,
+  that already exists between two neighbours. That equal gap is offered only for a slot no
+  neighbour occupies: a position on top of a neighbour is never called equal spacing, however the
+  row is spaced. Ties go to the grid line, then artboard centre,
   artboard edge, parent centre, parent edge, sibling edge, sibling centre. An element that is not
   rotated by a quarter turn locks by its centre only. An element already within 0.05 px of a line
   is shown as locked but not shifted, so no stray `0.01px` is written on an axis nobody touched.
@@ -60,7 +62,8 @@ ProjectView  (tweaksMutation: identityForPatch, directEditRevision)
   `snap-rects`, returns the element, its parent box and content box, the grid lines of a grid
   parent, the artboard, and up to 80 visible siblings, nearest first. It is asked once per gesture
   and never polled. Its answer is parsed all-or-nothing (`parseFrameSnapRects`), because the
-  numbers end up in saved styles.
+  numbers end up in saved styles. When the frame does not answer in time, the answer is null and the
+  gesture runs without the magnet.
 - A grid line is `{ start, end }`: with a gap the line has thickness, so three columns give four
   lines and both edges of every gap.
 - Nothing is drawn inside the iframe and nothing changes there during a gesture. The preview and the
@@ -83,7 +86,9 @@ ProjectView  (tweaksMutation: identityForPatch, directEditRevision)
   its handles outside the box, because they covered the Move surface of small text elements. And
   the Save history dialog, which has opened by itself after every revision since the source
   comparisons arrived, now stays closed for a revision made by hand on the canvas; before that it
-  covered the canvas after each drag and took the keyboard away from the next key press.
+  covered the canvas after each drag and took the keyboard away from the next key press. A refused
+  out-of-scope change still opens it, even right after a hand edit: a refusal does not move the
+  revision, so the revision alone cannot tell the two apart.
 - Taps on an arrow key are joined into one save by a short pause after the last key release. The
   plan said "on key release", which would have saved every tap on its own.
 
@@ -92,7 +97,7 @@ ProjectView  (tweaksMutation: identityForPatch, directEditRevision)
 - Unit tests run the pure parts and the real bridge script against a fake document:
   `snap-engine`, `canvas-interaction`, `element-geometry`, `snap-guides`, `selection-bridge`,
   `edit-target`, `tweaks-panel`, `canvas-prefs`, `toolbar-overflow`, `history-dialog`. Each change
-  was mutation-checked: every one-rule mutation tried made a test fail (138 mutations in all).
+  was mutation-checked: every one-rule mutation tried made a test fail (141 mutations in all).
 - Real browser, headless Chrome against the built app on an isolated profile, at 1440 and 390 px:
   dragging a nav link 135 px locked to its neighbour and saved `translate: 134.02px 0px`; Undo
   restored the original file hash; Escape and a 2 px press saved nothing; Ctrl saved the unlocked

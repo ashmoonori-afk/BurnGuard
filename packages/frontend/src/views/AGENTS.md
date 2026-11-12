@@ -29,5 +29,5 @@ Six route views (3,788 LOC) mounted by `App.tsx`; earned this guide at score 9 f
 - Do not leave the frame showing an edit the backend rejected; a failed PATCH must roll back the canvas UI (`ProjectView.tsx`).
 - Do not introduce a second repair flow; platform lint repair sends through the existing quality-repair path (`ProjectView.tsx`).
 - Do not poll for state the session SSE stream or the frame bridge already signals.
-- Do not let the Save history dialog open by itself for a revision made by hand on the canvas (`directEditRevision`); it covers the canvas and takes the keyboard from the next gesture.
+- Do not let the Save history dialog open by itself for a revision made by hand on the canvas (`directEditRevision`); it covers the canvas and takes the keyboard from the next gesture. A refused out-of-scope change must still open it (`refused` in `historyOpensItself`): a refusal leaves the revision where the hand edit put it.
 - Do not push view-only orchestration down into `components/` or up into a new global store.
