@@ -11,12 +11,12 @@ packages/frontend/
 ├── src/api/         # one module per backend resource family (own guide)
 ├── src/components/  # feature UI + canvas integration (own guide)
 ├── src/views/       # 6 route views; ProjectView is 1,987 LOC (own guide)
-├── src/lib/         # 62 pure state and serialization helpers + error copy (own guide)
+├── src/lib/         # 68 pure state and serialization helpers + error copy (own guide)
 ├── src/i18n/        # ko/en/zh-CN message packs behind useT (own guide)
 ├── src/hooks/       # useSessionEvents, useTheme, useFrameElementRect
-├── src/state/       # uiStore.ts, the only Zustand singleton
+├── src/state/       # uiStore.ts, the only Zustand singleton (toasts, settings, canvas magnet state)
 ├── src/mocks/       # typed @bg/shared fixtures for views
-└── tests/           # 144 bun:test suites + browser fixtures (own guide)
+└── tests/           # 158 bun:test suites + browser fixtures (own guide)
 ```
 
 ## WHERE TO LOOK

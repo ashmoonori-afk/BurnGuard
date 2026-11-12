@@ -2,7 +2,7 @@
 
 Start with the [product introduction and setup](../README.md), available in [Korean](../README.ko.md) and [Chinese](../README.zh-CN.md). Release changes are listed in the [changelog](../README.md#changelog).
 
-[User guide](user-guide.md): make a first website, fix an image, move a project to another computer and locate your files.
+[User guide](user-guide.md): make a first website, fix an image, line up elements by hand, move a project to another computer and locate your files.
 
 ## Architecture and development
 
@@ -36,6 +36,7 @@ Start with the [product introduction and setup](../README.md), available in [Kor
 - [The construction draw-in GIF export](36-logo-construction-gif-2026-11-09.md)
 - [Construction exports in the export menu](37-logo-construction-export-menu-2026-11-09.md)
 - [The construction draw-in MP4 export](38-logo-construction-mp4-2026-11-09.md)
+- [The canvas magnet: move, resize and rotate with alignment](39-canvas-magnet-2026-11-10.md)
 - [Model capability profiles, CSS logos and web asset sourcing](model-profiles.md)
 - [Edit scope and revision comparison](edit-scope.md)
 - [Sample design system](<../design system sample/README.md>)
