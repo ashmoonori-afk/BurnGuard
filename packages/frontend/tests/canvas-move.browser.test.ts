@@ -223,3 +223,38 @@ test("Given text inside a line that a resize turned into its own box When it is 
     expect(await page.evaluate(() => globalThis.canvasMoveTest.saves())).toBe(2);
   });
 }, 30_000);
+
+test("Given Align is waiting for the frame's measurement When another save lands on the element Then Align's save is refused as stale and the newer offset stays in the file", async () => {
+  if (!browser) throw new Error("canvas_move_browser_missing");
+  await withCanvasMove(browser, { ...assets, document: "transform-cases.html", width: 1440 }, async (page) => {
+    await select(page, ".inhalf");
+    const file = await page.evaluate(() => globalThis.canvasMoveTest.alignWhileFileChanges("center"));
+    expect(await page.evaluate(() => globalThis.canvasMoveTest.stale())).toBe(1);
+    expect([...file.matchAll(/translate:\s*([^;"]+)/g)].map((match) => match[1]?.trim())).toEqual(["99px 0px"]);
+  });
+}, 30_000);
+
+test("Given a page whose own script answers the canvas with values of the wrong type When the canvas asks what is under a point and where a node is Then both answers are dropped, nothing is selected and nothing is saved", async () => {
+  if (!browser) throw new Error("canvas_move_browser_missing");
+  await withCanvasMove(browser, { ...assets, document: "hostile-answers.html", width: 1440 }, async (page) => {
+    const rect = await rectOf(page, ".box");
+    const point = [rect.left + rect.width / 2, rect.top + rect.height / 2] as const;
+    await page.mouse.click(point[0], point[1]);
+    // Asked after the click, so answered after it: by then the overlay has handled the answer to its own question.
+    expect(await page.evaluate(([x, y]) => globalThis.canvasMoveTest.answersAt(x, y, "hostile"), point)).toEqual({ hit: false, rect: false });
+    expect(await page.locator("[data-canvas-move]").count()).toBe(0);
+    expect(await page.evaluate(() => globalThis.canvasMoveTest.saves())).toBe(0);
+  });
+}, 30_000);
+
+test("Given an SVG shape, which has no offset box When it is selected Then the selection box has the size of its drawn rectangle", async () => {
+  if (!browser) throw new Error("canvas_move_browser_missing");
+  await withCanvasMove(browser, { ...assets, document: "inline-cases.html", width: 1440 }, async (page) => {
+    const { rect } = await select(page, ".k-svg-rect");
+    const box = await page.locator("[data-canvas-move]").boundingBox();
+    if (box === null) throw new Error("canvas_move_surface_bounds_missing");
+    // The Move surface sits a few pixels inside or outside the selection box; without a box size it has none at all.
+    expect(Math.abs(box.width - rect.width)).toBeLessThanOrEqual(4);
+    expect(Math.abs(box.height - rect.height)).toBeLessThanOrEqual(4);
+  });
+}, 30_000);

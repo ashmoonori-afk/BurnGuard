@@ -4,7 +4,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MODES } from "../src/components/canvas/CanvasTopBar";
-import { buildSandboxedArtifactSrcDoc, FRAME_SNAP_SIBLING_LIMIT, parseFrameSnapRects, requestFrameSnapRects, type FrameSnapRects } from "../src/components/canvas/frame-bridge";
+import { buildSandboxedArtifactSrcDoc, FRAME_SNAP_SIBLING_LIMIT, parseFrameBgHit, parseFrameRect, parseFrameSnapRects, requestFrameSnapRects, type FrameSnapRects } from "../src/components/canvas/frame-bridge";
 import ModePanel from "../src/components/modes/ModePanel";
 import type { CanvasMode } from "../src/components/modes/types";
 
@@ -251,5 +251,57 @@ describe("snap rects parsing", () => {
     } finally {
       if (hadWindow) globals.window = before; else delete globals.window;
     }
+  });
+});
+
+describe("rectangle and hit parsing", () => {
+  const rect = { left: 1, top: 2, width: 3, height: 4, rotation: 0, boxWidth: 3, boxHeight: 4, scaleX: 1, scaleY: 1, basis: [1, 0, 0, 1] };
+  const hit = {
+    rect, geometry: { width: 3, height: 4 }, bgId: "a", tag: "div", text: "", hasBlockChildren: false, inSlide: false, inLine: false,
+    attributes: { class: "box" }, computed: { translate: "4px 8px" }, inline: {}, childCount: 0, siblingCount: 1, parent: { bgId: null, display: "block" }, image: null,
+  };
+
+  test("Given a well-formed rectangle or hit When parsed Then it passes through, also without a box size", () => {
+    const bare = { left: 1, top: 2, width: 3, height: 4 };
+    expect(parseFrameRect(rect)).toEqual(rect);
+    expect(parseFrameRect(bare)).toEqual(bare);
+    expect(parseFrameRect(null)).toBeNull();
+    expect(parseFrameBgHit(hit)).toEqual(hit);
+    expect(parseFrameBgHit({ ...hit, rect: bare, geometry: undefined })).toEqual({ ...hit, rect: bare, geometry: undefined });
+    expect(parseFrameBgHit(null)).toBeNull();
+  });
+
+  test("Given a rectangle with a value of the wrong type When parsed Then it is dropped", () => {
+    const sparse = [1, 0, 0, 1];
+    delete sparse[1];
+    for (const broken of [
+      "text", [],
+      { ...rect, left: "1" },
+      { ...rect, boxWidth: Number.NaN },
+      { ...rect, basis: [1n, 0n, 0n, 1n] },
+      { ...rect, basis: { poison: true } },
+      { ...rect, basis: sparse },
+      { ...rect, basis: [1, 0, 0] },
+      { ...rect, basis: [1, 0, 0, 1, 0] },
+    ]) expect(parseFrameRect(broken)).toBeNull();
+  });
+
+  test("Given a hit with a value of the wrong type When parsed Then the whole hit is dropped", () => {
+    for (const broken of [
+      "text", [],
+      { ...hit, computed: { translate: 12 } },
+      { ...hit, inline: { translate: null } },
+      { ...hit, attributes: "none" },
+      { ...hit, rect: { ...rect, basis: { poison: true } } },
+      { ...hit, bgId: 7 },
+      { ...hit, bgId: "x".repeat(257) },
+      { ...hit, tag: {} },
+      { ...hit, inLine: "yes" },
+      { ...hit, geometry: { width: "3", height: 4 } },
+    ]) expect(parseFrameBgHit(broken)).toBeNull();
+  });
+
+  test("Given layout or picture facts of the wrong type When a hit is parsed Then they count as none and the hit stays", () => {
+    expect(parseFrameBgHit({ ...hit, childCount: "many", parent: 3, image: "x" })).toMatchObject({ bgId: "a", childCount: 0, parent: null, image: null });
   });
 });

@@ -63,3 +63,22 @@ exactly as far as the pointer, at 1440 and 390 px, on a canvas zoomed to 200%, b
 Align. For text inside a line it checks that nothing is saved, that the Move surface and the panel give
 the same reason, and that the refusal agrees with what the browser itself does for eight kinds of
 element.
+
+## Answers from the frame
+
+The canvas document runs authored script, and that script can answer the canvas in the bridge's place. The answer to
+"what is under this point" (`hit-bg`) and every rectangle (`rect-bg`, `rect-selector`, the selected element of
+`snap-rects`) are parsed once, where they enter the app, all or nothing: finite numbers, a basis of exactly four
+numbers, string-valued style and attribute maps, boolean flags. An answer with anything else is dropped, so nothing
+is selected, measured or saved from it. Before, only `snap-rects` was parsed, and a basis or a `translate` of the
+wrong type reached code that threw.
+
+An SVG shape has no offset box. The bridge now sends no box size for it, and the selection box falls back to its
+drawn rectangle; before, the box size was not a number and the selection box had no size.
+
+## Align and a file that changes
+
+Align asks the frame for a measurement before it saves, and the file can change while it waits. It now reads the
+file's identity at the press, like a drag, and saves against that one: a change in between is refused as stale and the
+newer file stays. An answer that comes back after the selection changed, a save started or Style mode was left is
+dropped.
