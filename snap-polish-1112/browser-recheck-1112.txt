@@ -1,0 +1,10 @@
+Real-browser re-check of the canvas magnet, 2026-11-12 11:00-11:05 KST
+Build: worktree BurnGuard-next-t11 at 9cc2f3be (tree e94b463d) = main e2fa3436 + nudge (#426 head 5fee750c) + history fix aec7367a + snap fix a5bf6d41 + review follow-ups 9cc2f3be; frontend built with bun 1.3.14.
+Tool: Bun.WebView (system google-chrome, headless, 1440x900) with CDP mouse events against the built frontend served by the backend on 127.0.0.1:14175, isolated BG_APP_ROOT (.bg-tools/qa-root), seeded sample project "VELUNE - Web", Style mode, zoom 100%. File state read from the project folder on disk.
+
+1. Nav link "Atelier", dragged 5 px right and held: panel reads "Equal spacing: 134 px. Aligned to the middle of the container."; guides "134 px" (both gaps) and "middle"; saved translate: 0.02px 0px; no history dialog opened; keyboard focus stayed on the Move surface; mode stayed Style. Screenshot 1440-nav-equal-gap.png. -> PASS (the free-slot rule keeps the real equal-gap lock)
+2. Paragraph of the first object row (four-column grid: 70px 1fr 1fr 25px), dragged 300 px left onto column 2 and held: panel reads "Aligned to column 2. Aligned to the middle of the container."; guides "column 2" and "middle"; no "Equal spacing"; saved translate: -302.2px 0px (no sub-pixel value on the untouched axis); no history dialog. Screenshot 1440-grid-column.png. -> PASS
+3. Undo from the toolbar after the nav move: file hash back to the original (b3c7c8f7...), no dialog.
+
+Seen, not caused by these branches as far as the diffs go (not compared against main): after Undo the canvas re-renders and the mode returns to Preview, so the person has to enter Style again.
+Not checked in a browser: an aspect-locked corner resize (review follow-up), a refused out-of-scope AI change (no provider on this host), 390 px (no layout change in these branches).
