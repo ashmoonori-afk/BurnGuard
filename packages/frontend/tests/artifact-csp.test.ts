@@ -58,7 +58,16 @@ test("Given the Canvas browser fixture When bundled as a classic IIFE script The
   expect(() => new Script(script)).not.toThrow();
 });
 
-async function launchSystemChrome(timeoutMs = 20000) {
+/**
+ * A cold first launch of system Chrome has taken 15 s and more on a fresh CI runner (the bridge gives one channel
+ * 20 s). The launch has its own deadline, and a test that launches gets that deadline plus the time its own steps may
+ * take: a slow launch alone must not run a test out of time while it is still waiting for its first page.
+ */
+const CHROME_LAUNCH_DEADLINE_MS = 30_000;
+const CHROME_STEPS_BUDGET_MS = 45_000;
+const CHROME_TEST_TIMEOUT_MS = CHROME_LAUNCH_DEADLINE_MS + CHROME_STEPS_BUDGET_MS;
+
+async function launchSystemChrome(timeoutMs = CHROME_LAUNCH_DEADLINE_MS) {
   const controller = new AbortController();
   const deadline = setTimeout(() => controller.abort(), timeoutMs);
   try { return await launchChromiumViaNode({ channel: "chrome" }, controller.signal); }
@@ -157,7 +166,7 @@ async function assertCanvasPolicy(
   }
 }
 
-for (const action of ["popup", "navigation"] as const) test.skipIf(!systemChromeAvailable)(`system Chrome Canvas ${action} policy blocks popups and preserves project links`, () => assertCanvasPolicy(action), 20000);
+for (const action of ["popup", "navigation"] as const) test.skipIf(!systemChromeAvailable)(`system Chrome Canvas ${action} policy blocks popups and preserves project links`, () => assertCanvasPolicy(action), CHROME_TEST_TIMEOUT_MS);
 
 for (const stage of ["launch", "browser close"] as const) test(`Given ${stage} rejects When the CSP fixture owns a real server Then cleanup stops that server`, async () => {
   const failure = new Error("fixture_ownership_failure");
@@ -176,7 +185,7 @@ for (const stage of ["launch", "browser close"] as const) test(`Given ${stage} r
     })).rejects.toBe(failure);
     assertStopped();
   } finally { await cleanup?.(); }
-}, 30000);
+}, CHROME_TEST_TIMEOUT_MS);
 
 test.skipIf(!systemChromeAvailable)("system Chrome routes trusted external clicks with modifiers and preserves activation across postMessage", async () => {
   const compiler = Bun.spawn([process.execPath, "build", `${import.meta.dir}/fixtures/canvas-css-browser.ts`, "--target=browser", "--format=iife"], { stdout: "pipe", stderr: "pipe" });
@@ -190,7 +199,7 @@ test.skipIf(!systemChromeAvailable)("system Chrome routes trusted external click
       ? new Response(script, { headers: { "content-type": "application/javascript" } })
       : new Response('<!doctype html><body><script src="/bridge-fixture.js"></script></body>', { headers: { "content-type": "text/html" } });
   } });
-  const browser = await launchSystemChrome(30_000);
+  const browser = await launchSystemChrome();
   const context = await browser.newContext();
   try {
     const page = await context.newPage();
@@ -297,7 +306,7 @@ test.skipIf(!systemChromeAvailable)("system Chrome routes trusted external click
     await browser.close();
     await server.stop(true);
   }
-}, 30000);
+}, CHROME_TEST_TIMEOUT_MS);
 
 function metaPolicy(srcDoc: string): Map<string, string[]> {
   const content = /<meta http-equiv="Content-Security-Policy" content="([^"]*)">/u.exec(srcDoc)?.[1] ?? null;
