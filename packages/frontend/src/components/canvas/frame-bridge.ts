@@ -233,8 +233,9 @@ if (typeof window !== "undefined") {
       for (const [iframe, perEvent] of subscribers) {
         if (iframe.contentWindow === event.source) {
           const handlers = perEvent.get(data.event);
-          if (handlers) {
-            for (const handler of handlers) handler(data.payload);
+          const payload = handlers ? parseFrameEvent(data.event, data.payload) : undefined;
+          if (handlers && payload !== undefined) {
+            for (const handler of handlers) handler(payload);
           }
           break;
         }
@@ -355,9 +356,50 @@ export async function watchFrameComments(iframe: HTMLIFrameElement | null, comme
 export function readFrameCommentPositions(payload: unknown, documentKey: string): FrameCommentPosition[] | null {
   if (!payload || typeof payload !== "object" || !("documentKey" in payload) || payload.documentKey !== documentKey ||
     !("positions" in payload) || !Array.isArray(payload.positions) || payload.positions.length > 10000) return null;
-  return payload.positions.every(p => p && typeof p === "object" && typeof p.id === "string" &&
-    typeof p.x === "number" && Number.isFinite(p.x) && typeof p.y === "number" && Number.isFinite(p.y) && typeof p.visible === "boolean")
-    ? payload.positions : null;
+  // Index by index into a new array: `every` skips the holes of a sparse array, and a hole would reach the callers.
+  const source: unknown[] = payload.positions;
+  const positions: FrameCommentPosition[] = [];
+  for (let index = 0; index < source.length; index += 1) {
+    const entry = source[index];
+    if (entry === null || typeof entry !== "object") return null;
+    const { id, x, y, visible } = entry as Record<string, unknown>;
+    if (typeof id !== "string" || typeof x !== "number" || !Number.isFinite(x) || typeof y !== "number" || !Number.isFinite(y) || typeof visible !== "boolean") return null;
+    positions.push({ id, x, y, visible });
+  }
+  return positions;
+}
+
+/**
+ * What an event from the frame carries, parsed before any subscriber sees it; `undefined` drops the event. Like the
+ * answers, events come from a document that can run authored script. Comment positions stay unparsed here because
+ * their readers check them against their own document key with `readFrameCommentPositions`.
+ */
+export function parseFrameEvent(event: unknown, payload: unknown): unknown {
+  if (event === "comment-positions") return payload ?? undefined;
+  if (payload === null || typeof payload !== "object" || Array.isArray(payload)) return undefined;
+  const source = payload as Record<string, unknown>;
+  const finite = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
+  switch (event) {
+    case "document-loaded":
+    case "present-dismiss":
+      return typeof source.documentKey === "string" ? { documentKey: source.documentKey } : undefined;
+    case "comment-pointer":
+    case "comment-shortcut":
+    case "comment-dismiss": {
+      const { documentKey, x, y } = source;
+      if (typeof documentKey !== "string" || !(x === null || finite(x)) || !(y === null || finite(y))) return undefined;
+      return { documentKey, x, y };
+    }
+    case "viewport-wheel":
+      return finite(source.x) && finite(source.y) && finite(source.delta) ? { x: source.x, y: source.y, delta: source.delta } : undefined;
+    case "navigate":
+    case "navigate-external":
+      return typeof source.href === "string" ? { href: source.href } : undefined;
+    case "active-slide-changed":
+      return typeof source.index === "number" && Number.isSafeInteger(source.index) && source.index >= -1 ? { index: source.index } : undefined;
+    default:
+      return undefined;
+  }
 }
 
 export async function requestFrameRectForSelector(
@@ -372,9 +414,7 @@ export async function requestFrameRevealSelector(
   iframe: HTMLIFrameElement | null,
   selector: string,
 ): Promise<FrameRect | null> {
-  return (await requestFrameBridge(iframe, "reveal-selector", {
-    selector,
-  }).catch(() => null)) as FrameRect | null;
+  return parseFrameRect(await requestFrameBridge(iframe, "reveal-selector", { selector }).catch(() => null));
 }
 
 export async function requestFrameCountSelector(
@@ -481,7 +521,8 @@ export function parseFrameBgHit(payload: unknown): FrameBgHit | null {
   const rect = payload.rect === null ? null : parseFrameRect(payload.rect);
   const attributes = parseStringMap(payload.attributes), computed = parseStringMap(payload.computed), inline = parseStringMap(payload.inline);
   if ((payload.rect !== null && !rect) || !attributes || !computed || !inline) return null;
-  if (!isTextOrNull(bgId) || !isTextOrNull(tag) || !isTextOrNull(text) || (bgId !== null && bgId.length > 256)) return null;
+  // A node id is never cut or capped here: the file may carry any id, and a shortened one would name another node.
+  if (!isTextOrNull(bgId) || !isTextOrNull(tag) || !isTextOrNull(text)) return null;
   if (!isFlagOrAbsent(hasBlockChildren) || !isFlagOrAbsent(inSlide) || !isFlagOrAbsent(inLine)) return null;
   const facts = payload as Pick<FrameBgHit, "childCount" | "siblingCount" | "parent" | "image">;
   const hit: FrameBgHit = { rect, bgId, tag, text, attributes, computed, inline, ...frameHitLayout(facts), image: frameHitImage(facts) };
@@ -531,7 +572,7 @@ export function parseFrameSnapRects(payload: unknown): FrameSnapRects | null {
   for (const entry of source.siblings.slice(0, FRAME_SNAP_SIBLING_LIMIT)) {
     const raw = (entry ?? {}) as Record<string, unknown>;
     const rect = parseFrameBox(raw.rect);
-    if (!rect || typeof raw.bgId !== "string" || !raw.bgId || raw.bgId.length > 256 || typeof raw.label !== "string") return null;
+    if (!rect || typeof raw.bgId !== "string" || !raw.bgId || typeof raw.label !== "string") return null;
     siblings.push({ bgId: raw.bgId, rect, label: raw.label.slice(0, 40) });
   }
   return { self, parent, artboard, siblings };

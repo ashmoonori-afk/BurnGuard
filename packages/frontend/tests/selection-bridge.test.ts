@@ -4,7 +4,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MODES } from "../src/components/canvas/CanvasTopBar";
-import { buildSandboxedArtifactSrcDoc, FRAME_SNAP_SIBLING_LIMIT, parseFrameBgHit, parseFrameRect, parseFrameSnapRects, requestFrameSnapRects, type FrameSnapRects } from "../src/components/canvas/frame-bridge";
+import { buildSandboxedArtifactSrcDoc, FRAME_SNAP_SIBLING_LIMIT, parseFrameBgHit, parseFrameEvent, parseFrameRect, parseFrameSnapRects, readFrameCommentPositions, requestFrameSnapRects, type FrameSnapRects } from "../src/components/canvas/frame-bridge";
 import ModePanel from "../src/components/modes/ModePanel";
 import type { CanvasMode } from "../src/components/modes/types";
 
@@ -278,6 +278,7 @@ describe("rectangle and hit parsing", () => {
       "text", [],
       { ...rect, left: "1" },
       { ...rect, boxWidth: Number.NaN },
+      { ...rect, width: 9n, height: 16n },
       { ...rect, basis: [1n, 0n, 0n, 1n] },
       { ...rect, basis: { poison: true } },
       { ...rect, basis: sparse },
@@ -294,7 +295,6 @@ describe("rectangle and hit parsing", () => {
       { ...hit, attributes: "none" },
       { ...hit, rect: { ...rect, basis: { poison: true } } },
       { ...hit, bgId: 7 },
-      { ...hit, bgId: "x".repeat(257) },
       { ...hit, tag: {} },
       { ...hit, inLine: "yes" },
       { ...hit, geometry: { width: "3", height: 4 } },
@@ -303,5 +303,77 @@ describe("rectangle and hit parsing", () => {
 
   test("Given layout or picture facts of the wrong type When a hit is parsed Then they count as none and the hit stays", () => {
     expect(parseFrameBgHit({ ...hit, childCount: "many", parent: 3, image: "x" })).toMatchObject({ bgId: "a", childCount: 0, parent: null, image: null });
+  });
+});
+
+describe("node ids, events and comment positions from the frame", () => {
+  const box = { left: 1, top: 2, width: 3, height: 4 };
+  const hit = { rect: box, bgId: "a", tag: "div", text: "", attributes: {}, computed: {}, inline: {}, childCount: 0, siblingCount: 0, parent: null, image: null };
+
+  test("Given a node id of any length When a hit or a sibling is parsed Then the id is kept whole, never cut or refused", () => {
+    for (const length of [256, 257, 5000]) {
+      const id = "x".repeat(length);
+      expect(parseFrameBgHit({ ...hit, bgId: id })?.bgId).toBe(id);
+      expect(parseFrameSnapRects({ self: box, parent: null, artboard: null, siblings: [{ bgId: id, rect: box, label: "Card" }] })?.siblings[0]?.bgId).toBe(id);
+    }
+  });
+
+  test("Given a well-formed event When parsed Then only its known fields pass", () => {
+    expect(parseFrameEvent("document-loaded", { documentKey: "k", extra: 1 })).toEqual({ documentKey: "k" });
+    expect(parseFrameEvent("present-dismiss", { documentKey: "k" })).toEqual({ documentKey: "k" });
+    expect(parseFrameEvent("comment-pointer", { documentKey: "k", x: 3, y: 4 })).toEqual({ documentKey: "k", x: 3, y: 4 });
+    expect(parseFrameEvent("comment-dismiss", { documentKey: "k", x: null, y: null })).toEqual({ documentKey: "k", x: null, y: null });
+    expect(parseFrameEvent("viewport-wheel", { x: 1, y: 2, delta: -3 })).toEqual({ x: 1, y: 2, delta: -3 });
+    expect(parseFrameEvent("navigate", { href: "next.html" })).toEqual({ href: "next.html" });
+    expect(parseFrameEvent("active-slide-changed", { index: -1 })).toEqual({ index: -1 });
+    expect(parseFrameEvent("active-slide-changed", { index: 4 })).toEqual({ index: 4 });
+  });
+
+  test("Given an event with a missing payload or a value of the wrong type When parsed Then the event is dropped", () => {
+    for (const [event, payload] of [
+      ["active-slide-changed", null], ["active-slide-changed", { index: "2" }], ["active-slide-changed", { index: 1.5 }], ["active-slide-changed", { index: -2 }], ["active-slide-changed", { index: 2n }],
+      ["document-loaded", null], ["document-loaded", { documentKey: 7 }], ["present-dismiss", []],
+      ["comment-shortcut", { documentKey: "k", x: "3", y: 4 }], ["comment-pointer", { documentKey: "k", x: Number.NaN, y: 4 }],
+      ["viewport-wheel", { x: 1, y: 2 }], ["viewport-wheel", { x: 1, y: 2, delta: Number.POSITIVE_INFINITY }],
+      ["navigate", { href: 5 }], ["navigate-external", null], ["comment-positions", null], ["no-such-event", { documentKey: "k" }],
+    ] as const) expect(parseFrameEvent(event, payload)).toBeUndefined();
+  });
+
+  test("Given the parent's own message listener When the frame sends events Then a subscriber gets the parsed payload, and a malformed event or another window's event never reaches it", async () => {
+    const globals = globalThis as { window?: unknown };
+    const hadWindow = "window" in globals, before = globals.window;
+    let listener: ((event: { data: unknown; source: unknown }) => void) | undefined;
+    globals.window = { setTimeout, clearTimeout, addEventListener: (_type: string, handler: typeof listener) => { listener = handler; } };
+    try {
+      // A second copy of the module, so its listener registers on this window.
+      const specifier = "../src/components/canvas/frame-bridge.ts?dispatch";
+      const bridge = await import(specifier) as typeof import("../src/components/canvas/frame-bridge");
+      const frameWindow = {};
+      const frame = { contentWindow: frameWindow } as unknown as HTMLIFrameElement;
+      const seen: unknown[] = [];
+      const stop = bridge.subscribeFrameEvent(frame, "active-slide-changed" as never, (payload: unknown) => { seen.push(payload); });
+      const send = (payload: unknown, source: unknown = frameWindow) => listener?.({ data: { __bgFrameBridge: true, type: "event", event: "active-slide-changed", payload }, source });
+      send(null);
+      send({ index: "2" });
+      send({ index: 3 }, {});
+      send({ index: 2, extra: true });
+      stop();
+      send({ index: 5 });
+      expect(seen).toEqual([{ index: 2 }]);
+    } finally {
+      if (hadWindow) globals.window = before; else delete globals.window;
+    }
+  });
+
+  test("Given comment positions When read Then a dense valid list is copied, and a hole, a wrong type or another document drops it", () => {
+    const pin = { id: "c1", x: 10, y: 20, visible: true };
+    const read = readFrameCommentPositions({ documentKey: "doc", positions: [pin, { ...pin, id: "c2", extra: 1 }] }, "doc");
+    expect(read).toEqual([pin, { ...pin, id: "c2" }]);
+    const sparse = [pin, pin];
+    delete sparse[0];
+    for (const positions of [new Array(1), sparse, [null], [{ ...pin, x: "10" }], [{ ...pin, visible: 1 }], "none"]) {
+      expect(readFrameCommentPositions({ documentKey: "doc", positions }, "doc")).toBeNull();
+    }
+    expect(readFrameCommentPositions({ documentKey: "other", positions: [pin] }, "doc")).toBeNull();
   });
 });

@@ -107,9 +107,11 @@ export type OffsetBasis = FrameRect["basis"];
 export function offsetDelta(basis: OffsetBasis, dx: number, dy: number): { x: number; y: number } {
   const [a = 1, b = 0, c = 0, d = 1]: readonly number[] = Array.isArray(basis) ? basis : [];
   const determinant = a * d - b * c;
-  // A flattened or unreadable basis moves nothing, instead of saving a wild number.
+  // A flattened or unreadable basis moves nothing, instead of saving a wild number. So does one whose numbers are
+  // finite but too large to calculate with: the division then gives no number at all.
   if (!(Math.abs(determinant) > 1e-9)) return { x: 0, y: 0 };
-  return { x: (d * dx - c * dy) / determinant, y: (a * dy - b * dx) / determinant };
+  const x = (d * dx - c * dy) / determinant, y = (a * dy - b * dx) / determinant;
+  return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : { x: 0, y: 0 };
 }
 
 /** One arrow-key step of `translate` pixels as the distance it covers on screen, along the screen's own axes. */
