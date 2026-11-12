@@ -122,12 +122,17 @@ describe("position and align (magnet release)", () => {
     expect(field(html, "Y")).toContain('value="12"');
   });
 
-  test("Given a position in a unit other than pixels When the section renders Then the fields are disabled and no Reset or Align is offered", () => {
-    const html = section({ inline: { translate: "10% 0px" } });
-    expect(html).toContain('data-position-state="unsupported"');
-    expect(field(html, "X")).toContain('disabled=""');
-    expect(reset(html)).toBeNull();
-    expect(aligns(html)).toHaveLength(0);
+  test("Given a position in a unit other than pixels, or text inside a line When the section renders Then the fields are disabled, no Reset or Align is offered, and each case gives its own reason", () => {
+    const refused = [section({ inline: { translate: "10% 0px" } }), section({ inLine: true, computed: { display: "inline" } })];
+    for (const html of refused) {
+      expect(html).toContain('data-position-state="unsupported"');
+      expect(field(html, "X")).toContain('disabled=""');
+      expect(reset(html)).toBeNull();
+      expect(aligns(html)).toHaveLength(0);
+    }
+    expect(refused[0]).toContain('data-position-refusal="unit"');
+    expect(refused[1]).toContain('data-position-refusal="line"');
+    expect(section()).not.toContain("data-position-refusal");
   });
 
   test("Given an element with a parent When the section renders Then six labelled Align buttons show, in reading order", () => {

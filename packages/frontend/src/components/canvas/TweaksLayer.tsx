@@ -23,7 +23,7 @@ import {
   type FrameSnapRects,
 } from "./frame-bridge";
 import { useFrameElementRect } from "@/hooks/useFrameElementRect";
-import { alignOffset, nudgeTravel, targetDimensions, targetOffset, translatePatch, dimensionPatch, rotationPatch, isAspectLocked, type AlignMode } from "@/lib/element-geometry";
+import { alignOffset, moveRefusal, MOVE_REFUSAL_MESSAGES, nudgeTravel, targetDimensions, targetOffset, translatePatch, dimensionPatch, rotationPatch, isAspectLocked, type AlignMode } from "@/lib/element-geometry";
 import type { FileArtifactIdentity } from "@/lib/artifact-identity";
 import { arrowStep, beginMoveGesture, type MoveGesture } from "@/lib/move-gesture";
 import { primaryGuides, snapGuideChip, snapGuideStatus } from "@/lib/snap-guides";
@@ -57,6 +57,8 @@ export interface TweaksTarget {
   tag: string;
   /** Inside a deck slide the text-size floor is the audit's 24px instead of 12px. */
   inSlide?: boolean;
+  /** Plain text inside a line, which the browser does not move for a `translate`. */
+  inLine?: boolean;
   computed: Partial<Record<TweaksStyleKey, string>>;
   inline: Partial<Record<TweaksStyleKey, string>>;
   /** Element children of the selected node; a node with children can become a layout container. */
@@ -104,7 +106,7 @@ export function tweaksTargetFromHit(hit: FrameBgHit | null): TweaksTarget | null
     if (hit.computed[key]) computed[key] = hit.computed[key];
     if (hit.inline[key]) inline[key] = hit.inline[key];
   }
-  return { bg_id: hit.bgId, tag: hit.tag ?? "div", inSlide: hit.inSlide === true, computed, inline, geometry: hit.geometry, ...frameHitLayout(hit) };
+  return { bg_id: hit.bgId, tag: hit.tag ?? "div", inSlide: hit.inSlide === true, ...(hit.inLine === true ? { inLine: true } : {}), computed, inline, geometry: hit.geometry, ...frameHitLayout(hit) };
 }
 
 export default function TweaksLayer({
@@ -437,6 +439,8 @@ export default function TweaksLayer({
     if (commit && active && !saving && current && current.bgId === target?.bg_id && Object.keys(current.patch).length) onApply(current.patch, current.identity ? { identity: current.identity } : undefined);
   };
   const box = preview ?? (selectedRect ? selectionBox(selectedRect) : null);
+  // An element the move tools refuse says so on its Move surface before any drag, in the panel's own words.
+  const refusal = target ? moveRefusal(target) : null;
   // On a small box the handles would cover the Move surface, so they step outside it.
   const handleX = box && box.width < SMALL_BOX_PX ? "calc(100% + 10px)" : "100%";
   const handleY = box && box.height < SMALL_BOX_PX ? "calc(100% + 10px)" : "100%";
@@ -475,7 +479,7 @@ export default function TweaksLayer({
             rotate: `${(box.rotation ?? 0) + (drag.current?.kind === "rotate" && target ? Number.parseFloat(String(drag.current.patch.rotate ?? targetDimensions(target).rotation)) - targetDimensions(target).rotation : 0)}deg`,
           }}
         >
-          <button ref={attachSurface} type="button" aria-label={t("canvas.handles.move")} data-canvas-move="" aria-disabled={saving} onKeyDown={nudgeKeyDown} onKeyUp={nudgeKeyUp} onBlur={commitNudge} className="absolute inset-0 pointer-events-auto bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" style={{ touchAction: "none", cursor: saving ? "default" : "move" }} onPointerDown={startMove} onPointerMove={moveMove} onPointerUp={(event) => finishMove(event, true)} onPointerCancel={(event) => finishMove(event, false)} onClick={(event) => event.stopPropagation()} />
+          <button ref={attachSurface} type="button" aria-label={t("canvas.handles.move")} data-canvas-move="" data-move-refusal={refusal ?? undefined} title={refusal ? t(MOVE_REFUSAL_MESSAGES[refusal]) : undefined} aria-disabled={saving} onKeyDown={nudgeKeyDown} onKeyUp={nudgeKeyUp} onBlur={commitNudge} className="absolute inset-0 pointer-events-auto bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" style={{ touchAction: "none", cursor: saving ? "default" : refusal ? "not-allowed" : "move" }} onPointerDown={startMove} onPointerMove={moveMove} onPointerUp={(event) => finishMove(event, true)} onPointerCancel={(event) => finishMove(event, false)} onClick={(event) => event.stopPropagation()} />
           {([['e', t("canvas.handles.width"), handleX, '50%'], ['s', t("canvas.handles.height"), '50%', handleY], ['se', t("canvas.handles.size"), handleX, handleY], ['rotate', t("canvas.handles.rotation"), '50%', '-24px']] as const).map(([kind, label, left, top]) => (
             <button key={kind} aria-label={label} disabled={saving} className="absolute h-3 w-3 border border-accent bg-card pointer-events-auto disabled:opacity-50" style={{ left, top, borderRadius: kind === 'rotate' ? '50%' : 0, transform: 'translate(-50%, -50%)', touchAction: 'none', cursor: kind === 'rotate' ? 'grab' : `${kind}-resize` }} onPointerDown={(event) => start(event, kind)} onPointerMove={move} onPointerUp={(event) => finish(event, true)} onPointerCancel={(event) => finish(event, false)} onClick={(event) => event.stopPropagation()} />
           ))}

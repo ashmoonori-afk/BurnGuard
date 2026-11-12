@@ -47,7 +47,7 @@ Use this when the generated layout is nearly right and one element needs to sit 
 5. The resize handles lock the same way: the moving edge locks to nearby lines, and the width or height locks to a neighbor's size, which the badge names. The rotate handle locks every 15 degrees.
 6. Press **Esc** to cancel a drag in progress. After a change, **Undo** in the top bar or Ctrl/Cmd+Z reverts it, and **Save history** lists every saved point.
 
-A move is stored as a CSS `translate` offset on that one element. Its neighbors keep their places, and the offset applies at every screen width, so check a website's **Tablet 768** and **Phone 390** previews after moving something. An element whose position was authored in a unit other than pixels is left alone: its **X** and **Y** fields are disabled and say why. If the file changes while you are still dragging, for example because an AI turn finishes, the move is refused and the canvas shows the saved state.
+A move is stored as a CSS `translate` offset on that one element. Its neighbors keep their places, and the offset applies at every screen width, so check a website's **Tablet 768** and **Phone 390** previews after moving something. An element whose position was authored in a unit other than pixels is left alone: its **X** and **Y** fields are disabled and say why. Text inside a line, such as one word of a sentence or an inline link, is not moved on its own either: its move pointer shows that before you drag, and the panel says why. Move the block that contains it. If the file changes while you are still dragging, for example because an AI turn finishes, the move is refused and the canvas shows the saved state.
 
 ## Move a project to another Mac
 

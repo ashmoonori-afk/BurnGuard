@@ -6,7 +6,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import { cn } from "@/lib/utils";
-import { ALIGN_MODES, ASPECT_PRESETS, aspectPresetValue, dimensionPatch, isAspectLocked, MAX_ELEMENT_SIZE, rotationPatch, targetDimensions, targetOffset, translatePatch, type AlignMode } from "@/lib/element-geometry";
+import { ALIGN_MODES, ASPECT_PRESETS, aspectPresetValue, dimensionPatch, isAspectLocked, MAX_ELEMENT_SIZE, MOVE_REFUSAL_MESSAGES, moveRefusal, rotationPatch, targetDimensions, targetOffset, translatePatch, type AlignMode } from "@/lib/element-geometry";
 import { AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignStartHorizontal, AlignStartVertical, type LucideIcon } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { parseLocalFonts } from "@bg/shared";
@@ -201,16 +201,17 @@ function PositionControls(props: { target: TweaksTarget; saving: boolean; onAppl
 export function PositionSection({ target, moving, saving, onApply, onAlign }: { target: TweaksTarget; moving: { x: number; y: number } | null; saving: boolean; onApply: ApplyFn; onAlign?: (mode: AlignMode) => void }) {
   const t = useT();
   const saved = targetOffset(target);
+  const refusal = moveRefusal(target);
   const offset = moving ?? saved ?? { x: 0, y: 0 };
   const locked = saving || saved === null;
-  return <section aria-label={t("modes.tweaks.position")} data-position-state={saved === null ? "unsupported" : "ready"} className="mx-3 mb-3 space-y-3 rounded-lg border border-border bg-card p-3">
+  return <section aria-label={t("modes.tweaks.position")} data-position-state={saved === null ? "unsupported" : "ready"} data-position-refusal={refusal ?? undefined} className="mx-3 mb-3 space-y-3 rounded-lg border border-border bg-card p-3">
     <SectionHeader>{t("modes.tweaks.position")}</SectionHeader>
     <div className="grid grid-cols-2 gap-3">
       <GeometryNumber label="X" unit="px" value={offset.x} min={-POSITION_LIMIT} max={POSITION_LIMIT} disabled={locked} onCommit={value => onApply(translatePatch(value, offset.y))} />
       <GeometryNumber label="Y" unit="px" value={offset.y} min={-POSITION_LIMIT} max={POSITION_LIMIT} disabled={locked} onCommit={value => onApply(translatePatch(offset.x, value))} />
     </div>
-    {saved === null
-      ? <p className="text-xs leading-relaxed text-muted-foreground">{t("modes.tweaks.positionUnsupported")}</p>
+    {refusal !== null
+      ? <p className="text-xs leading-relaxed text-muted-foreground">{t(MOVE_REFUSAL_MESSAGES[refusal])}</p>
       : <button type="button" data-position-reset="" disabled={saving || target.inline.translate === undefined} onClick={() => onApply({ translate: null })} className="min-h-10 rounded border border-input bg-background px-3 text-xs hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:text-muted-foreground max-lg:min-h-11">{t("modes.tweaks.resetPosition")}</button>}
     {onAlign && saved !== null && target.parent != null && <div role="group" aria-label={t("modes.tweaks.align")} className="space-y-2">
       <SectionHeader>{t("modes.tweaks.align")}</SectionHeader>

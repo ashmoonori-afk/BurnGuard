@@ -149,3 +149,77 @@ test("Given a child of a scale(0.5) parent When centred Then its drawn centre is
     expect(aligned.left + aligned.width / 2).toBeCloseTo(parent.left + parent.width / 2, 1);
   });
 }, 30_000);
+
+for (const width of [1440, 390]) {
+  test(`Given text inside a line at ${width}px When it is selected, dragged and nudged Then nothing is saved, it stays in place, and the Move surface gives the panel's reason`, async () => {
+    if (!browser) throw new Error("canvas_move_browser_missing");
+    await withCanvasMove(browser, { ...assets, document: "qa-transform.html", width }, async (page) => {
+      const { rect: before, point } = await select(page, ".inl");
+      const surface = page.locator("[data-canvas-move]");
+      expect(await surface.getAttribute("data-move-refusal")).toBe("line");
+      const panel = page.locator('[data-position-refusal="line"]');
+      expect(await panel.locator("input").first().isDisabled()).toBe(true);
+      const reason = await surface.getAttribute("title");
+      expect(reason).toMatch(/\S/);
+      expect(await panel.locator("p").textContent()).toBe(reason);
+      await page.mouse.move(point.x, point.y);
+      await page.mouse.down();
+      await page.mouse.move(point.x + 40, point.y);
+      await page.mouse.up();
+      await page.keyboard.press("ArrowRight");
+      await surface.evaluate((element: HTMLElement) => element.blur());
+      expect(await page.evaluate(() => globalThis.canvasMoveTest.saves())).toBe(0);
+      expect(await rectOf(page, ".inl")).toEqual(before);
+    });
+  }, 30_000);
+}
+
+const KINDS: ReadonlyArray<{ selector: string; tag: string; moves: boolean }> = [
+  { selector: ".k-span", tag: "span", moves: false },
+  { selector: ".k-link", tag: "a", moves: false },
+  { selector: ".k-em", tag: "em", moves: false },
+  { selector: ".k-inline-block", tag: "span", moves: true },
+  { selector: ".k-img", tag: "img", moves: true },
+  { selector: ".k-svg", tag: "svg", moves: true },
+  { selector: ".k-svg-rect", tag: "rect", moves: true },
+  { selector: ".k-button", tag: "button", moves: true },
+];
+
+for (const kind of KINDS) {
+  test(`Given ${kind.selector} in a line of text When the canvas reads it Then the move tools refuse it exactly when the browser would not move it`, async () => {
+    if (!browser) throw new Error("canvas_move_browser_missing");
+    await withCanvasMove(browser, { ...assets, document: "inline-cases.html", width: 1440 }, async (page) => {
+      const rect = await rectOf(page, kind.selector);
+      const read = await page.evaluate(([x, y]) => globalThis.canvasMoveTest.refusalAt(x, y), [rect.left + rect.width / 2, rect.top + rect.height / 2] as const);
+      // The browser's own answer: set a translate on the element, measure it, and take it off again.
+      const shift = await page.frameLocator("iframe").locator(kind.selector).evaluate((element: HTMLElement | SVGElement) => {
+        const before = element.getBoundingClientRect().left;
+        element.style.translate = "10px 0px";
+        const moved = element.getBoundingClientRect().left - before;
+        element.style.translate = "";
+        return moved;
+      });
+      expect(shift).toBeCloseTo(kind.moves ? 10 : 0, 1);
+      expect(read).toEqual({ tag: kind.tag, refusal: kind.moves ? null : "line" });
+    });
+  }, 30_000);
+}
+
+test("Given text inside a line that a resize turned into its own box When it is dragged Then it moves and the save carries the move", async () => {
+  if (!browser) throw new Error("canvas_move_browser_missing");
+  await withCanvasMove(browser, { ...assets, document: "qa-transform.html", width: 1440 }, async (page) => {
+    await select(page, ".inl");
+    const handle = await page.locator('button[style*="e-resize"]').first().boundingBox();
+    if (handle === null) throw new Error("canvas_move_handle_bounds_missing");
+    const grip = { x: handle.x + handle.width / 2, y: handle.y + handle.height / 2 };
+    await page.mouse.move(grip.x, grip.y);
+    await page.mouse.down();
+    await page.evaluate(() => globalThis.canvasMoveTest.arm());
+    await page.mouse.move(grip.x + 20, grip.y);
+    await page.mouse.up();
+    await page.evaluate(() => globalThis.canvasMoveTest.saved());
+    const result = await drag(page, ".inl", { x: 40, y: 0 });
+    expectVector(result.moved, { x: 40, y: 0 });
+    expect(await page.evaluate(() => globalThis.canvasMoveTest.saves())).toBe(2);
+  });
+}, 30_000);

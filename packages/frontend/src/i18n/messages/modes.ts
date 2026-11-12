@@ -103,6 +103,7 @@ export const modesMessages = defineMessages({
   "modes.tweaks.position": { ko: "위치", en: "Position", "zh-CN": "位置" },
   "modes.tweaks.resetPosition": { ko: "위치 되돌리기", en: "Reset position", "zh-CN": "重置位置" },
   "modes.tweaks.positionUnsupported": { ko: "이 요소의 위치는 px가 아닌 값으로 정해져 있어서 여기서는 바꾸지 않아요.", en: "This element's position is set in a unit other than pixels, so it is not changed here.", "zh-CN": "此元素的位置使用了像素以外的单位，因此不在这里修改。" },
+  "modes.tweaks.positionInLine": { ko: "이 요소는 문장 안에 있는 글자라서 따로 옮길 수 없어요. 이 글자가 들어 있는 블록을 옮겨 주세요.", en: "This element is text inside a line, so it cannot be moved on its own. Move the block that contains it.", "zh-CN": "此元素是一行文字中的内容，无法单独移动。请移动包含它的区块。" },
   "modes.tweaks.align": { ko: "상위 영역에 맞추기", en: "Align to parent", "zh-CN": "对齐到容器" },
   "modes.tweaks.alignLeft": { ko: "왼쪽에 맞추기", en: "Align left", "zh-CN": "左对齐" },
   "modes.tweaks.alignCenter": { ko: "가로 가운데에 맞추기", en: "Align center", "zh-CN": "水平居中" },
