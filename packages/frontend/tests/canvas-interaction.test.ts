@@ -9,7 +9,7 @@ import { buildCommentEditRequest, commentEditDisplayText, saveAndRequestCommentE
 import { parseLocalFonts, type Comment } from "@bg/shared";
 import { identityForPatch, type FileArtifactIdentity } from "../src/lib/artifact-identity";
 import { dimensionPatch, rotationPatch, translatePatch } from "../src/lib/element-geometry";
-import { snapResize, snapRotate } from "../src/lib/resize-gesture";
+import { heldGuides, snapResize, snapRotate } from "../src/lib/resize-gesture";
 import { collectCandidates } from "../src/lib/snap-engine";
 import type { TweaksTarget } from "../src/components/canvas/TweaksLayer";
 import { arrowStep, beginMoveGesture, type MoveGestureStart } from "../src/lib/move-gesture";
@@ -233,6 +233,22 @@ test("Given an aspect-locked element When the east handle locks to an edge Then 
   const locked: TweaksTarget = { ...CARD, inline: { "aspect-ratio": "2 / 1" } };
   const snapped = resize(296, 100);
   expect(dimensionPatch(locked, snapped.width, snapped.height, true)).toMatchObject({ width: "300px", height: "150px", "aspect-ratio": "300 / 150" });
+});
+
+test("Given an aspect-locked element When the corner handle locks on both sides Then only the lock on the side that is kept is shown", () => {
+  const locked: TweaksTarget = { ...CARD, inline: { "aspect-ratio": "2 / 1" } };
+  // The pointer asks for 296 x 196: the width locks to the sibling's right edge (300) and the height to its top (200).
+  const snapped = resize(296, 196, { handle: "se" });
+  expect([snapped.width, snapped.height]).toEqual([300, 200]);
+  expect(new Set(snapped.guides.map((guide) => "axis" in guide && guide.axis))).toEqual(new Set(["x", "y"]));
+  // The height changed more, so it is kept and the width follows the ratio: 400 x 200. The width lock no longer holds.
+  const patch = dimensionPatch(locked, snapped.width, snapped.height, true);
+  expect(patch).toMatchObject({ width: "400px", height: "200px" });
+  const held = heldGuides(snapped.guides, snapped, { width: 400, height: 200 });
+  expect(held.length).toBeGreaterThan(0);
+  expect(held.every((guide) => "axis" in guide && guide.axis === "y")).toBe(true);
+  // Without the ratio lock both sides are saved as snapped, so every lock is shown.
+  expect(heldGuides(snapped.guides, snapped, { width: 300, height: 200 })).toEqual(snapped.guides);
 });
 
 test("Given a rotate drag that ends at 43 degrees When released Then 45deg is saved, and 43deg with the pause key", () => {
