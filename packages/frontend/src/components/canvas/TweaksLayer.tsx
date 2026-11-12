@@ -27,7 +27,7 @@ import { alignOffset, targetDimensions, targetOffset, translatePatch, dimensionP
 import type { FileArtifactIdentity } from "@/lib/artifact-identity";
 import { arrowStep, beginMoveGesture, type MoveGesture } from "@/lib/move-gesture";
 import { primaryGuides, snapGuideChip, snapGuideStatus } from "@/lib/snap-guides";
-import { snapResize, snapRotate, type ResizeHandle } from "@/lib/resize-gesture";
+import { heldGuides, snapResize, snapRotate, type ResizeHandle } from "@/lib/resize-gesture";
 import { collectCandidates, type SnapCandidates, type SnapGuide, type SnapRect } from "@/lib/snap-engine";
 import { useUIStore } from "@/state/uiStore";
 import SnapGuides from "./SnapGuides";
@@ -423,9 +423,10 @@ export default function TweaksLayer({
         candidates: current.candidates, zoom, magnet, paused,
       });
       current.patch = dimensionPatch(target, snapped.width, snapped.height, isAspectLocked(target));
-      const size = { width: Number.parseFloat(String(current.patch.width)) * scaleX, height: Number.parseFloat(String(current.patch.height)) * scaleY };
+      const saved = { width: Number.parseFloat(String(current.patch.width)), height: Number.parseFloat(String(current.patch.height)) };
+      const size = { width: saved.width * scaleX, height: saved.height * scaleY };
       setPreview({ ...current.rect, ...size });
-      showLocks(snapped.guides, { ...current.bbox, ...size }, current.names);
+      showLocks(heldGuides(snapped.guides, snapped, saved), { ...current.bbox, ...size }, current.names);
     }
   };
   const finish = (event: PointerEvent<HTMLButtonElement>, commit: boolean) => {

@@ -477,9 +477,12 @@ export function parseFrameSnapRects(payload: unknown): FrameSnapRects | null {
   return { self, parent, artboard, siblings };
 }
 
-/** Asked once when a gesture starts (never polled): the element, its parent, its artboard and its nearest siblings. */
+/**
+ * Asked once when a gesture starts (never polled): the element, its parent, its artboard and its nearest siblings.
+ * Null when the frame cannot be asked either: the gesture then runs without the magnet.
+ */
 export async function requestFrameSnapRects(iframe: HTMLIFrameElement | null, bgId: string): Promise<FrameSnapRects | null> {
-  return parseFrameSnapRects(await requestFrameBridge(iframe, "snap-rects", { bgId }));
+  return parseFrameSnapRects(await requestFrameBridge(iframe, "snap-rects", { bgId }).catch(() => null));
 }
 
 export async function requestFrameActiveSlide(

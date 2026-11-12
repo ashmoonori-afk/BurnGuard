@@ -4,7 +4,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MODES } from "../src/components/canvas/CanvasTopBar";
-import { buildSandboxedArtifactSrcDoc, FRAME_SNAP_SIBLING_LIMIT, parseFrameSnapRects, type FrameSnapRects } from "../src/components/canvas/frame-bridge";
+import { buildSandboxedArtifactSrcDoc, FRAME_SNAP_SIBLING_LIMIT, parseFrameSnapRects, requestFrameSnapRects, type FrameSnapRects } from "../src/components/canvas/frame-bridge";
 import ModePanel from "../src/components/modes/ModePanel";
 import type { CanvasMode } from "../src/components/modes/types";
 
@@ -236,5 +236,17 @@ describe("snap rects parsing", () => {
     const parsed = parseFrameSnapRects(many)!;
     expect(parsed.siblings).toHaveLength(FRAME_SNAP_SIBLING_LIMIT);
     expect(parsed.siblings[0]!.label).toHaveLength(40);
+  });
+
+  test("Given a frame window that refuses the message When snap rects are asked Then the answer is null instead of a rejection", async () => {
+    const globals = globalThis as { window?: unknown };
+    const hadWindow = "window" in globals, before = globals.window;
+    globals.window = { setTimeout, clearTimeout };
+    try {
+      const frame = { contentWindow: { postMessage() { throw new Error("detached"); } } } as unknown as HTMLIFrameElement;
+      expect(await requestFrameSnapRects(frame, "card")).toBeNull();
+    } finally {
+      if (hadWindow) globals.window = before; else delete globals.window;
+    }
   });
 });

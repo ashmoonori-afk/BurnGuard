@@ -28,6 +28,15 @@ export function snapResize(input: {
   return { width: width + snap.dx / scaleX, height: height + snap.dy / scaleY, guides: snap.guides };
 }
 
+/**
+ * The locks that still hold for the size that is saved. An aspect-locked box keeps one side and derives the other, so
+ * a lock on the derived side is no longer true and must not be drawn or read out.
+ */
+export function heldGuides(guides: SnapGuide[], snapped: { width: number; height: number }, saved: { width: number; height: number }): SnapGuide[] {
+  const held = { x: Math.abs(saved.width - snapped.width) < 0.01, y: Math.abs(saved.height - snapped.height) < 0.01 };
+  return guides.filter((guide) => guide.kind === "angle" || held[guide.axis]);
+}
+
 /** The rotate handle locks to 15-degree steps unless the magnet is off or paused. */
 export function snapRotate(input: { degrees: number; magnet: boolean; paused: boolean }): { degrees: number; locked: boolean } {
   return input.magnet && !input.paused ? snapRotation(input.degrees) : { degrees: input.degrees, locked: false };
