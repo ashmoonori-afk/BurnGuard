@@ -13,6 +13,7 @@ import { writeProjectAuditCache } from "../../backend/src/services/design-audit"
 import { unmeasuredAuthorityAudit } from "./fixtures/launch-authority-audit";
 import type { AuthorityBrowserState } from "./fixtures/launch-authority-browser";
 import type { AuthorityServerMessage } from "./fixtures/launch-authority-server";
+import { STEP_DEADLINE_MS } from "./helpers/step-deadline";
 
 let browser: Browser;
 const appRoot = process.env.BG_APP_ROOT;
@@ -60,7 +61,7 @@ async function startServer(port: number, capability: string, secret: string, req
       if (message) { cleanup(); resolve(message); }
       else if (child.exitCode !== null) { cleanup(); reject(new Error(`Authority server exited before ${kind}`)); }
     };
-    const timer = setTimeout(() => { cleanup(); reject(new Error(`Authority server did not report ${kind}`)); }, 5000);
+    const timer = setTimeout(() => { cleanup(); reject(new Error(`Authority server did not report ${kind}`)); }, STEP_DEADLINE_MS);
     listeners.add(check);
     check();
   });
@@ -101,7 +102,7 @@ async function fixture() {
   const origin = server.origin;
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   const page = await context.newPage();
-  page.setDefaultTimeout(5000);
+  page.setDefaultTimeout(STEP_DEADLINE_MS);
   const network: { kind: string; at: number; resource: string; status?: number; code?: string }[] = [];
   const record = (entry: Omit<(typeof network)[number], "at">) => {
     if (network.length < 80) network.push({ ...entry, at: Date.now() });

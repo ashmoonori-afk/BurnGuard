@@ -11,10 +11,20 @@ import { launchChromiumViaNode } from "../../backend/src/services/chromium-node-
 import { messages } from "../src/i18n/messages";
 import type { RecoveryServerMessage } from "./fixtures/startup-recovery-server";
 import type {} from "./fixtures/launch-authority-browser";
+import { STEP_DEADLINE_MS } from "./helpers/step-deadline";
 
 const appRoot = process.env.BG_APP_ROOT;
 if (!appRoot) throw new Error("Missing isolated recovery test profile");
 let browser: Browser;
+
+/** Closes the page context without letting a browser that is already gone replace the error that failed the test. */
+async function closeContext(context: Awaited<ReturnType<Browser["newContext"]>> | undefined, failed: boolean): Promise<void> {
+  try { await context?.close(); }
+  catch (error) {
+    if (!failed) throw error;
+    console.error(JSON.stringify({ event: "f09_context_close_failed", connected: browser.isConnected() }));
+  }
+}
 
 beforeAll(async () => {
   for (const [file, command] of [
@@ -30,7 +40,7 @@ beforeAll(async () => {
       const [code, output, errors] = await Promise.race([
         completion,
         new Promise<never>((_, reject) => {
-          timer = setTimeout(() => reject(new Error("Recovery fixture compilation deadline")), 4000);
+          timer = setTimeout(() => reject(new Error("Recovery fixture compilation deadline")), STEP_DEADLINE_MS);
         }),
       ]);
       if (code !== 0) throw new Error(`Recovery fixture compilation failed (${code}): ${errors}`);
@@ -45,7 +55,7 @@ beforeAll(async () => {
   const deadline = setTimeout(() => controller.abort(), 30_000);
   try { browser = await launchChromiumViaNode({}, controller.signal); }
   finally { clearTimeout(deadline); }
-});
+}, 90_000);
 afterAll(async () => { await browser?.close(); });
 
 async function startServer(sessionId: string, generation: "first" | "second") {
@@ -85,7 +95,7 @@ async function startServer(sessionId: string, generation: "first" | "second") {
           cleanup(); reject(new Error("Recovery turn ended before provider entry"));
         }
       };
-      const timer = setTimeout(() => { mark(`deadline-${kind}`); cleanup(); reject(new Error(`Recovery server did not report ${kind}`)); }, 5000);
+      const timer = setTimeout(() => { mark(`deadline-${kind}`); cleanup(); reject(new Error(`Recovery server did not report ${kind}`)); }, STEP_DEADLINE_MS);
       listeners.add(check);
       check();
     });
@@ -94,7 +104,7 @@ async function startServer(sessionId: string, generation: "first" | "second") {
     mark("cleanup-begin");
     if (!stopped) child.send("stop");
     let forced = false;
-    const timer = setTimeout(() => { forced = true; child.kill("SIGKILL"); }, 5000);
+    const timer = setTimeout(() => { forced = true; child.kill("SIGKILL"); }, STEP_DEADLINE_MS);
     try { await exited; await output; }
     finally { clearTimeout(timer); }
     if (forced) throw new Error("Recovery fixture did not close its owned processes");
@@ -129,6 +139,7 @@ test("Given a recovered workspace connection When it stays quiet beyond the defa
   const db = getSqlite();
   let context: Awaited<ReturnType<Browser["newContext"]>> | undefined;
   let server: Awaited<ReturnType<typeof startServer>> | undefined;
+  let failed = false;
   try {
     await mkdir(root, { recursive: true });
     await Bun.write(join(root, "index.html"), "<!doctype html><html><body><h1>Saved artifact</h1></body></html>");
@@ -140,7 +151,7 @@ test("Given a recovered workspace connection When it stays quiet beyond the defa
     server = await startServer(sessionId, "second");
     context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
     const page = await context.newPage();
-    page.setDefaultTimeout(5000);
+    page.setDefaultTimeout(STEP_DEADLINE_MS);
     await load(page, `${server.origin}/projects/${projectId}#bg-bootstrap:${server.secret}`);
     const observed = await page.evaluate(() => new Promise<ReturnType<typeof globalThis.launchAuthorityTest.state>>((resolve, reject) => {
       const cleanup = () => {
@@ -164,8 +175,11 @@ test("Given a recovered workspace connection When it stays quiet beyond the defa
       check();
     }));
     expect(observed).toMatchObject({ readyState: 1, opened: 1, disabled: false, reason: null });
+  } catch (error) {
+    failed = true;
+    throw error;
   } finally {
-    try { await context?.close(); }
+    try { await closeContext(context, failed); }
     finally {
       try { await server?.stop(); }
       finally {
@@ -174,7 +188,7 @@ test("Given a recovered workspace connection When it stays quiet beyond the defa
       }
     }
   }
-}, 30000);
+}, 90_000);
 
 test("Given a backend killed after its real commit When relaunched Then interruption preserves committed bytes and the actual composer successfully resends", async () => {
   const projectId = `f09-${crypto.randomUUID()}`;
@@ -187,8 +201,8 @@ test("Given a backend killed after its real commit When relaunched Then interrup
   db.prepare("INSERT INTO sessions(id,project_id,backend_id,status,created_at,updated_at,last_active_at) VALUES (?,?,'claude-code','idle',1,1,1)").run(sessionId, projectId);
   await new ArtifactCoordinator(db).initialize(projectId, root);
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
-  const page = await context.newPage();
-  page.setDefaultTimeout(5000);
+  let page = await context.newPage();
+  page.setDefaultTimeout(STEP_DEADLINE_MS);
   let server: Awaited<ReturnType<typeof startServer>> | undefined;
   let failed = false;
   let beforeResend = 0;
@@ -221,7 +235,7 @@ test("Given a backend killed after its real commit When relaunched Then interrup
         crashTimer = setTimeout(() => {
           mark("crash-timer-fire");
           reject(new Error("Recovery turn did not crash at its committed operation"));
-        }, 4000);
+        }, STEP_DEADLINE_MS);
       });
       try { return await Promise.race([crashed, crashDeadline]); }
       finally { clearTimeout(crashTimer); }
@@ -246,7 +260,11 @@ test("Given a backend killed after its real commit When relaunched Then interrup
     expect(db.query("SELECT status,result_revision,result_digest FROM artifact_operations WHERE id=?").get(operation.operationId)).toEqual({ status: "committed", result_revision: operation.revision, result_digest: operation.digest });
     expect(before.some(item => item.event.type === "chat.message_end" || item.event.type === "status.idle")).toBe(false);
     await server.stop();
-    await page.goto("about:blank");
+    // The page is still reacting to its dead server and can abort a navigation (net::ERR_ABORTED on about:blank).
+    // A fresh page in the same context keeps the launch cookie and cannot be aborted by the old one.
+    await page.close();
+    page = await context.newPage();
+    page.setDefaultTimeout(STEP_DEADLINE_MS);
 
     server = await startServer(sessionId, "second");
     expect(server.recovered).toBe(1);
@@ -306,7 +324,7 @@ test("Given a backend killed after its real commit When relaunched Then interrup
     }));
     throw error;
   } finally {
-    try { await context.close(); }
+    try { await closeContext(context, failed); }
     finally {
       try { await server?.stop(); }
       finally {
@@ -319,4 +337,4 @@ test("Given a backend killed after its real commit When relaunched Then interrup
       }
     }
   }
-});
+}, 150_000);

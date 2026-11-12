@@ -9,6 +9,7 @@ import Bootstrap from "../../src/components/Bootstrap";
 import ProjectView from "../../src/views/ProjectView";
 import { useLocaleStore } from "../../src/i18n/locale";
 import { t } from "../../src/i18n/t";
+import { STEP_DEADLINE_MS } from "../helpers/step-deadline";
 
 export type AuthorityBrowserState = {
   bootstrap: string | null;
@@ -110,7 +111,7 @@ globalThis.launchAuthorityTest = {
       const timer = setTimeout(() => {
         cleanup();
         reject(new Error(`Authority browser state not observed: ${JSON.stringify({ expected: { ...expected, draft: undefined }, current: { ...state(), draft: undefined } })}`));
-      }, 5000);
+      }, STEP_DEADLINE_MS);
       document.addEventListener("f08:state", check);
       check();
     });
@@ -163,7 +164,7 @@ globalThis.launchAuthorityTest = {
           queries: queries.slice(0, 32).map(summarize), queriesTruncated: queries.length > 32,
           changes, changesTruncated: changeCount > 48,
         })}`));
-      }, 5000);
+      }, STEP_DEADLINE_MS);
       const unsubscribe = queryClient.getQueryCache().subscribe(event => {
         if (changeCount++ < 48) changes.push(summarize(event.query));
         check();
