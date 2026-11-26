@@ -75,14 +75,14 @@ jobs:
           bun scripts/qa/native-mac-smoke.ts "$app" "$RUNNER_TEMP/native-mac-smoke-dequarantined-evidence"
       - name: Upload native acceptance evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: BurnGuard-macOS-Native-QA
           path: |
             ${{ runner.temp }}/native-mac-smoke-evidence/*
             ${{ runner.temp }}/native-mac-smoke-dequarantined-evidence/*
           if-no-files-found: error
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: BurnGuard-macOS
           path: dist/releases/*

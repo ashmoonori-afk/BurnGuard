@@ -50,7 +50,7 @@ jobs:
         run: dotnet run --project packages/windows-process-host/qa/ProcessHostChecks.csproj -c Release
       - name: Upload Windows process host evidence
         if: always() && steps.process_host_qa.outcome != 'skipped'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: BurnGuard-Windows-Process-Host-QA
           path: .omo/evidence/windows-process-host/*
@@ -67,12 +67,12 @@ jobs:
         run: node scripts/qa/windows-native-smoke.mjs --release
       - name: Upload native acceptance evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: BurnGuard-Windows-Native-QA
           path: .omo/evidence/windows-native-2026-09-09/*
           if-no-files-found: error
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: BurnGuard-Windows
           path: dist/releases/*
