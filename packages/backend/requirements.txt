@@ -10,4 +10,4 @@
 # packages/backend/src/services/pypdf-version.ts; older releases carry
 # malformed-PDF resource-exhaustion advisories and are refused at runtime.
 
-pypdf==6.18.0
+pypdf==7.1.1
