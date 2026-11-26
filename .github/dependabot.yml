@@ -4,6 +4,9 @@ updates:
     directory: /
     schedule: {interval: weekly, day: monday, time: "09:00", timezone: Asia/Seoul}
     open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     groups:
       minor-and-patch:
         patterns: ["*"]
@@ -12,6 +15,9 @@ updates:
     directory: /
     schedule: {interval: weekly, day: monday, time: "09:00", timezone: Asia/Seoul}
     open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     groups:
       minor-and-patch:
         patterns: ["*"]
