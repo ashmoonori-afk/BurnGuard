@@ -1,0 +1,40 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: {interval: weekly, day: monday, time: "09:00", timezone: Asia/Seoul}
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
+  - package-ecosystem: bun
+    directory: /
+    schedule: {interval: weekly, day: monday, time: "09:00", timezone: Asia/Seoul}
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
+  - package-ecosystem: pip
+    directory: /packages/backend
+    schedule: {interval: weekly, day: monday, time: "09:00", timezone: Asia/Seoul}
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
+  - package-ecosystem: nuget
+    directories:
+      - /
+      - /packages/desktop-windows
+      - /packages/desktop-windows/qa
+      - /packages/windows-process-host
+      - /packages/windows-process-host/qa
+      - /packages/windows-process-host/qa-host
+    schedule: {interval: weekly, day: monday, time: "09:00", timezone: Asia/Seoul}
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
