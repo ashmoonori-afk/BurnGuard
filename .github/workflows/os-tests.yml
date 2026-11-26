@@ -37,7 +37,7 @@ jobs:
         with:
           node-version: 24.13.0
       - run: bun install --frozen-lockfile
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         if: runner.os == 'Windows'
         with:
           dotnet-version: 8.0.x
