@@ -50,13 +50,18 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 24.13.0
+      - name: Install the pinned Chromium headless shell
+        run: |
+          bun install --frozen-lockfile
+          node packages/backend/node_modules/playwright-core/cli.js install --with-deps --only-shell chromium
       - name: Capture one frozen fresh run and one warm comparison
+        id: capture
         env:
           BG_FRONTEND_EVIDENCE_PUBLIC_KEY: ${{ vars.BG_FRONTEND_EVIDENCE_PUBLIC_KEY }}
           BG_FRONTEND_EVIDENCE_DIRECTORY: ${{ runner.temp }}/frontend-failure-evidence
         run: bun scripts/qa/frontend-failure-evidence.ts
       - name: Retain encrypted failures for seven days
-        if: failure()
+        if: failure() && steps.capture.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
           name: frontend-failure-${{ github.run_id }}-${{ github.run_attempt }}
