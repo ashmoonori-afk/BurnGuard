@@ -23,7 +23,7 @@ export async function requireDirectory(target: string): Promise<void> {
   const info = await lstat(target);
   if (!info.isDirectory() || info.isSymbolicLink()) unsafe();
 }
-/** Check lexical components before realpath-based containment can resolve a link away. */
+/** Reject links before realpath can resolve a hardlink to another name on macOS. */
 export async function safeContentChild(root: string, ...parts: readonly string[]): Promise<string> {
   await requireDirectory(root);
   let candidate = root;
@@ -31,7 +31,7 @@ export async function safeContentChild(root: string, ...parts: readonly string[]
     assertSafeName(part);
     candidate = path.join(candidate, part);
     const info = await pathStat(candidate);
-    if (info?.isSymbolicLink()) unsafe();
+    if (info?.isSymbolicLink() || (info?.isFile() && info.nlink !== 1)) unsafe();
   }
   return resolveWithin(root, ...parts);
 }
