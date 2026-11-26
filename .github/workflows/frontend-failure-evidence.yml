@@ -41,7 +41,7 @@ jobs:
     # Enclose three 15-minute phases, one two-minute frontend build and setup/upload.
     timeout-minutes: 50
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.14
