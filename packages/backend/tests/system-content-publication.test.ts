@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { getCatalogRow, getCurrentSystemContent, getPendingSystemOperation, prepareCatalogOperation, getLatestCatalogOperation, listCatalogRows } from "../src/db/catalog-repository";
 import { listSystemContentReceipts } from "../src/db/design-system-repository";
+import * as pathBoundary from "../src/security/path-boundary";
 import { defaultManagedTreeIo, syncOpenModeFor, type ManagedTreeIo } from "../src/services/artifact-tree-storage";
 import { validateCatalogReceiptTree } from "../src/services/catalog-files";
 import { assertSystemContentLease, reconcileSystemContentLocks, withSystemContentAccess } from "../src/services/system-content-access";
@@ -570,7 +571,13 @@ describe("strict persisted evidence and paths", () => {
     await writeFile(path.join(outside, "sentinel"), "preserve");
     if (kind === "hardlink") await link(path.join(outside, "sentinel"), path.join(f.live, ".git/linked"));
     else await symlink(outside, path.join(f.live, ".git/linked"), process.platform === "win32" ? "junction" : "dir");
-    await expect(expectedDigest(environment(f.db, f.systemsRoot))).rejects.toMatchObject({ code: "system_content_conflict" });
+    const resolve = spyOn(pathBoundary, "resolveWithin");
+    try {
+      await expect(expectedDigest(environment(f.db, f.systemsRoot))).rejects.toMatchObject({ code: "system_content_conflict" });
+      expect(resolve).not.toHaveBeenCalledWith(f.live, ".git", "linked");
+    } finally {
+      resolve.mockRestore();
+    }
     expect(await readFile(path.join(outside, "sentinel"), "utf8")).toBe("preserve");
   });
   test("Given a mismatched owner at the derived control path When publication starts Then unknown bytes stay", async () => {
