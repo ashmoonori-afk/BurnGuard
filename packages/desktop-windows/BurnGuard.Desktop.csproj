@@ -14,8 +14,8 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Remove="qa/**/*.cs" />
-    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4191.47" />
-    <PackageReference Include="Velopack" Version="1.2.0" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4370.26" />
+    <PackageReference Include="Velopack" Version="1.2.161" />
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net48" Version="1.0.3" PrivateAssets="all" />
     <Reference Include="System.Web.Extensions" />
     <!-- Shell dialog strings by OS UI language; ShellText reads them as BurnGuard.Desktop.i18n.<language>.json. -->
