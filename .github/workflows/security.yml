@@ -346,6 +346,6 @@ jobs:
           --ignore=GHSA-vfj7-8cjw-p6xm
           --ignore=GHSA-rj75-hqrm-r3gf
       - name: Scan for secrets
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
